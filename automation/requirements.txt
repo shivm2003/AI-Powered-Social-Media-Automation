@@ -1,0 +1,13 @@
+# Python automation for AI Social Media
+# This module handles Selenium-based browser automation for:
+# - LLM interaction (Gemini, ChatGPT, Claude)
+# - Social media posting (Facebook, Instagram, LinkedIn, WhatsApp)
+# - Image/video generation
+# - Telegram bot for approval workflow
+
+undetected-chromedriver>=3.5.0
+selenium>=4.20.0
+python-telegram-bot>=21.0
+moviepy>=2.1.0
+Pillow>=11.0.0
+cryptography>=43.0.0
