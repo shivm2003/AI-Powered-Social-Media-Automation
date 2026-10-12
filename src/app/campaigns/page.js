@@ -3,6 +3,17 @@
 import { useState, useEffect } from "react";
 import { CAMPAIGN_STATUSES, CONTENT_TYPES, LLM_PROVIDERS, PLATFORMS } from "@/lib/constants";
 
+function safeArray(val) {
+  if (Array.isArray(val)) return val;
+  if (!val) return [];
+  try {
+    const parsed = JSON.parse(val);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return typeof val === "string" ? [val] : [];
+  }
+}
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +128,7 @@ export default function CampaignsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           {filteredCampaigns.map((campaign) => {
             const statusConfig = CAMPAIGN_STATUSES[campaign.status] || CAMPAIGN_STATUSES.draft;
-            const platforms = JSON.parse(campaign.platforms || "[]");
+            const platforms = safeArray(campaign.platforms);
 
             return (
               <div className="card" key={campaign.id}>

@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import { getSetting, getCampaignById, updateCampaignStatus, getProductById } from "@/lib/db";
 import { runAutomationCommand } from "@/lib/automation";
 
+function safeParseArray(val) {
+  if (Array.isArray(val)) return val;
+  if (!val) return [];
+  try {
+    const p = JSON.parse(val);
+    return Array.isArray(p) ? p : [p];
+  } catch {
+    return typeof val === "string" ? [val] : [];
+  }
+}
+
 export async function GET() {
   try {
     const token = getSetting("telegram_bot_token") || process.env.TELEGRAM_BOT_TOKEN;
@@ -80,9 +91,10 @@ export async function POST(request) {
           updateCampaignStatus(campaignId, "approved");
 
           // Post to selected social platforms via Selenium
-          const platforms = JSON.parse(campaign.platforms || "[]");
-          const mediaPaths = JSON.parse(campaign.media_paths || "[]");
-          const caption = `${campaign.generated_caption}\n\n${JSON.parse(campaign.generated_hashtags || "[]").join(" ")}`;
+          const platforms = safeParseArray(campaign.platforms);
+          const mediaPaths = safeParseArray(campaign.media_paths);
+          const hashtags = safeParseArray(campaign.generated_hashtags);
+          const caption = `${campaign.generated_caption || ""}\n\n${hashtags.join(" ")}`;
 
           runAutomationCommand({
             action: "post",
@@ -162,7 +174,7 @@ export async function POST(request) {
         if (campaign) {
           // Re-generate content incorporating suggestion
           const product = getProductById(campaign.product_id);
-          const platforms = JSON.parse(campaign.platforms || "[]");
+          const platforms = safeParseArray(campaign.platforms);
 
           // Send "Regenerating..." notification
           if (token) {

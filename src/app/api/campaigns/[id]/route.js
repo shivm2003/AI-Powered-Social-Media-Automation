@@ -14,6 +14,17 @@ export async function GET(request, { params }) {
   }
 }
 
+function safeParseArray(val) {
+  if (Array.isArray(val)) return val;
+  if (!val) return [];
+  try {
+    const p = JSON.parse(val);
+    return Array.isArray(p) ? p : [p];
+  } catch {
+    return typeof val === "string" ? [val] : [];
+  }
+}
+
 export async function PUT(request, { params }) {
   try {
     const body = await request.json();
@@ -26,9 +37,10 @@ export async function PUT(request, { params }) {
 
     if (action === "approve") {
       updateCampaignStatus(params.id, "approved");
-      const platforms = JSON.parse(campaign.platforms || "[]");
-      const mediaPaths = JSON.parse(campaign.media_paths || "[]");
-      const caption = `${campaign.generated_caption}\n\n${JSON.parse(campaign.generated_hashtags || "[]").join(" ")}`;
+      const platforms = safeParseArray(campaign.platforms);
+      const mediaPaths = safeParseArray(campaign.media_paths);
+      const hashtags = safeParseArray(campaign.generated_hashtags);
+      const caption = `${campaign.generated_caption || ""}\n\n${hashtags.join(" ")}`;
 
       // Trigger automatic posting via Selenium
       try {
