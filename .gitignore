@@ -66,3 +66,5 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Graphify cache
+graphify-out/cache/

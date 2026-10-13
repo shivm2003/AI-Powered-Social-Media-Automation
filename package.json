@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "bot": "python automation/telegram/poller.py",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

@@ -13,7 +13,14 @@ import json
 import random
 import logging
 import subprocess
+import uuid
 from pathlib import Path
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options as SeleniumOptions
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 
 logger = logging.getLogger("automation.human_operator")
 
@@ -633,51 +640,228 @@ def execute_human_generation_and_telegram_flow(
         platforms=platforms
     )
 
-    logs.append(f"💬 Step 3: Navigating to {clean_platform.upper()} & human-typing marketing prompt...")
     content_data = fallback_data
-    try:
-        ai_res = step3_search_ai_platform(driver, clean_platform, prompt)
-        raw_text = ai_res.get("response", "")
-        if raw_text:
-            parsed = extract_json_or_fallback(raw_text, None)
-            if parsed and isinstance(parsed, dict) and "caption" in parsed:
-                content_data = parsed
-                if not content_data.get("headline"):
-                    content_data["headline"] = fallback_data.get("headline")
-                if not content_data.get("hashtags"):
-                    content_data["hashtags"] = fallback_data.get("hashtags")
-            elif len(raw_text) > 40:
-                content_data["caption"] = raw_text
-        logs.append(f"✅ Step 3 Complete: AI generated viral copy and headline.")
-    except Exception as e_ai:
-        logger.warning(f"AI platform prompt notice: {e_ai}")
-        logs.append(f"ℹ️ Step 3 Notice: {e_ai}. Using optimized copy synthesis.")
-
-    # Step 4: Visual Asset Generation
-    logs.append(f"🎨 Step 4: Synthesizing branded graphic asset with {aspect_ratio} ratio...")
     img_path = None
-    headline = content_data.get("headline") or f"Discover {product_name}"
-    subheadline = content_data.get("subheadline") or (desc[:65] if desc else "The smart solution for you.")
 
-    if clean_platform == "chatgpt" and skill_image_path:
+    if clean_platform == "chatgpt":
+        logs.append(f"💬 Step 3: Navigating to CHATGPT & inserting complete marketing + image prompt all at once...")
         try:
-            from llm.chatgpt import generate_image_with_chatgpt_browser
-            img_path = generate_image_with_chatgpt_browser(
-                product_name=product_name,
-                headline=headline,
-                subheadline=subheadline,
-                visual_style=visual_style,
-                aspect_ratio=aspect_ratio,
-                cta_text="Learn More ➜",
-                skill_image_path=skill_image_path,
-                custom_instructions=custom_instructions,
-                brand_colors=brand_colors,
-                category=category
-            )
-        except Exception as e_img:
-            logger.warning(f"Browser graphic generation fallback: {e_img}")
+            # Switch to ChatGPT tab
+            chatgpt_found = False
+            for h in driver.window_handles:
+                try:
+                    driver.switch_to.window(h)
+                    if "chatgpt.com" in driver.current_url:
+                        chatgpt_found = True
+                        break
+                except Exception:
+                    continue
 
+            if not chatgpt_found:
+                driver.get("https://chatgpt.com")
+                human_sleep(2.5, 4.0)
+            else:
+                human_sleep(0.8, 1.5)
+
+            # Dismiss any dialogs/banners if present
+            for d_sel in ["button[aria-label='Close']", "button[data-testid='close-button']", "div[role='dialog'] button"]:
+                try:
+                    for d_btn in driver.find_elements(By.CSS_SELECTOR, d_sel):
+                        if d_btn.is_displayed():
+                            d_btn.click()
+                            human_sleep(0.2, 0.4)
+                except Exception:
+                    pass
+
+            # Locate input box with retry
+            input_box = None
+            for _ in range(15):
+                for sel in ["div.ProseMirror", "#prompt-textarea", "div[contenteditable='true']", "textarea"]:
+                    try:
+                        for el in driver.find_elements(By.CSS_SELECTOR, sel):
+                            if el.is_displayed():
+                                input_box = el
+                                break
+                    except Exception:
+                        pass
+                    if input_box:
+                        break
+                if input_box:
+                    break
+                time.sleep(1)
+
+            if not input_box:
+                raise RuntimeError("Could not locate ChatGPT prompt editor.")
+
+            try:
+                input_box.click()
+            except Exception:
+                ActionChains(driver).move_to_element(input_box).pause(0.2).click().perform()
+            human_sleep(0.3, 0.6)
+
+            # Query existing images before submitting
+            existing_imgs = driver.execute_script("""
+                return Array.from(document.querySelectorAll('img'))
+                    .filter(img => (img.naturalWidth >= 250 || img.clientWidth >= 250))
+                    .map(img => img.src);
+            """) or []
+
+            # Construct unified prompt asking for BOTH image and caption all at once
+            unified_prompt = (
+                f"Generate a high-converting, photorealistic commercial marketing image for '{product_name}'. "
+                f"Description: {desc[:140]}. "
+                f"Visual layout: {aspect_ratio} square aspect ratio, modern advertising style, vibrant commercial lighting, sleek 3D tech aesthetics, 8k resolution. "
+                f"Below the image, also write the complete social media post:\n"
+                f"Headline: Discover {product_name}\n"
+                f"Caption: An engaging 2-3 paragraph marketing copy with strong hook and call-to-action.\n"
+                f"Hashtags: 5-6 viral hashtags for {', '.join(platforms)}."
+            )
+
+            # Insert ALL PROMPT AT ONCE
+            driver.execute_script("""
+                const ed = arguments[0];
+                const text = arguments[1];
+                ed.focus();
+                document.execCommand('selectAll', false, null);
+                document.execCommand('insertText', false, text);
+                ed.dispatchEvent(new Event('input', { bubbles: true }));
+                ed.dispatchEvent(new Event('change', { bubbles: true }));
+            """, input_box, unified_prompt)
+            human_sleep(0.5, 1.0)
+
+            # Fallback if text didn't insert
+            current_val = (input_box.text or input_box.get_attribute("value") or "").strip()
+            if not current_val:
+                input_box.send_keys(unified_prompt)
+                human_sleep(0.4, 0.8)
+
+            # Submit prompt
+            send_btn = None
+            for sel in [
+                "button[data-testid='send-button']",
+                "button[data-testid='composer-send-button']",
+                "button[aria-label*='Send']",
+                "button[aria-label*='send']",
+                "#send-button"
+            ]:
+                try:
+                    for b in driver.find_elements(By.CSS_SELECTOR, sel):
+                        if b.is_displayed():
+                            send_btn = b
+                            break
+                except Exception:
+                    pass
+                if send_btn:
+                    break
+
+            if send_btn:
+                try:
+                    send_btn.click()
+                except Exception:
+                    driver.execute_script("arguments[0].click();", send_btn)
+            else:
+                input_box.send_keys(Keys.ENTER)
+
+            logs.append("✅ Step 3 Complete: Full prompt submitted all at once! Waiting for ChatGPT to generate image...")
+
+            # Wait for image generation & capture response (poll up to 90s)
+            poll_start = time.time()
+            img_info = None
+            while time.time() - poll_start < 90:
+                time.sleep(3)
+                img_info = driver.execute_async_script("""
+                    const existing = arguments[0] || [];
+                    const callback = arguments[arguments.length - 1];
+                    const images = Array.from(document.querySelectorAll('img')).reverse();
+                    const target = images.find(img => {
+                        const alt = (img.alt || '').toLowerCase();
+                        const src = (img.src || '').toLowerCase();
+                        const isNotAttachment = !alt.includes('attachment') && !src.includes('avatar') && !src.includes('auth0') && !src.includes('profile');
+                        const isBig = (img.naturalWidth >= 280 || img.clientWidth >= 250);
+                        if (!isNotAttachment || !isBig) return false;
+                        const isNew = !existing.includes(img.src);
+                        if (!isNew) return false;
+                        if (alt.includes('generated') || alt.includes('dall-e')) return true;
+                        if (src.startsWith('blob:') && (img.naturalWidth >= 350 || img.clientWidth >= 300)) return true;
+                        if (src.includes('oaidalleapiprodscus') || src.includes('files.oaiusercontent.com')) return true;
+                        return false;
+                    });
+                    if (!target) return callback(null);
+                    fetch(target.src)
+                        .then(r => r.blob())
+                        .then(blob => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => callback({ data: reader.result, width: target.naturalWidth, height: target.naturalHeight });
+                            reader.readAsDataURL(blob);
+                        })
+                        .catch(() => {
+                            try {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = target.naturalWidth || 1024;
+                                canvas.height = target.naturalHeight || 1024;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(target, 0, 0);
+                                callback({ data: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height });
+                            } catch(e) {
+                                callback(null);
+                            }
+                        });
+                """, existing_imgs)
+                if img_info and img_info.get("data"):
+                    break
+
+            if img_info and img_info.get("data"):
+                import base64
+                from config import IMAGES_DIR
+                data_b64 = img_info["data"]
+                if "base64," in data_b64:
+                    raw_bytes = base64.b64decode(data_b64.split("base64,")[1])
+                    ar_slug = aspect_ratio.replace(":", "x")
+                    filename = f"chatgpt_{uuid.uuid4().hex[:8]}_{ar_slug}.png"
+                    output_path = IMAGES_DIR / filename
+                    with open(output_path, "wb") as f:
+                        f.write(raw_bytes)
+                    img_path = output_path
+                    logs.append(f"✅ Step 4 Complete: Successfully downloaded generated ChatGPT image ({len(raw_bytes):,} bytes).")
+
+            # Extract generated caption from assistant message
+            try:
+                assistants = driver.find_elements(By.CSS_SELECTOR, "article, div[data-message-author-role='assistant'], [data-message-id]")
+                for ast in reversed(assistants):
+                    t = ast.text.strip()
+                    if t and len(t) > 30 and "generate" not in t.lower()[:20]:
+                        content_data["caption"] = t
+                        import re
+                        extracted_tags = re.findall(r"#\w+", t)
+                        if extracted_tags:
+                            content_data["hashtags"] = extracted_tags
+                        break
+            except Exception as e_text:
+                logger.warning(f"Error parsing assistant text: {e_text}")
+
+        except Exception as e_cg:
+            logger.warning(f"ChatGPT unified flow notice: {e_cg}")
+            logs.append(f"ℹ️ ChatGPT notice: {e_cg}")
+
+    else:
+        logs.append(f"💬 Step 3: Navigating to {clean_platform.upper()} & prompting marketing copy...")
+        try:
+            ai_res = step3_search_ai_platform(driver, clean_platform, prompt)
+            raw_text = ai_res.get("response", "")
+            if raw_text:
+                parsed = extract_json_or_fallback(raw_text, None)
+                if parsed and isinstance(parsed, dict) and "caption" in parsed:
+                    content_data = parsed
+                elif len(raw_text) > 40:
+                    content_data["caption"] = raw_text
+            logs.append(f"✅ Step 3 Complete: AI generated viral copy and headline.")
+        except Exception as e_ai:
+            logs.append(f"ℹ️ Step 3 Notice: {e_ai}. Using optimized copy synthesis.")
+
+    # Fallback to high-res branded design engine if image wasn't downloaded
     if not img_path or not os.path.exists(img_path):
+        headline = content_data.get("headline") or f"Discover {product_name}"
+        subheadline = content_data.get("subheadline") or (desc[:65] if desc else "The smart solution for you.")
         resolved_logo = skill_image_path or product.get("logo_path")
         img_path = generate_social_image(
             product_name=product_name,
@@ -689,8 +873,7 @@ def execute_human_generation_and_telegram_flow(
             logo_path=resolved_logo,
             category=category
         )
-
-    logs.append(f"✅ Step 4 Complete: High-converting graphic generated ({os.path.basename(str(img_path)) if img_path else 'Graphic Ready'}).")
+        logs.append(f"✅ Step 4 Complete: High-converting branded graphic ready ({os.path.basename(str(img_path))}).")
 
     # Step 5: Telegram Dispatch for Approval
     logs.append("📱 Step 5: Dispatching preview to Telegram bot for review & approval...")

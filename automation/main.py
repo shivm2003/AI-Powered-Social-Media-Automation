@@ -275,6 +275,13 @@ def handle_command(command: dict):
             )
             send_response(result)
 
+        elif action == "human_chatgpt_image_telegram":
+            product = command.get("product", {})
+            logger.info("Executing human_chatgpt_image_telegram flow...")
+            from chatgpt_human_image_telegram import run_chatgpt_human_image_and_telegram
+            result = run_chatgpt_human_image_and_telegram(custom_product=product)
+            send_response(result)
+
         else:
             send_response({
                 "status": "error",

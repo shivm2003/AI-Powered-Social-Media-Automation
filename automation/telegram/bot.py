@@ -18,6 +18,13 @@ logger = logging.getLogger("automation.telegram")
 BASE_DIR = Path(__file__).parent.parent.parent
 DB_PATH = BASE_DIR / "data" / "database.sqlite"
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / ".env.local")
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass
+
 
 def get_telegram_credentials():
     """Retrieve bot token and chat ID from DB settings or environment."""
@@ -169,6 +176,18 @@ def send_preview_to_telegram(
                 },
                 files={"video": (filename, file_bytes, "video/mp4")}
             )
+            if not res.get("ok"):
+                plain_text = f"🌟 Content Preview for {platforms_str}\n\n📝 Caption:\n{caption[:900]}\n\n👉 Review above and choose an action:"
+                res = make_telegram_request(
+                    bot_token,
+                    "sendVideo",
+                    data={
+                        "chat_id": chat_id,
+                        "caption": plain_text[:1024],
+                        "reply_markup": json.dumps(keyboard),
+                    },
+                    files={"video": (filename, file_bytes, "video/mp4")}
+                )
         else:
             res = make_telegram_request(
                 bot_token,
@@ -181,6 +200,18 @@ def send_preview_to_telegram(
                 },
                 files={"photo": (filename, file_bytes, "image/png")}
             )
+            if not res.get("ok"):
+                plain_text = f"🌟 Content Preview for {platforms_str}\n\n📝 Caption:\n{caption[:900]}\n\n👉 Review above and choose an action:"
+                res = make_telegram_request(
+                    bot_token,
+                    "sendPhoto",
+                    data={
+                        "chat_id": chat_id,
+                        "caption": plain_text[:1024],
+                        "reply_markup": json.dumps(keyboard),
+                    },
+                    files={"photo": (filename, file_bytes, "image/png")}
+                )
     else:
         # Send text message
         res = make_telegram_request(
@@ -193,9 +224,115 @@ def send_preview_to_telegram(
                 "reply_markup": json.dumps(keyboard),
             }
         )
+        if not res.get("ok"):
+            plain_text = f"🌟 Content Preview for {platforms_str}\n\n📝 Caption:\n{caption[:3500]}\n\n👉 Review above and choose an action:"
+            res = make_telegram_request(
+                bot_token,
+                "sendMessage",
+                data={
+                    "chat_id": chat_id,
+                    "text": plain_text,
+                    "reply_markup": json.dumps(keyboard),
+                }
+            )
 
     logger.info(f"Sent Telegram preview for campaign {campaign_id}: {res.get('ok')}")
     return {
         "status": "success" if res.get("ok") else "error",
         "response": res
     }
+
+
+def answer_callback_query(callback_id: str, text: str = None) -> dict:
+    """Answers a Telegram callback query to clear the loading spinner."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"ok": False}
+    data = {"callback_query_id": callback_id}
+    if text:
+        data["text"] = text
+    return make_telegram_request(bot_token, "answerCallbackQuery", data=data)
+
+
+def send_platform_selection_menu(campaign_id: str, chat_id: str = None) -> dict:
+    """
+    Sends an action keyboard asking the user which social media platform to publish to.
+    """
+    bot_token, default_chat_id = get_telegram_credentials()
+    target_chat_id = chat_id or default_chat_id
+    if not bot_token or not target_chat_id:
+        return {"status": "error", "message": "Missing Telegram credentials."}
+
+    text = (
+        "🚀 <b>Campaign Approved!</b>\n\n"
+        "Which social media platform would you like to publish this post to?"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "📘 Facebook", "callback_data": f"post_to:facebook:{campaign_id}"},
+                {"text": "📸 Instagram", "callback_data": f"post_to:instagram:{campaign_id}"},
+            ],
+            [
+                {"text": "💼 LinkedIn", "callback_data": f"post_to:linkedin:{campaign_id}"},
+                {"text": "💬 WhatsApp", "callback_data": f"post_to:whatsapp:{campaign_id}"},
+            ],
+            [
+                {"text": "❌ Cancel", "callback_data": f"cancel_post:{campaign_id}"}
+            ]
+        ]
+    }
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": target_chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_password_request_prompt(chat_id: str, platform: str, campaign_id: str) -> dict:
+    """Asks the user on Telegram for their social account password."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error", "message": "Missing Telegram token."}
+
+    text = (
+        f"🔒 <b>{platform.capitalize()} Login Required</b>\n\n"
+        f"The browser requires your {platform.capitalize()} password to publish this post.\n\n"
+        f"👉 <i>Please reply to this message directly with your password (or <code>email:password</code>).</i>\n\n"
+        f"The automation will safely paste it into the browser and proceed immediately."
+    )
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def delete_telegram_message(chat_id: str, message_id: int) -> dict:
+    """Deletes a Telegram message (e.g. user password message for security)."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"ok": False}
+    return make_telegram_request(bot_token, "deleteMessage", data={"chat_id": chat_id, "message_id": message_id})
+
+
+def send_text_message(chat_id: str, text: str) -> dict:
+    """Sends a plain or HTML formatted text message."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"ok": False}
+    return make_telegram_request(bot_token, "sendMessage", data={"chat_id": chat_id, "text": text, "parse_mode": "HTML"})
