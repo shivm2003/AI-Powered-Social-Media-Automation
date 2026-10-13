@@ -34,3 +34,22 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Codebase Statistics
+
+### Language Breakdown
+
+| Language / File Type | Files | Total Lines | Actual Code Lines | Blank Lines |
+| :--- | :---: | :---: | :---: | :---: |
+| **JavaScript (`.js`)** | 28 | 6,747 | 6,256 | 491 |
+| **Python (`.py`)** | 25 | 3,760 | 3,287 | 473 |
+| **CSS (`.css`)** | 2 | 1,476 | 1,269 | 207 |
+| **Markdown / Docs (`.md`)** | 3 | 1,004 | 860 | 144 |
+| **Config & Scripts (`.json`, `.bat`, etc.)** | 15 | 219 | 175 | 44 |
+| **TOTAL (Source Code)** | **73** | **13,206** | **11,847** | **1,359** |
+
+### Check Lines of Code
+To calculate total lines in PowerShell:
+```powershell
+git ls-files | Where-Object { $_ -notlike "*package-lock.json" } | ForEach-Object { Get-Content $_ -ErrorAction SilentlyContinue } | Measure-Object -Line
+```
