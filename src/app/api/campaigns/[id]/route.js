@@ -4,7 +4,8 @@ import { runAutomationCommand } from "@/lib/automation";
 
 export async function GET(request, { params }) {
   try {
-    const campaign = getCampaignById(params.id);
+    const { id } = await params;
+    const campaign = await getCampaignById(id);
     if (!campaign) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
@@ -27,16 +28,17 @@ function safeParseArray(val) {
 
 export async function PUT(request, { params }) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { action } = body; // 'approve', 'reject', 'revise'
-    const campaign = getCampaignById(params.id);
+    const campaign = await getCampaignById(id);
 
     if (!campaign) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
     if (action === "approve") {
-      updateCampaignStatus(params.id, "approved");
+      await updateCampaignStatus(id, "approved");
       const platforms = safeParseArray(campaign.platforms);
       const mediaPaths = safeParseArray(campaign.media_paths);
       const hashtags = safeParseArray(campaign.generated_hashtags);
@@ -50,17 +52,17 @@ export async function PUT(request, { params }) {
           media_path: mediaPaths[0] || null,
           caption,
         });
-        updateCampaignStatus(params.id, "posted");
+        await updateCampaignStatus(id, "posted");
       } catch (e) {
         console.warn("Auto-posting exception:", e);
       }
 
       return NextResponse.json({ message: "Campaign approved and publishing dispatched" });
     } else if (action === "reject") {
-      updateCampaignStatus(params.id, "rejected");
+      await updateCampaignStatus(id, "rejected");
       return NextResponse.json({ message: "Campaign marked as rejected" });
     } else if (action === "revise") {
-      updateCampaignStatus(params.id, "generating", { revision_notes: body.notes || "" });
+      await updateCampaignStatus(id, "generating", { revision_notes: body.notes || "" });
       // Can trigger regeneration
       return NextResponse.json({ message: "Revision recorded" });
     }
@@ -73,7 +75,8 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
-    deleteCampaign(params.id);
+    const { id } = await params;
+    await deleteCampaign(id);
     return NextResponse.json({ message: "Campaign deleted successfully" });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -23,23 +23,54 @@ export async function runAutomationCommand(command, timeoutMs = 120000) {
     let stderrData = "";
     let finished = false;
 
-    // Spawn python process
+    // Spawn python process with visible window so Chrome browser opens visibly for the user
     const child = spawn(/*turbopackIgnore: true*/ PYTHON_CMD, [AUTOMATION_SCRIPT], {
       cwd: path.join(PROJECT_ROOT, "automation"),
       env: {
         ...process.env,
         PYTHONUNBUFFERED: "1",
       },
-      windowsHide: true,
+      windowsHide: false,
     });
 
     const timer = setTimeout(() => {
       if (!finished) {
         finished = true;
+        if (sendTimer) clearTimeout(sendTimer);
         child.kill();
         reject(new Error(`Automation command timed out after ${timeoutMs / 1000}s`));
       }
     }, timeoutMs);
+
+    if (child.stdin) {
+      child.stdin.on("error", (err) => {
+        // Prevent uncaught stream error like EPIPE or ERR_STREAM_WRITE_AFTER_END
+        console.warn("Python stdin stream notice:", err.message);
+      });
+    }
+
+    let commandSent = false;
+    let sendTimer = null;
+
+    const sendCommand = () => {
+      if (
+        !commandSent &&
+        !finished &&
+        child.stdin &&
+        !child.stdin.destroyed &&
+        child.stdin.writable &&
+        !child.stdin.writableEnded
+      ) {
+        commandSent = true;
+        try {
+          child.stdin.write(JSON.stringify(command) + "\n", (err) => {
+            if (err) console.warn("Could not write to Python stdin:", err.message);
+          });
+        } catch (e) {
+          console.warn("Could not write to Python stdin:", e.message);
+        }
+      }
+    };
 
     child.stdout.on("data", (data) => {
       const text = data.toString();
@@ -49,19 +80,23 @@ export async function runAutomationCommand(command, timeoutMs = 120000) {
       for (const line of lines) {
         try {
           const parsed = JSON.parse(line.trim());
-          if (parsed && (parsed.status === "success" || parsed.status === "error" || parsed.status === "ready")) {
-            if (parsed.status !== "ready") {
-              finished = true;
-              clearTimeout(timer);
-              child.kill();
-              return resolve(parsed);
-            }
+          if (parsed && parsed.status === "ready") {
+            sendCommand();
+          } else if (parsed && (parsed.status === "success" || parsed.status === "error")) {
+            finished = true;
+            clearTimeout(timer);
+            if (sendTimer) clearTimeout(sendTimer);
+            child.kill();
+            return resolve(parsed);
           }
         } catch {
           // Continue buffering
         }
       }
     });
+
+    // Also attempt sending command after brief tick in case ready was already emitted
+    sendTimer = setTimeout(sendCommand, 200);
 
     child.stderr.on("data", (data) => {
       stderrData += data.toString();
@@ -71,6 +106,7 @@ export async function runAutomationCommand(command, timeoutMs = 120000) {
       if (!finished) {
         finished = true;
         clearTimeout(timer);
+        if (sendTimer) clearTimeout(sendTimer);
         reject(new Error(`Failed to start Python process (${PYTHON_CMD}): ${err.message}`));
       }
     });
@@ -79,6 +115,7 @@ export async function runAutomationCommand(command, timeoutMs = 120000) {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
+      if (sendTimer) clearTimeout(sendTimer);
 
       // Try parsing stdout lines from end
       const lines = stdoutData.trim().split("\n");
@@ -101,10 +138,5 @@ export async function runAutomationCommand(command, timeoutMs = 120000) {
         });
       }
     });
-
-    // Send the command payload to stdin
-    const inputPayload = JSON.stringify(command) + "\n";
-    child.stdin.write(inputPayload);
-    child.stdin.end();
   });
 }

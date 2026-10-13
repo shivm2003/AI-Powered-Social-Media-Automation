@@ -1,30 +1,36 @@
-import Database from "better-sqlite3";
-import path from "path";
-import fs from "fs";
+import { Pool } from "pg";
 
-// Ensure data directory exists
-const dataDir = path.join(process.cwd(), "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
+let pool;
 
-const dbPath = path.join(dataDir, "database.sqlite");
+function getPool() {
+  if (!globalThis.__pgPool) {
+    globalThis.__pgPool = new Pool({
+      user: process.env.DB_USER || "postgres",
+      password: process.env.DB_PASSWORD || "Shivam@123",
+      host: process.env.DB_HOST || "localhost",
+      port: parseInt(process.env.DB_PORT || "5432", 10),
+      database: process.env.DB_NAME || "Social_Media",
+      max: 10,
+      idleTimeoutMillis: 30000,
+    });
 
-let db;
-
-function getDb() {
-  if (!db) {
-    db = new Database(dbPath);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    initializeDatabase(db);
+    // Run table initialization once
+    initializeDatabase(globalThis.__pgPool).catch((err) => {
+      console.error("PostgreSQL database initialization warning:", err.message);
+    });
   }
-  return db;
+  return globalThis.__pgPool;
 }
 
-function initializeDatabase(database) {
-  database.exec(`
-    -- Products table
+pool = getPool();
+
+async function query(text, params = []) {
+  const client = getPool();
+  return client.query(text, params);
+}
+
+async function initializeDatabase(client) {
+  await client.query(`
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -39,21 +45,19 @@ function initializeDatabase(database) {
       disclaimer TEXT,
       custom_prompt TEXT,
       campaign_objectives TEXT DEFAULT '[]',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
 
-    -- Product images
     CREATE TABLE IF NOT EXISTS product_images (
       id TEXT PRIMARY KEY,
       product_id TEXT NOT NULL,
       file_path TEXT NOT NULL,
       file_name TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     );
 
-    -- Social accounts
     CREATE TABLE IF NOT EXISTS social_accounts (
       id TEXT PRIMARY KEY,
       platform TEXT NOT NULL,
@@ -62,12 +66,11 @@ function initializeDatabase(database) {
       extra_fields TEXT DEFAULT '{}',
       chrome_profile_path TEXT,
       session_status TEXT DEFAULT 'unverified',
-      last_verified TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
+      last_verified TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
 
-    -- Campaigns
     CREATE TABLE IF NOT EXISTS campaigns (
       id TEXT PRIMARY KEY,
       product_id TEXT,
@@ -90,43 +93,47 @@ function initializeDatabase(database) {
       telegram_message_id TEXT,
       revision_notes TEXT,
       revision_count INTEGER DEFAULT 0,
-      posted_at TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
+      posted_at TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
     );
 
-    -- Settings
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
     );
 
-    -- Insert default settings if not exists
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('llm_provider', 'gemini');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('telegram_bot_token', '');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('telegram_chat_id', '');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('default_language', 'english');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('default_tone', 'professional');
+    INSERT INTO settings (key, value) VALUES ('llm_provider', 'gemini') ON CONFLICT (key) DO NOTHING;
+    INSERT INTO settings (key, value) VALUES ('telegram_bot_token', '') ON CONFLICT (key) DO NOTHING;
+    INSERT INTO settings (key, value) VALUES ('telegram_chat_id', '') ON CONFLICT (key) DO NOTHING;
+    INSERT INTO settings (key, value) VALUES ('default_language', 'english') ON CONFLICT (key) DO NOTHING;
+    INSERT INTO settings (key, value) VALUES ('default_tone', 'professional') ON CONFLICT (key) DO NOTHING;
   `);
 }
 
 // ── Product Queries ──
 
-export function getAllProducts() {
-  return getDb().prepare("SELECT * FROM products ORDER BY created_at DESC").all();
+export async function getAllProducts() {
+  const { rows } = await query("SELECT * FROM products ORDER BY created_at DESC");
+  return rows;
 }
 
-export function getProductById(id) {
-  return getDb().prepare("SELECT * FROM products WHERE id = ?").get(id);
+export async function getProductById(id) {
+  const { rows } = await query("SELECT * FROM products WHERE id = $1", [id]);
+  return rows[0] || null;
 }
 
-export function createProduct(product) {
-  const stmt = getDb().prepare(`
-    INSERT INTO products (id, name, description, category, website_url, logo_path, target_audience, key_benefits, brand_colors, tone, disclaimer, custom_prompt, campaign_objectives)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  return stmt.run(
+export async function createProduct(product) {
+  const sql = `
+    INSERT INTO products (
+      id, name, description, category, website_url, logo_path,
+      target_audience, key_benefits, brand_colors, tone,
+      disclaimer, custom_prompt, campaign_objectives
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+  `;
+  return query(sql, [
     product.id,
     product.name,
     product.description || null,
@@ -134,136 +141,146 @@ export function createProduct(product) {
     product.website_url || null,
     product.logo_path || null,
     product.target_audience || null,
-    JSON.stringify(product.key_benefits || []),
-    JSON.stringify(product.brand_colors || { primary: "#7C5CFC", secondary: "#3DD6D0", accent: "#FFB347" }),
+    typeof product.key_benefits === "string" ? product.key_benefits : JSON.stringify(product.key_benefits || []),
+    typeof product.brand_colors === "string" ? product.brand_colors : JSON.stringify(product.brand_colors || { primary: "#7C5CFC", secondary: "#3DD6D0", accent: "#FFB347" }),
     product.tone || "professional",
     product.disclaimer || null,
     product.custom_prompt || null,
-    JSON.stringify(product.campaign_objectives || [])
-  );
+    typeof product.campaign_objectives === "string" ? product.campaign_objectives : JSON.stringify(product.campaign_objectives || []),
+  ]);
 }
 
-export function updateProduct(id, product) {
-  const stmt = getDb().prepare(`
+export async function updateProduct(id, product) {
+  const sql = `
     UPDATE products SET
-      name = ?, description = ?, category = ?, website_url = ?,
-      target_audience = ?, key_benefits = ?, brand_colors = ?,
-      tone = ?, disclaimer = ?, custom_prompt = ?, campaign_objectives = ?,
-      updated_at = datetime('now')
-    WHERE id = ?
-  `);
-  return stmt.run(
+      name = $1, description = $2, category = $3, website_url = $4,
+      target_audience = $5, key_benefits = $6, brand_colors = $7,
+      tone = $8, disclaimer = $9, custom_prompt = $10, campaign_objectives = $11,
+      updated_at = NOW()
+    WHERE id = $12
+  `;
+  return query(sql, [
     product.name,
     product.description || null,
     product.category || "other",
     product.website_url || null,
     product.target_audience || null,
-    JSON.stringify(product.key_benefits || []),
-    JSON.stringify(product.brand_colors || {}),
+    typeof product.key_benefits === "string" ? product.key_benefits : JSON.stringify(product.key_benefits || []),
+    typeof product.brand_colors === "string" ? product.brand_colors : JSON.stringify(product.brand_colors || {}),
     product.tone || "professional",
     product.disclaimer || null,
     product.custom_prompt || null,
-    JSON.stringify(product.campaign_objectives || []),
-    id
-  );
+    typeof product.campaign_objectives === "string" ? product.campaign_objectives : JSON.stringify(product.campaign_objectives || []),
+    id,
+  ]);
 }
 
-export function deleteProduct(id) {
-  return getDb().prepare("DELETE FROM products WHERE id = ?").run(id);
+export async function deleteProduct(id) {
+  return query("DELETE FROM products WHERE id = $1", [id]);
 }
 
-export function updateProductLogo(id, logoPath) {
-  return getDb().prepare("UPDATE products SET logo_path = ?, updated_at = datetime('now') WHERE id = ?").run(logoPath, id);
+export async function updateProductLogo(id, logoPath) {
+  return query("UPDATE products SET logo_path = $1, updated_at = NOW() WHERE id = $2", [logoPath, id]);
 }
 
 // ── Social Account Queries ──
 
-export function getAllAccounts() {
-  return getDb().prepare("SELECT * FROM social_accounts ORDER BY platform, created_at").all();
+export async function getAllAccounts() {
+  const { rows } = await query("SELECT * FROM social_accounts ORDER BY platform, created_at");
+  return rows;
 }
 
-export function getAccountById(id) {
-  return getDb().prepare("SELECT * FROM social_accounts WHERE id = ?").get(id);
+export async function getAccountById(id) {
+  const { rows } = await query("SELECT * FROM social_accounts WHERE id = $1", [id]);
+  return rows[0] || null;
 }
 
-export function getAccountByPlatform(platform) {
-  return getDb().prepare("SELECT * FROM social_accounts WHERE platform = ?").get(platform);
+export async function getAccountByPlatform(platform) {
+  const { rows } = await query("SELECT * FROM social_accounts WHERE platform = $1", [platform]);
+  return rows[0] || null;
 }
 
-export function upsertAccount(account) {
-  const existing = getAccountByPlatform(account.platform);
+export async function upsertAccount(account) {
+  const existing = await getAccountByPlatform(account.platform);
   if (existing) {
-    const stmt = getDb().prepare(`
+    const sql = `
       UPDATE social_accounts SET
-        username = ?, encrypted_password = ?, extra_fields = ?,
-        session_status = ?, updated_at = datetime('now')
-      WHERE platform = ?
-    `);
-    return stmt.run(
+        username = $1, encrypted_password = $2, extra_fields = $3,
+        session_status = $4, updated_at = NOW()
+      WHERE platform = $5
+    `;
+    return query(sql, [
       account.username || null,
       account.encrypted_password || null,
-      JSON.stringify(account.extra_fields || {}),
+      typeof account.extra_fields === "string" ? account.extra_fields : JSON.stringify(account.extra_fields || {}),
       account.session_status || "unverified",
-      account.platform
-    );
+      account.platform,
+    ]);
   } else {
-    const stmt = getDb().prepare(`
+    const sql = `
       INSERT INTO social_accounts (id, platform, username, encrypted_password, extra_fields, session_status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    return stmt.run(
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `;
+    return query(sql, [
       account.id,
       account.platform,
       account.username || null,
       account.encrypted_password || null,
-      JSON.stringify(account.extra_fields || {}),
-      account.session_status || "unverified"
-    );
+      typeof account.extra_fields === "string" ? account.extra_fields : JSON.stringify(account.extra_fields || {}),
+      account.session_status || "unverified",
+    ]);
   }
 }
 
-export function deleteAccount(id) {
-  return getDb().prepare("DELETE FROM social_accounts WHERE id = ?").run(id);
+export async function deleteAccount(id) {
+  return query("DELETE FROM social_accounts WHERE id = $1", [id]);
 }
 
-export function updateAccountStatus(id, status) {
-  return getDb().prepare(
-    "UPDATE social_accounts SET session_status = ?, last_verified = datetime('now'), updated_at = datetime('now') WHERE id = ?"
-  ).run(status, id);
+export async function updateAccountStatus(id, status) {
+  return query(
+    "UPDATE social_accounts SET session_status = $1, last_verified = NOW(), updated_at = NOW() WHERE id = $2",
+    [status, id]
+  );
 }
 
 // ── Campaign Queries ──
 
-export function getAllCampaigns() {
-  return getDb().prepare(`
+export async function getAllCampaigns() {
+  const { rows } = await query(`
     SELECT c.*, p.name as product_name
     FROM campaigns c
     LEFT JOIN products p ON c.product_id = p.id
     ORDER BY c.created_at DESC
-  `).all();
+  `);
+  return rows;
 }
 
-export function getCampaignById(id) {
-  return getDb().prepare(`
+export async function getCampaignById(id) {
+  const { rows } = await query(`
     SELECT c.*, p.name as product_name
     FROM campaigns c
     LEFT JOIN products p ON c.product_id = p.id
-    WHERE c.id = ?
-  `).get(id);
+    WHERE c.id = $1
+  `, [id]);
+  return rows[0] || null;
 }
 
-export function createCampaign(campaign) {
-  const stmt = getDb().prepare(`
-    INSERT INTO campaigns (id, product_id, llm_provider, content_type, language, platforms, audience, tone, cta, hashtags, aspect_ratio, video_duration, visual_style, custom_instructions, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  return stmt.run(
+export async function createCampaign(campaign) {
+  const sql = `
+    INSERT INTO campaigns (
+      id, product_id, llm_provider, content_type, language,
+      platforms, audience, tone, cta, hashtags,
+      aspect_ratio, video_duration, visual_style, custom_instructions, status
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+  `;
+  return query(sql, [
     campaign.id,
     campaign.product_id || null,
     campaign.llm_provider || "gemini",
     campaign.content_type || "text",
     campaign.language || "english",
-    JSON.stringify(campaign.platforms || []),
+    typeof campaign.platforms === "string" ? campaign.platforms : JSON.stringify(campaign.platforms || []),
     campaign.audience || null,
     campaign.tone || "professional",
     campaign.cta || null,
@@ -272,52 +289,54 @@ export function createCampaign(campaign) {
     campaign.video_duration || 15,
     campaign.visual_style || "minimal",
     campaign.custom_instructions || null,
-    campaign.status || "draft"
-  );
+    campaign.status || "draft",
+  ]);
 }
 
-export function updateCampaignStatus(id, status, extra = {}) {
-  let sql = "UPDATE campaigns SET status = ?, updated_at = datetime('now')";
+export async function updateCampaignStatus(id, status, extra = {}) {
+  const setClauses = ["status = $1", "updated_at = NOW()"];
   const params = [status];
+  let paramIdx = 2;
 
   if (extra.generated_caption) {
-    sql += ", generated_caption = ?";
+    setClauses.push(`generated_caption = $${paramIdx++}`);
     params.push(extra.generated_caption);
   }
   if (extra.generated_hashtags) {
-    sql += ", generated_hashtags = ?";
-    params.push(extra.generated_hashtags);
+    setClauses.push(`generated_hashtags = $${paramIdx++}`);
+    params.push(typeof extra.generated_hashtags === "string" ? extra.generated_hashtags : JSON.stringify(extra.generated_hashtags));
   }
   if (extra.media_paths) {
-    sql += ", media_paths = ?";
-    params.push(JSON.stringify(extra.media_paths));
+    setClauses.push(`media_paths = $${paramIdx++}`);
+    params.push(typeof extra.media_paths === "string" ? extra.media_paths : JSON.stringify(extra.media_paths));
   }
   if (extra.telegram_message_id) {
-    sql += ", telegram_message_id = ?";
+    setClauses.push(`telegram_message_id = $${paramIdx++}`);
     params.push(extra.telegram_message_id);
   }
   if (extra.revision_notes) {
-    sql += ", revision_notes = ?, revision_count = revision_count + 1";
+    setClauses.push(`revision_notes = $${paramIdx++}`);
     params.push(extra.revision_notes);
+    setClauses.push("revision_count = revision_count + 1");
   }
   if (status === "posted") {
-    sql += ", posted_at = datetime('now')";
+    setClauses.push("posted_at = NOW()");
   }
 
-  sql += " WHERE id = ?";
+  const sql = `UPDATE campaigns SET ${setClauses.join(", ")} WHERE id = $${paramIdx}`;
   params.push(id);
 
-  return getDb().prepare(sql).run(...params);
+  return query(sql, params);
 }
 
-export function deleteCampaign(id) {
-  return getDb().prepare("DELETE FROM campaigns WHERE id = ?").run(id);
+export async function deleteCampaign(id) {
+  return query("DELETE FROM campaigns WHERE id = $1", [id]);
 }
 
 // ── Settings Queries ──
 
-export function getAllSettings() {
-  const rows = getDb().prepare("SELECT * FROM settings").all();
+export async function getAllSettings() {
+  const { rows } = await query("SELECT * FROM settings");
   const settings = {};
   rows.forEach((row) => {
     settings[row.key] = row.value;
@@ -325,39 +344,44 @@ export function getAllSettings() {
   return settings;
 }
 
-export function getSetting(key) {
-  const row = getDb().prepare("SELECT value FROM settings WHERE key = ?").get(key);
-  return row ? row.value : null;
+export async function getSetting(key) {
+  const { rows } = await query("SELECT value FROM settings WHERE key = $1", [key]);
+  return rows[0] ? rows[0].value : null;
 }
 
-export function setSetting(key, value) {
-  return getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+export async function setSetting(key, value) {
+  const sql = `
+    INSERT INTO settings (key, value)
+    VALUES ($1, $2)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return query(sql, [key, value]);
 }
 
 // ── Stats ──
 
-export function getDashboardStats() {
-  const db = getDb();
-  const productCount = db.prepare("SELECT COUNT(*) as count FROM products").get().count;
-  const accountCount = db.prepare("SELECT COUNT(*) as count FROM social_accounts WHERE session_status = 'verified'").get().count;
-  const campaignCount = db.prepare("SELECT COUNT(*) as count FROM campaigns").get().count;
-  const postedCount = db.prepare("SELECT COUNT(*) as count FROM campaigns WHERE status = 'posted'").get().count;
-  const pendingCount = db.prepare("SELECT COUNT(*) as count FROM campaigns WHERE status IN ('preview_sent', 'generating')").get().count;
-
-  const recentCampaigns = db.prepare(`
-    SELECT c.*, p.name as product_name
-    FROM campaigns c
-    LEFT JOIN products p ON c.product_id = p.id
-    ORDER BY c.updated_at DESC
-    LIMIT 10
-  `).all();
+export async function getDashboardStats() {
+  const [pCount, aCount, cCount, postCount, pendCount, recent] = await Promise.all([
+    query("SELECT COUNT(*) as count FROM products"),
+    query("SELECT COUNT(*) as count FROM social_accounts WHERE session_status = 'verified'"),
+    query("SELECT COUNT(*) as count FROM campaigns"),
+    query("SELECT COUNT(*) as count FROM campaigns WHERE status = 'posted'"),
+    query("SELECT COUNT(*) as count FROM campaigns WHERE status IN ('preview_sent', 'generating')"),
+    query(`
+      SELECT c.*, p.name as product_name
+      FROM campaigns c
+      LEFT JOIN products p ON c.product_id = p.id
+      ORDER BY c.updated_at DESC
+      LIMIT 10
+    `),
+  ]);
 
   return {
-    productCount,
-    accountCount,
-    campaignCount,
-    postedCount,
-    pendingCount,
-    recentCampaigns,
+    productCount: parseInt(pCount.rows[0].count, 10),
+    accountCount: parseInt(aCount.rows[0].count, 10),
+    campaignCount: parseInt(cCount.rows[0].count, 10),
+    postedCount: parseInt(postCount.rows[0].count, 10),
+    pendingCount: parseInt(pendCount.rows[0].count, 10),
+    recentCampaigns: recent.rows,
   };
 }

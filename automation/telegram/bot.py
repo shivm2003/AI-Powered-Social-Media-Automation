@@ -24,6 +24,30 @@ def get_telegram_credentials():
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
+    # If missing from env, check PostgreSQL
+    if not bot_token or not chat_id:
+        try:
+            import psycopg2
+            pg_user = os.environ.get("DB_USER", "postgres")
+            pg_pass = os.environ.get("DB_PASSWORD", "Shivam@123")
+            pg_host = os.environ.get("DB_HOST", "localhost")
+            pg_port = int(os.environ.get("DB_PORT", "5432"))
+            pg_db = os.environ.get("DB_NAME", "Social_Media")
+            conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
+            cur = conn.cursor()
+            cur.execute("SELECT key, value FROM settings WHERE key IN ('telegram_bot_token', 'telegram_chat_id')")
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            for k, v in rows:
+                if k == "telegram_bot_token" and v:
+                    bot_token = v
+                elif k == "telegram_chat_id" and v:
+                    chat_id = v
+        except Exception as e:
+            logger.debug(f"Could not read Telegram settings from PostgreSQL: {e}")
+
+    # Fallback to SQLite if still missing
     if (not bot_token or not chat_id) and DB_PATH.exists():
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -103,11 +127,13 @@ def send_preview_to_telegram(
             "message": "Telegram Bot Token or Chat ID not configured. Please set them in Settings."
         }
 
+    import html
+    safe_caption = html.escape(caption)
     platforms_str = ", ".join(platforms or ["Facebook", "Instagram"])
     text_content = (
         f"🌟 <b>Content Preview for {platforms_str}</b>\n"
         f"{f'<i>(Revision #{revision_count})</i>' if revision_count > 0 else ''}\n\n"
-        f"📝 <b>Caption:</b>\n{caption}\n\n"
+        f"📝 <b>Caption:</b>\n{safe_caption}\n\n"
         f"👉 <i>Review above and choose an action:</i>"
     )
 

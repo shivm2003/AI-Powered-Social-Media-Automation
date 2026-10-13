@@ -4,11 +4,11 @@ import { v4 as uuidv4 } from "uuid";
 
 export async function GET() {
   try {
-    const campaigns = getAllCampaigns();
+    const campaigns = await getAllCampaigns();
     const parsed = campaigns.map((c) => ({
       ...c,
-      platforms: JSON.parse(c.platforms || "[]"),
-      media_paths: JSON.parse(c.media_paths || "[]"),
+      platforms: typeof c.platforms === "string" ? JSON.parse(c.platforms || "[]") : (c.platforms || []),
+      media_paths: typeof c.media_paths === "string" ? JSON.parse(c.media_paths || "[]") : (c.media_paths || []),
     }));
     return NextResponse.json(parsed);
   } catch (error) {
@@ -24,7 +24,7 @@ export async function POST(request) {
       id: uuidv4(),
       ...body,
     };
-    createCampaign(campaign);
+    await createCampaign(campaign);
     return NextResponse.json({ id: campaign.id, message: "Campaign created" }, { status: 201 });
   } catch (error) {
     console.error("Error creating campaign:", error);

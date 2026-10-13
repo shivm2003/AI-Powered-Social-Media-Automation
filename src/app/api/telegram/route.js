@@ -15,8 +15,8 @@ function safeParseArray(val) {
 
 export async function GET() {
   try {
-    const token = getSetting("telegram_bot_token") || process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = getSetting("telegram_chat_id") || process.env.TELEGRAM_CHAT_ID;
+    const token = (await getSetting("telegram_bot_token")) || process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = (await getSetting("telegram_chat_id")) || process.env.TELEGRAM_CHAT_ID;
 
     if (!token) {
       return NextResponse.json({
@@ -54,8 +54,8 @@ export async function POST(request) {
 
     // Check if this is a manual test message request from frontend settings
     if (body.action === "test_message") {
-      const token = getSetting("telegram_bot_token") || process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = body.chat_id || getSetting("telegram_chat_id") || process.env.TELEGRAM_CHAT_ID;
+      const token = (await getSetting("telegram_bot_token")) || process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = body.chat_id || (await getSetting("telegram_chat_id")) || process.env.TELEGRAM_CHAT_ID;
 
       if (!token || !chatId) {
         return NextResponse.json({ error: "Missing Bot Token or Chat ID" }, { status: 400 });
@@ -75,7 +75,7 @@ export async function POST(request) {
     }
 
     // ── Handle Telegram Webhook Updates ──
-    const token = getSetting("telegram_bot_token") || process.env.TELEGRAM_BOT_TOKEN;
+    const token = (await getSetting("telegram_bot_token")) || process.env.TELEGRAM_BOT_TOKEN;
 
     // 1. Handle Inline Button Clicks (callback_query)
     if (body.callback_query) {
@@ -85,10 +85,10 @@ export async function POST(request) {
 
       if (callbackData.startsWith("approve:")) {
         const campaignId = callbackData.split(":")[1];
-        const campaign = getCampaignById(campaignId);
+        const campaign = await getCampaignById(campaignId);
 
         if (campaign) {
-          updateCampaignStatus(campaignId, "approved");
+          await updateCampaignStatus(campaignId, "approved");
 
           // Post to selected social platforms via Selenium
           const platforms = safeParseArray(campaign.platforms);
@@ -103,7 +103,7 @@ export async function POST(request) {
             caption,
           }).catch(console.error);
 
-          updateCampaignStatus(campaignId, "posted");
+          await updateCampaignStatus(campaignId, "posted");
 
           // Notify in Telegram
           if (token && chatId) {
@@ -133,7 +133,7 @@ export async function POST(request) {
         }
       } else if (callbackData.startsWith("reject:")) {
         const campaignId = callbackData.split(":")[1];
-        updateCampaignStatus(campaignId, "rejected");
+        await updateCampaignStatus(campaignId, "rejected");
         if (token && chatId) {
           await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: "POST",
@@ -169,11 +169,11 @@ export async function POST(request) {
       const match = replyText.match(/campaign <code>([a-zA-Z0-9-]+)<\/code>/i) || replyText.match(/([a-zA-Z0-9-]{36})/);
       if (match) {
         const campaignId = match[1];
-        const campaign = getCampaignById(campaignId);
+        const campaign = await getCampaignById(campaignId);
 
         if (campaign) {
           // Re-generate content incorporating suggestion
-          const product = getProductById(campaign.product_id);
+          const product = await getProductById(campaign.product_id);
           const platforms = safeParseArray(campaign.platforms);
 
           // Send "Regenerating..." notification
@@ -212,7 +212,7 @@ export async function POST(request) {
 
             const newMediaPath = imgRes.image_path || "";
 
-            updateCampaignStatus(campaignId, "preview_sent", {
+            await updateCampaignStatus(campaignId, "preview_sent", {
               generated_caption: newCaption,
               generated_hashtags: JSON.stringify(newHashtags),
               media_paths: newMediaPath ? [newMediaPath] : [],

@@ -3,7 +3,7 @@ import { getAllSettings, setSetting } from "@/lib/db";
 
 export async function GET() {
   try {
-    const settings = getAllSettings();
+    const settings = await getAllSettings();
     return NextResponse.json(settings);
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -15,7 +15,7 @@ export async function PUT(request) {
   try {
     const body = await request.json();
     for (const [key, value] of Object.entries(body)) {
-      setSetting(key, value);
+      await setSetting(key, value);
     }
     return NextResponse.json({ message: "Settings updated successfully" });
   } catch (error) {

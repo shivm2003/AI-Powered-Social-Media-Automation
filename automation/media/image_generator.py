@@ -132,56 +132,84 @@ def generate_social_image(
     font_sub = get_font(int(min(width, height) * 0.028))
     font_cta = get_font(int(min(width, height) * 0.030))
 
-    cur_y = card_box[1] + int(height * 0.06)
+    def wrap_text(text, max_chars=32):
+        words = text.split()
+        lines = []
+        cur = []
+        cur_len = 0
+        for w in words:
+            if cur_len + len(w) + 1 <= max_chars:
+                cur.append(w)
+                cur_len += len(w) + 1
+            else:
+                if cur:
+                    lines.append(" ".join(cur))
+                cur = [w]
+                cur_len = len(w)
+        if cur:
+            lines.append(" ".join(cur))
+        return lines
+
+    cur_y = card_box[1] + int(height * 0.055)
     left_x = card_box[0] + int(width * 0.06)
 
-    # Category Pill Badge
-    pill_text = f"✦  {category.upper()}  ✦"
-    pill_w = int(len(pill_text) * 10)
-    pill_h = int(min(width, height) * 0.04)
+    # Category Pill Badge (Clean ASCII without broken glyphs)
+    clean_cat = category.strip().upper() if category else "FEATURED"
+    pill_text = f"•  {clean_cat}  •"
+    pill_w = max(int(len(pill_text) * 11), 160)
+    pill_h = int(min(width, height) * 0.042)
     draw.rounded_rectangle(
         (left_x, cur_y, left_x + pill_w, cur_y + pill_h),
         radius=pill_h // 2,
-        fill=(*primary, 90),
-        outline=(*secondary, 150),
+        fill=(*primary, 100),
+        outline=(*secondary, 180),
         width=1
     )
-    draw.text((left_x + 14, cur_y + 6), pill_text, fill=(240, 240, 255), font=font_badge)
-    cur_y += pill_h + int(height * 0.04)
+    draw.text((left_x + 16, cur_y + int(pill_h * 0.15)), pill_text, fill=(240, 240, 255), font=font_badge)
+    cur_y += pill_h + int(height * 0.035)
 
     # Product Name
     draw.text((left_x, cur_y), product_name, fill=(255, 255, 255), font=font_title)
-    cur_y += int(min(width, height) * 0.08)
+    cur_y += int(min(width, height) * 0.075)
 
-    # Punchy Headline (wrapped if needed)
+    # Punchy Headline (wrapped nicely across up to 2 lines)
     headline_text = headline or f"Unlock Next-Gen Results With {product_name}"
-    draw.text((left_x, cur_y), headline_text[:65], fill=(*secondary, 255), font=font_headline)
-    cur_y += int(min(width, height) * 0.07)
+    headline_lines = wrap_text(headline_text, max_chars=32)[:2]
+    for hline in headline_lines:
+        draw.text((left_x, cur_y), hline, fill=(*secondary, 255), font=font_headline)
+        cur_y += int(min(width, height) * 0.052)
+    cur_y += int(min(width, height) * 0.015)
 
-    # Subheadline
+    # Subheadline (wrapped nicely across up to 2 lines)
     sub_text = subheadline or "Supercharge productivity and elevate your brand presence."
-    draw.text((left_x, cur_y), sub_text[:90], fill=(200, 205, 225), font=font_sub)
-    cur_y += int(min(width, height) * 0.09)
+    sub_lines = wrap_text(sub_text, max_chars=44)[:2]
+    for sline in sub_lines:
+        draw.text((left_x, cur_y), sline, fill=(210, 215, 235), font=font_sub)
+        cur_y += int(min(width, height) * 0.038)
 
     # Decorative divider
-    draw.line((left_x, cur_y, width - left_x, cur_y), fill=(255, 255, 255, 30), width=2)
-    cur_y += int(min(width, height) * 0.05)
+    cur_y += int(min(width, height) * 0.02)
+    draw.line((left_x, cur_y, width - left_x, cur_y), fill=(255, 255, 255, 35), width=2)
 
-    # Call to Action Button
-    cta_w = int(width * 0.38)
-    cta_h = int(min(width, height) * 0.07)
-    cta_top = card_box[3] - cta_h - int(height * 0.06)
+    # Call to Action Button (Clean ASCII arrow)
+    clean_cta = (cta_text or "Learn More").replace("➜", "->").replace("→", "->").replace("âžœ", "->").strip()
+    if not clean_cta.endswith("->") and not clean_cta.endswith(">"):
+        clean_cta = f"{clean_cta} ->"
+
+    cta_w = max(int(width * 0.40), 220)
+    cta_h = int(min(width, height) * 0.072)
+    cta_top = card_box[3] - cta_h - int(height * 0.055)
 
     draw.rounded_rectangle(
         (left_x, cta_top, left_x + cta_w, cta_top + cta_h),
         radius=int(cta_h // 2),
         fill=(*primary, 240),
-        outline=(*secondary, 200),
+        outline=(*secondary, 220),
         width=2
     )
     draw.text(
-        (left_x + int(cta_w * 0.15), cta_top + int(cta_h * 0.22)),
-        cta_text,
+        (left_x + int(cta_w * 0.12), cta_top + int(cta_h * 0.22)),
+        clean_cta,
         fill=(255, 255, 255),
         font=font_cta
     )

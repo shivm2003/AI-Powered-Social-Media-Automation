@@ -100,6 +100,7 @@ def handle_command(command: dict):
             })
 
         elif action == "generate_image":
+            provider = command.get("provider", "chatgpt").lower()
             product = command.get("product", {})
             headline = command.get("headline", "")
             subheadline = command.get("subheadline", "")
@@ -107,18 +108,58 @@ def handle_command(command: dict):
             aspect_ratio = command.get("aspect_ratio", "1:1")
             cta_text = command.get("cta_text", "Learn More ➜")
             logo_path = command.get("logo_path", None)
+            skill_image_path = command.get("skill_image_path", logo_path)
+            visual_style = command.get("visual_style", "photorealistic")
+            custom_instructions = command.get("custom_instructions", "")
             category = product.get("category", "Featured")
 
-            img_path = generate_social_image(
-                product_name=product.get("name", "Product"),
-                headline=headline,
-                subheadline=subheadline,
-                brand_colors=brand_colors,
-                aspect_ratio=aspect_ratio,
-                cta_text=cta_text,
-                logo_path=logo_path,
-                category=category
-            )
+            img_path = None
+            if provider == "chatgpt":
+                try:
+                    from llm.chatgpt import generate_image_with_chatgpt_browser
+                    img_path = generate_image_with_chatgpt_browser(
+                        product_name=product.get("name", "Product"),
+                        headline=headline,
+                        subheadline=subheadline,
+                        visual_style=visual_style,
+                        aspect_ratio=aspect_ratio,
+                        cta_text=cta_text,
+                        skill_image_path=skill_image_path,
+                        custom_instructions=custom_instructions,
+                        brand_colors=brand_colors,
+                        category=category
+                    )
+                except Exception as e_cg:
+                    logger.warning(f"ChatGPT browser image generator notice: {e_cg}")
+            elif provider == "gemini":
+                try:
+                    from llm.gemini import generate_image_with_gemini_browser
+                    img_path = generate_image_with_gemini_browser(
+                        product_name=product.get("name", "Product"),
+                        headline=headline,
+                        subheadline=subheadline,
+                        visual_style=visual_style,
+                        aspect_ratio=aspect_ratio,
+                        cta_text=cta_text,
+                        skill_image_path=skill_image_path,
+                        custom_instructions=custom_instructions,
+                        brand_colors=brand_colors,
+                        category=category
+                    )
+                except Exception as e_gem:
+                    logger.warning(f"Gemini browser image generator notice: {e_gem}")
+
+            if not img_path:
+                img_path = generate_social_image(
+                    product_name=product.get("name", "Product"),
+                    headline=headline,
+                    subheadline=subheadline,
+                    brand_colors=brand_colors,
+                    aspect_ratio=aspect_ratio,
+                    cta_text=cta_text,
+                    logo_path=skill_image_path,
+                    category=category
+                )
 
             send_response({
                 "status": "success",
@@ -193,6 +234,46 @@ def handle_command(command: dict):
                 "results": results,
                 "message": f"Posted to {', '.join(platforms)}",
             })
+
+        elif action == "human_flow":
+            platform = command.get("platform", "gemini")
+            query = command.get("query", "Search and draft a viral marketing post for our product.")
+            logger.info(f"Executing human_flow for platform: {platform}...")
+            from browser.human_operator import execute_full_human_flow
+            result = execute_full_human_flow(platform=platform, query=query)
+            send_response(result)
+
+        elif action == "human_flow_generate":
+            platform = command.get("platform") or command.get("provider", "chatgpt")
+            product = command.get("product", {})
+            platforms = command.get("platforms", ["facebook", "instagram"])
+            content_type = command.get("content_type", "image")
+            language = command.get("language", "english")
+            tone = command.get("tone", "professional")
+            cta = command.get("cta", "learn_more")
+            custom_instructions = command.get("custom_instructions", "")
+            aspect_ratio = command.get("aspect_ratio", "1:1")
+            visual_style = command.get("visual_style", "photorealistic")
+            skill_image_path = command.get("skill_image_path", None)
+            campaign_id = command.get("campaign_id", None)
+
+            logger.info(f"Executing human_flow_generate for platform: {platform}...")
+            from browser.human_operator import execute_human_generation_and_telegram_flow
+            result = execute_human_generation_and_telegram_flow(
+                platform=platform,
+                product=product,
+                platforms=platforms,
+                content_type=content_type,
+                language=language,
+                tone=tone,
+                cta=cta,
+                custom_instructions=custom_instructions,
+                aspect_ratio=aspect_ratio,
+                visual_style=visual_style,
+                skill_image_path=skill_image_path,
+                campaign_id=campaign_id
+            )
+            send_response(result)
 
         else:
             send_response({

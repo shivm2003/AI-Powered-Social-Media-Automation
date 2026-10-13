@@ -57,7 +57,26 @@ def get_master_secret() -> bytes:
                 pass
         return secret_bytes
 
-    # 2. Second priority: SQLite settings table (encryption_master_secret)
+    # 2. Second priority: PostgreSQL settings table
+    try:
+        import psycopg2
+        pg_user = os.environ.get("DB_USER", "postgres")
+        pg_pass = os.environ.get("DB_PASSWORD", "Shivam@123")
+        pg_host = os.environ.get("DB_HOST", "localhost")
+        pg_port = int(os.environ.get("DB_PORT", "5432"))
+        pg_db = os.environ.get("DB_NAME", "Social_Media")
+        conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key = 'encryption_master_secret'")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row and row[0]:
+            return row[0].strip().encode("utf-8")
+    except Exception:
+        pass
+
+    # 3. Third priority: SQLite settings table (encryption_master_secret)
     if DB_PATH.exists():
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -70,7 +89,7 @@ def get_master_secret() -> bytes:
         except Exception as e:
             logger.debug(f"Could not read encryption_master_secret from DB: {e}")
 
-    # 3. Fallback secret
+    # 4. Fallback secret
     return b"ai-social-media-secure-local-vault-2026"
 
 

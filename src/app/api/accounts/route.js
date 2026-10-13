@@ -5,11 +5,11 @@ import { v4 as uuidv4 } from "uuid";
 
 export async function GET() {
   try {
-    const accounts = getAllAccounts();
+    const accounts = await getAllAccounts();
     // Parse JSON fields and mask passwords
     const parsed = accounts.map((a) => ({
       ...a,
-      extra_fields: JSON.parse(a.extra_fields || "{}"),
+      extra_fields: typeof a.extra_fields === "string" ? JSON.parse(a.extra_fields || "{}") : (a.extra_fields || {}),
       // Never send actual password to frontend
       has_password: !!a.encrypted_password,
       encrypted_password: undefined,
@@ -39,7 +39,7 @@ export async function POST(request) {
       session_status: "unverified",
     };
 
-    upsertAccount(account);
+    await upsertAccount(account);
 
     return NextResponse.json({ message: "Account saved successfully" }, { status: 201 });
   } catch (error) {
@@ -55,7 +55,7 @@ export async function DELETE(request) {
     if (!id) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
     }
-    deleteAccount(id);
+    await deleteAccount(id);
     return NextResponse.json({ message: "Account deleted successfully" });
   } catch (error) {
     console.error("Error deleting account:", error);

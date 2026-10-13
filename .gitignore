@@ -53,6 +53,8 @@ data/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+public/uploads/*
+!public/uploads/.gitkeep
 
 # Logs
 /logs/

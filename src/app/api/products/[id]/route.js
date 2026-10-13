@@ -4,16 +4,16 @@ import { getProductById, updateProduct, deleteProduct } from "@/lib/db";
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
-    const product = getProductById(id);
+    const product = await getProductById(id);
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
     return NextResponse.json({
       ...product,
-      key_benefits: JSON.parse(product.key_benefits || "[]"),
-      brand_colors: JSON.parse(product.brand_colors || "{}"),
-      campaign_objectives: JSON.parse(product.campaign_objectives || "[]"),
+      key_benefits: typeof product.key_benefits === "string" ? JSON.parse(product.key_benefits || "[]") : (product.key_benefits || []),
+      brand_colors: typeof product.brand_colors === "string" ? JSON.parse(product.brand_colors || "{}") : (product.brand_colors || {}),
+      campaign_objectives: typeof product.campaign_objectives === "string" ? JSON.parse(product.campaign_objectives || "[]") : (product.campaign_objectives || []),
     });
   } catch (error) {
     console.error("Error fetching product:", error);
@@ -30,7 +30,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Product name is required" }, { status: 400 });
     }
 
-    updateProduct(id, body);
+    await updateProduct(id, body);
     return NextResponse.json({ message: "Product updated successfully" });
   } catch (error) {
     console.error("Error updating product:", error);
@@ -41,7 +41,7 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
-    deleteProduct(id);
+    await deleteProduct(id);
     return NextResponse.json({ message: "Product deleted successfully" });
   } catch (error) {
     console.error("Error deleting product:", error);

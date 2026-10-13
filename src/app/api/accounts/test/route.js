@@ -11,7 +11,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Platform is required" }, { status: 400 });
     }
 
-    const account = getAccountByPlatform(platform);
+    const account = await getAccountByPlatform(platform);
     let decryptedPassword = "";
     if (account && account.encrypted_password) {
       decryptedPassword = decrypt(account.encrypted_password);
@@ -25,7 +25,7 @@ export async function POST(request) {
           platform,
           username: account ? account.username : body.username || null,
           password: decryptedPassword || body.password || null,
-          extra_fields: account ? JSON.parse(account.extra_fields || "{}") : {},
+          extra_fields: account ? (typeof account.extra_fields === "string" ? JSON.parse(account.extra_fields || "{}") : account.extra_fields) : {},
         },
         180000 // 3 minutes timeout for user MFA
       );
@@ -39,7 +39,7 @@ export async function POST(request) {
 
     // Mark account as verified in DB
     if (account) {
-      updateAccountStatus(account.id, "verified");
+      await updateAccountStatus(account.id, "verified");
     }
 
     return NextResponse.json({
