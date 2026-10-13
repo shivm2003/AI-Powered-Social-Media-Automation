@@ -120,14 +120,17 @@ export const CTA_OPTIONS = [
   { value: "custom", label: "Custom" },
 ];
 
-// Visual styles
+// Visual styles & Creative Templates
 export const VISUAL_STYLES = [
-  { value: "minimal", label: "Minimal", description: "Clean, simple design" },
-  { value: "bold", label: "Bold", description: "Eye-catching, vibrant" },
-  { value: "gradient", label: "Gradient", description: "Smooth color gradients" },
-  { value: "photorealistic", label: "Photo-realistic", description: "Natural looking" },
-  { value: "illustrated", label: "Illustrated", description: "Hand-drawn or digital art" },
-  { value: "corporate", label: "Corporate", description: "Business-professional" },
+  { value: "auto", label: "🎲 Auto-Diversify", description: "Thousands of unique styles, fresh on every run" },
+  { value: "lifestyle", label: "📸 Lifestyle & Real", description: "Authentic, relatable commercial photography" },
+  { value: "neo_brutalist", label: "🎨 Neo-Brutalist Pop", description: "Punchy contrast, bold geometry & sticker badges" },
+  { value: "minimal", label: "✨ Minimalist Luxury", description: "Clean Scandinavian elegance & vast negative space" },
+  { value: "3d_tech", label: "🧊 3D Glassmorphism", description: "Tactile glass, glowing holographic UI components" },
+  { value: "infographic", label: "📊 Split & Infographic", description: "Transformation visual, metrics & key benefits" },
+  { value: "corporate", label: "💼 Corporate Trust", description: "Prestige navy & gold, executive authority" },
+  { value: "editorial", label: "🌟 Fashion Editorial", description: "Vogue/GQ studio lighting & artistic angles" },
+  { value: "vintage", label: "📼 Retro 90s Film", description: "Warm analog grain & nostalgic cinematic tones" },
 ];
 
 // Languages

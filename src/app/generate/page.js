@@ -37,7 +37,7 @@ export default function GeneratePage() {
     hashtagStrategy: "auto",
     aspectRatio: "1:1",
     videoDuration: 15,
-    visualStyle: "photorealistic",
+    visualStyle: "auto",
     customInstructions: "",
     skillImagePath: "",
     skillImageUrl: "",
@@ -549,9 +549,14 @@ export default function GeneratePage() {
                     )}
                   </div>
 
-                  {/* Visual Style */}
+                  {/* Visual Style & Template Archetype */}
                   <div className="form-group">
-                    <label className="form-label">Visual Style</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
+                      <label className="form-label" style={{ margin: 0 }}>Design Template & Creative Style</label>
+                      <span style={{ fontSize: "var(--font-xs)", color: "var(--accent-primary)", fontWeight: 600 }}>
+                        ✨ 50,000+ Combinatorial Variations
+                      </span>
+                    </div>
                     <div className="grid-3">
                       {VISUAL_STYLES.map((style) => (
                         <div

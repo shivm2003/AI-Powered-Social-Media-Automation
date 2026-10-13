@@ -33,6 +33,7 @@ from telegram.bot import (
     send_password_request_prompt,
     delete_telegram_message,
     send_text_message,
+    send_start_dashboard,
 )
 from social.facebook import is_facebook_login_needed, submit_facebook_login, post_to_facebook
 from browser.driver import browser
@@ -42,6 +43,46 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 
 # In-memory session state per chat_id
 chat_sessions = {}
+
+
+def get_all_products() -> list:
+    """Finds all registered products from PostgreSQL or SQLite."""
+    # 1. Try PostgreSQL
+    try:
+        import psycopg2
+        pg_user = os.environ.get("DB_USER", "postgres")
+        pg_pass = os.environ.get("DB_PASSWORD", "Shivam@123")
+        pg_host = os.environ.get("DB_HOST", "localhost")
+        pg_port = int(os.environ.get("DB_PORT", "5432"))
+        pg_db = os.environ.get("DB_NAME", "Social_Media")
+        conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, category, description FROM products ORDER BY name ASC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        if rows:
+            return [{"id": str(r[0]), "name": r[1], "category": r[2], "description": r[3]} for r in rows]
+    except Exception as e:
+        logger.debug(f"PG products lookup note: {e}")
+
+    # 2. Try SQLite
+    db_path = BASE_DIR / "data" / "database.sqlite"
+    if db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, category, description FROM products ORDER BY name ASC")
+            rows = cur.fetchall()
+            conn.close()
+            if rows:
+                return [{"id": str(r[0]), "name": r[1], "category": r[2], "description": r[3]} for r in rows]
+        except Exception as e:
+            logger.debug(f"SQLite products lookup note: {e}")
+
+    return []
+
 
 
 def get_campaign_data(campaign_id: str) -> dict:
@@ -195,17 +236,86 @@ def handle_callback_query(callback: dict):
         answer_callback_query(callback_id, text="Rejected.")
         send_text_message(chat_id, "❌ Campaign rejected. No post will be made.")
 
+    # 6. User clicked [🚀 Generate: <Product>] from /start dashboard
+    elif callback_data.startswith("gen_prod:"):
+        prod_id = callback_data.split(":", 1)[1]
+        answer_callback_query(callback_id, text="Initiating AI generation...")
+
+        products = get_all_products()
+        selected_prod = None
+        for p in products:
+            if str(p.get("id")) == prod_id:
+                selected_prod = p
+                break
+        if not selected_prod and products:
+            selected_prod = products[0]
+
+        prod_name = selected_prod.get("name", "Featured Product") if selected_prod else "Featured Product"
+
+        send_text_message(
+            chat_id,
+            f"🚀 <b>Generation Initiated for '{prod_name}'</b>\n\n"
+            f"🤖 <b>Step 1 & 2:</b> Opening Chrome and prompting ChatGPT like a human...\n"
+            f"🎨 <b>Step 3:</b> Generating custom visual graphic & viral post copy...\n"
+            f"⏳ <i>Please wait ~35-50 seconds. The complete preview with approval buttons will be sent here!</i>"
+        )
+
+        import threading
+        def _run_human_flow():
+            try:
+                from browser.human_operator import execute_human_generation_and_telegram_flow
+                execute_human_generation_and_telegram_flow(
+                    platform="chatgpt",
+                    product=selected_prod or {"name": prod_name},
+                    platforms=["facebook", "instagram"],
+                )
+            except Exception as e_run:
+                logger.error(f"Error during Telegram triggered generation: {e_run}")
+                send_text_message(chat_id, f"⚠️ Generation notice: {e_run}")
+
+        threading.Thread(target=_run_human_flow, daemon=True).start()
+
+    # 7. User clicked [ℹ️ How It Works]
+    elif callback_data == "info:how_it_works":
+        answer_callback_query(callback_id)
+        send_text_message(
+            chat_id,
+            "💡 <b>How The Automation Works:</b>\n\n"
+            "1️⃣ <b>Select Product</b>: Tap any product button or configure on http://localhost:3000.\n"
+            "2️⃣ <b>Human Browser Flow</b>: Chrome opens ChatGPT with your profile and inputs the prompt all at once.\n"
+            "3️⃣ <b>DALL-E & Copy</b>: Generates high-res visual artwork, headline, marketing copy & hashtags.\n"
+            "4️⃣ <b>Telegram Review</b>: The bot delivers the preview with interactive Approve/Reject buttons.\n"
+            "5️⃣ <b>Auto-Posting</b>: Upon approval, the bot navigates to Facebook and publishes your post!"
+        )
+
+    # 8. User clicked [📋 Active Products]
+    elif callback_data == "info:products":
+        answer_callback_query(callback_id)
+        prods = get_all_products()
+        if prods:
+            p_lines = [f"• <b>{p.get('name')}</b> ({p.get('category', 'Product')}): <i>{p.get('description', '')[:70]}...</i>" for p in prods]
+            send_text_message(chat_id, "📋 <b>Active Registered Products:</b>\n\n" + "\n".join(p_lines))
+        else:
+            send_text_message(chat_id, "📋 <i>No registered products found in database.</i>")
+
 
 def handle_text_message(message: dict):
-    """Processes user text messages in Telegram (such as passwords or revision feedback)."""
+    """Processes user text messages in Telegram (such as passwords, start commands, or revision feedback)."""
     chat_id = str(message.get("chat", {}).get("id"))
     text = message.get("text", "").strip()
     msg_id = message.get("message_id")
 
+    clean_text = text.lower().strip()
+    if clean_text in ["/start", "start", "/help", "help", "hi", "hello", "menu", "/menu"]:
+        products = get_all_products()
+        send_start_dashboard(chat_id, products)
+        return
+
     session = chat_sessions.get(chat_id)
     if not session:
         if text.startswith("/"):
-            send_text_message(chat_id, "👋 <b>AI Social Media Bot</b> is active and listening for approvals and post commands.")
+            products = get_all_products()
+            send_start_dashboard(chat_id, products)
         return
 
     # User provided password for a platform

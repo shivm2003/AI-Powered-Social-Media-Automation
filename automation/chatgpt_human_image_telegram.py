@@ -126,10 +126,11 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
     # Construct prompt
     product_name = (custom_product or {}).get("name", "AI Social Media Automation")
     prompt_text = (
-        f"Generate a high-converting, photorealistic commercial marketing image for '{product_name}'. "
+        f"Generate a clean, high-converting commercial marketing image for '{product_name}'. "
         "A stunning modern tech workspace with holographic dashboards, vibrant purple and cyan neon lighting, "
         "sleek glassmorphism UI cards, 1:1 square aspect ratio, 8k commercial resolution. "
-        "Below the image, please write an engaging promotional social media post caption with a strong call-to-action and 5 viral hashtags."
+        "CRITICAL: Do NOT paint hashtags (#...), paragraphs, or long descriptions inside the image itself. Keep the artwork clean. "
+        "Below the image in your chat text only, write an engaging promotional social media post caption with a strong call-to-action and 5 viral hashtags."
     )
 
     print(f"⚡ Inserting full prompt at once ({len(prompt_text)} chars)...", flush=True)
@@ -258,6 +259,63 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
             category="SaaS / AI Tools"
         )
         print(f"✅ High-converting image ready -> {downloaded_path}")
+
+    # If ChatGPT only produced the image and stopped, prompt Task 2 (marketing post)
+    if not generated_text or len(generated_text) < 40:
+        print("\n✍️ Prompting ChatGPT for Task 2: Writing complete marketing caption & hashtags...")
+        try:
+            task2_box = None
+            for sel in ["div.ProseMirror", "#prompt-textarea", "div[contenteditable='true']", "textarea"]:
+                for el in driver.find_elements(By.CSS_SELECTOR, sel):
+                    if el.is_displayed():
+                        task2_box = el
+                        break
+                if task2_box:
+                    break
+
+            if task2_box:
+                task2_box.click()
+                human_sleep(0.3, 0.6)
+                task2_text = (
+                    f"Now write the complete social media post for '{product_name}'. "
+                    "Include a compelling Headline, an engaging 2-3 paragraph marketing copy with call-to-action, "
+                    "and 5-6 viral hashtags."
+                )
+                driver.execute_script("""
+                    const ed = arguments[0];
+                    ed.focus();
+                    document.execCommand('selectAll', false, null);
+                    document.execCommand('insertText', false, arguments[1]);
+                    ed.dispatchEvent(new Event('input', { bubbles: true }));
+                """, task2_box, task2_text)
+                human_sleep(0.4, 0.8)
+
+                send_btn2 = None
+                for s in ["button[data-testid='send-button']", "button[aria-label*='Send']"]:
+                    for b in driver.find_elements(By.CSS_SELECTOR, s):
+                        if b.is_displayed():
+                            send_btn2 = b
+                            break
+                    if send_btn2:
+                        break
+
+                if send_btn2:
+                    send_btn2.click()
+                else:
+                    task2_box.send_keys(Keys.ENTER)
+
+                # Wait for ChatGPT to stream caption
+                print("Waiting for ChatGPT to write post caption...")
+                for _ in range(8):
+                    time.sleep(2)
+                    asts = driver.find_elements(By.CSS_SELECTOR, "article, div[data-message-author-role='assistant'], [data-message-id]")
+                    if asts:
+                        lt = asts[-1].text.strip()
+                        if lt and len(lt) > 50 and "now write" not in lt.lower()[:30]:
+                            generated_text = lt
+                            break
+        except Exception as e_t2:
+            print(f"Notice on Task 2 follow-up: {e_t2}")
 
     # Build clean caption
     caption_body = generated_text if len(generated_text) > 40 else (

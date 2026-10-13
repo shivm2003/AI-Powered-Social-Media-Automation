@@ -336,3 +336,77 @@ def send_text_message(chat_id: str, text: str) -> dict:
     if not bot_token:
         return {"ok": False}
     return make_telegram_request(bot_token, "sendMessage", data={"chat_id": chat_id, "text": text, "parse_mode": "HTML"})
+
+
+def send_start_dashboard(chat_id: str, products: list) -> dict:
+    """
+    Sends the welcome dashboard explaining the 5-step automation workflow
+    and provides interactive buttons for each registered product.
+    """
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error", "message": "Missing Telegram credentials."}
+
+    text = (
+        "🚀 <b>AI-Powered Social Media Automation</b>\n"
+        "<i>Welcome! Automate high-converting marketing posts with human-like AI.</i>\n\n"
+        "📋 <b>5-Step Workflow:</b>\n"
+        "1️⃣ <b>Select Product</b> — Choose from your registered products below.\n"
+        "2️⃣ <b>Human AI Flow</b> — Chrome opens ChatGPT & injects prompts like a human.\n"
+        "3️⃣ <b>Image & Copy Generation</b> — Generates custom graphics & viral hashtags.\n"
+        "4️⃣ <b>Review in Telegram</b> — Complete preview sent here for your one-click approval.\n"
+        "5️⃣ <b>Auto-Publish</b> — Upon your approval, post is published directly to Facebook or Instagram!\n\n"
+        "👇 <b>Select a product to start generating:</b>"
+    )
+
+    inline_keyboard = []
+    if products:
+        for p in products:
+            p_id = p.get("id")
+            p_name = p.get("name") or "Featured Product"
+            p_cat = (p.get("category") or "").capitalize()
+            btn_text = f"🚀 Generate: {p_name} ({p_cat})" if p_cat else f"🚀 Generate: {p_name}"
+            inline_keyboard.append([{"text": btn_text, "callback_data": f"gen_prod:{p_id}"}])
+    else:
+        inline_keyboard.append([{"text": "🚀 Generate Quick Post", "callback_data": "gen_prod:default"}])
+
+    inline_keyboard.append([
+        {"text": "ℹ️ How It Works", "callback_data": "info:how_it_works"},
+        {"text": "📋 Active Products", "callback_data": "info:products"}
+    ])
+
+    keyboard = {"inline_keyboard": inline_keyboard}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    if not res.get("ok"):
+        plain_text = (
+            "🚀 AI-Powered Social Media Automation\n"
+            "Welcome! Automate high-converting marketing posts with human-like AI.\n\n"
+            "5-Step Workflow:\n"
+            "1. Select Product — Choose from your registered products below.\n"
+            "2. Human AI Flow — Chrome opens ChatGPT & injects prompts like a human.\n"
+            "3. Image & Copy Generation — Generates custom graphics & viral hashtags.\n"
+            "4. Review in Telegram — Complete preview sent here for your approval.\n"
+            "5. Auto-Publish — Upon approval, post is published to Facebook/Instagram!\n\n"
+            "Select a product below:"
+        )
+        res = make_telegram_request(
+            bot_token,
+            "sendMessage",
+            data={
+                "chat_id": chat_id,
+                "text": plain_text,
+                "reply_markup": json.dumps(keyboard),
+            }
+        )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+

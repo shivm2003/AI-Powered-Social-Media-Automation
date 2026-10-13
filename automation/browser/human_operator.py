@@ -706,16 +706,20 @@ def execute_human_generation_and_telegram_flow(
                     .map(img => img.src);
             """) or []
 
-            # Construct unified prompt asking for BOTH image and caption all at once
-            unified_prompt = (
-                f"Generate a high-converting, photorealistic commercial marketing image for '{product_name}'. "
-                f"Description: {desc[:140]}. "
-                f"Visual layout: {aspect_ratio} square aspect ratio, modern advertising style, vibrant commercial lighting, sleek 3D tech aesthetics, 8k resolution. "
-                f"Below the image, also write the complete social media post:\n"
-                f"Headline: Discover {product_name}\n"
-                f"Caption: An engaging 2-3 paragraph marketing copy with strong hook and call-to-action.\n"
-                f"Hashtags: 5-6 viral hashtags for {', '.join(platforms)}."
+            # Construct rich, diverse template prompt from dynamic variation matrix
+            from media.template_engine import build_diverse_visual_prompt
+            prompt_bundle = build_diverse_visual_prompt(
+                product_name=product_name,
+                description=desc,
+                category=category,
+                visual_style=visual_style,
+                aspect_ratio=aspect_ratio,
+                brand_colors=brand_colors,
+                platforms=platforms,
+                custom_instructions=custom_instructions,
             )
+            unified_prompt = prompt_bundle["unified_prompt"]
+            logs.append(f"🎨 Template Archetype Selected: {prompt_bundle['archetype_name']} (Variant #{prompt_bundle['seed']})")
 
             # Insert ALL PROMPT AT ONCE
             driver.execute_script("""
@@ -824,18 +828,106 @@ def execute_human_generation_and_telegram_flow(
                     img_path = output_path
                     logs.append(f"✅ Step 4 Complete: Successfully downloaded generated ChatGPT image ({len(raw_bytes):,} bytes).")
 
-            # Extract generated caption from assistant message
+            # Extract generated caption from assistant message or prompt Task 2
             try:
+                caption_found = False
                 assistants = driver.find_elements(By.CSS_SELECTOR, "article, div[data-message-author-role='assistant'], [data-message-id]")
                 for ast in reversed(assistants):
                     t = ast.text.strip()
-                    if t and len(t) > 30 and "generate" not in t.lower()[:20]:
+                    if t and len(t) > 60 and "task 1" not in t.lower()[:30] and "generate" not in t.lower()[:20]:
                         content_data["caption"] = t
+                        caption_found = True
                         import re
                         extracted_tags = re.findall(r"#\w+", t)
                         if extracted_tags:
                             content_data["hashtags"] = extracted_tags
                         break
+
+                # If ChatGPT stopped after Task 1 (image) without writing Task 2 (caption):
+                if not caption_found:
+                    logs.append("✍️ Task 2: Prompting ChatGPT to generate viral caption & hashtags for the image...")
+                    task2_input = None
+                    for sel in ["div.ProseMirror", "#prompt-textarea", "div[contenteditable='true']", "textarea"]:
+                        try:
+                            for el in driver.find_elements(By.CSS_SELECTOR, sel):
+                                if el.is_displayed():
+                                    task2_input = el
+                                    break
+                        except Exception:
+                            pass
+                        if task2_input:
+                            break
+
+                    if task2_input:
+                        try:
+                            task2_input.click()
+                        except Exception:
+                            pass
+                        human_sleep(0.3, 0.5)
+
+                        task2_prompt = (
+                            f"Now complete Task 2 for this image: Write the complete social media post for '{product_name}'. "
+                            f"Include a compelling Headline, an engaging 2-3 paragraph marketing caption with strong hook and call-to-action, "
+                            f"and 5-6 viral hashtags for {', '.join(platforms)}."
+                        )
+                        driver.execute_script("""
+                            const ed = arguments[0];
+                            ed.focus();
+                            document.execCommand('selectAll', false, null);
+                            document.execCommand('insertText', false, arguments[1]);
+                            ed.dispatchEvent(new Event('input', { bubbles: true }));
+                            ed.dispatchEvent(new Event('change', { bubbles: true }));
+                        """, task2_input, task2_prompt)
+                        human_sleep(0.4, 0.8)
+
+                        # Submit Task 2
+                        send_btn2 = None
+                        for s in [
+                            "button[data-testid='send-button']",
+                            "button[data-testid='composer-send-button']",
+                            "button[aria-label*='Send']",
+                            "button[aria-label*='send']",
+                            "#send-button"
+                        ]:
+                            try:
+                                for b in driver.find_elements(By.CSS_SELECTOR, s):
+                                    if b.is_displayed():
+                                        send_btn2 = b
+                                        break
+                            except Exception:
+                                pass
+                            if send_btn2:
+                                break
+
+                        if send_btn2:
+                            try:
+                                send_btn2.click()
+                            except Exception:
+                                driver.execute_script("arguments[0].click();", send_btn2)
+                        else:
+                            task2_input.send_keys(Keys.ENTER)
+
+                        # Wait for ChatGPT to stream caption (up to 20s)
+                        poll_t2 = time.time()
+                        while time.time() - poll_t2 < 20:
+                            time.sleep(2)
+                            assistants = driver.find_elements(By.CSS_SELECTOR, "article, div[data-message-author-role='assistant'], [data-message-id]")
+                            if assistants:
+                                last_text = assistants[-1].text.strip()
+                                if last_text and len(last_text) > 60 and "task 2" not in last_text.lower()[:30]:
+                                    content_data["caption"] = last_text
+                                    import re
+                                    extracted_tags = re.findall(r"#\w+", last_text)
+                                    if extracted_tags:
+                                        content_data["hashtags"] = extracted_tags
+                                    caption_found = True
+                                    break
+
+                    if caption_found:
+                        logs.append("✅ Task 2 Complete: Successfully retrieved AI marketing caption & hashtags from ChatGPT.")
+                    else:
+                        logs.append("ℹ️ Task 2 Notice: Using optimized marketing copy synthesis.")
+
             except Exception as e_text:
                 logger.warning(f"Error parsing assistant text: {e_text}")
 
@@ -871,7 +963,8 @@ def execute_human_generation_and_telegram_flow(
             aspect_ratio=aspect_ratio,
             cta_text="Learn More ➜",
             logo_path=resolved_logo,
-            category=category
+            category=category,
+            visual_style=visual_style
         )
         logs.append(f"✅ Step 4 Complete: High-converting branded graphic ready ({os.path.basename(str(img_path))}).")
 

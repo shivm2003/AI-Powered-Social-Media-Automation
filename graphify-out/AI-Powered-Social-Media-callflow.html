@@ -60,7 +60,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <div class="container">
 
 <h1>AI Powered Social Media — Complete Call Flow &amp; Architecture Documentation</h1>
-<p class="subtitle">Generated from graphify knowledge graph: 491 nodes, 967 edges, 25 communities. Commit: f1b32fd</p>
+<p class="subtitle">Generated from graphify knowledge graph: 508 nodes, 1017 edges, 21 communities. Commit: b258320</p>
 
 <div class="nav">
     <a href="#overview">Architecture Overview</a>
@@ -70,14 +70,14 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
     <a href="#ingest-cache-update">Ingestion &amp; Updates</a>
     <a href="#serve-api">Serving API</a>
     <a href="#constants-js">constants.js</a>
+    <a href="#encryption-py">encryption.py</a>
     <a href="#accountspage">AccountsPage</a>
-    <a href="#time">time</a>
-    <a href="#driver-py">driver.py</a>
     <a href="#layout-js">layout.js</a>
-    <a href="#post-to-facebook">post_to_facebook</a>
     <a href="#productspage">ProductsPage</a>
     <a href="#readme-md">README.md</a>
     <a href="#next-config-mjs">next.config.mjs</a>
+    <a href="#agents-md">AGENTS.md</a>
+    <a href="#browser-init-py">browser/__init__.py</a>
     <a href="#other">Other</a>
 </div>
 
@@ -90,46 +90,46 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 flowchart LR
     EXTRACT_PIPELINE_5F350230("Extraction Pipeline<br/><small>46 nodes</small>")
     class EXTRACT_PIPELINE_5F350230 module;
-    BUILD_GRAPH_321CBB04("Graph Build<br/><small>30 nodes</small>")
+    BUILD_GRAPH_321CBB04("Graph Build<br/><small>31 nodes</small>")
     class BUILD_GRAPH_321CBB04 module;
-    CLI_SKILLS_9964CBB8("CLI &amp; Skill Installers<br/><small>72 nodes</small>")
+    CLI_SKILLS_9964CBB8("CLI &amp; Skill Installers<br/><small>93 nodes</small>")
     class CLI_SKILLS_9964CBB8 module;
-    INGEST_CACHE_UPDATE_FF457338("Ingestion &amp; Updates<br/><small>89 nodes</small>")
+    INGEST_CACHE_UPDATE_FF457338("Ingestion &amp; Updates<br/><small>131 nodes</small>")
     class INGEST_CACHE_UPDATE_FF457338 module;
-    SERVE_API_35EC8E86("Serving API<br/><small>124 nodes</small>")
+    SERVE_API_35EC8E86("Serving API<br/><small>95 nodes</small>")
     class SERVE_API_35EC8E86 module;
     CONSTANTS_JS_16C80FBF("constants.js<br/><small>42 nodes</small>")
     class CONSTANTS_JS_16C80FBF module;
+    ENCRYPTION_PY_94E92AAB("encryption.py<br/><small>20 nodes</small>")
+    class ENCRYPTION_PY_94E92AAB module;
     ACCOUNTSPAGE_C80EA1A3("AccountsPage<br/><small>16 nodes</small>")
     class ACCOUNTSPAGE_C80EA1A3 module;
-    TIME_714EEA0F("time<br/><small>15 nodes</small>")
-    class TIME_714EEA0F module;
-    DRIVER_PY_0481D266("driver.py<br/><small>13 nodes</small>")
-    class DRIVER_PY_0481D266 module;
     LAYOUT_JS_6443F830("layout.js<br/><small>11 nodes</small>")
     class LAYOUT_JS_6443F830 module;
-    POST_TO_FACEBOOK_78279CEC("post_to_facebook<br/><small>10 nodes</small>")
-    class POST_TO_FACEBOOK_78279CEC module;
     PRODUCTSPAGE_16BA95BA("ProductsPage<br/><small>8 nodes</small>")
     class PRODUCTSPAGE_16BA95BA module;
     README_MD_6F88C4CB("README.md<br/><small>7 nodes</small>")
     class README_MD_6F88C4CB module;
     NEXT_CONFIG_MJS_D24FB38C("next.config.mjs<br/><small>3 nodes</small>")
     class NEXT_CONFIG_MJS_D24FB38C module;
-    OTHER_D0941E68("Other<br/><small>5 nodes</small>")
+    AGENTS_MD_8C25758D("AGENTS.md<br/><small>2 nodes</small>")
+    class AGENTS_MD_8C25758D module;
+    BROWSER_INIT_PY_C7B09DA5("browser/__init__.py<br/><small>1 nodes</small>")
+    class BROWSER_INIT_PY_C7B09DA5 module;
+    OTHER_D0941E68("Other<br/><small>2 nodes</small>")
     class OTHER_D0941E68 module;
-    CLI_SKILLS_9964CBB8 -->|imports x31| INGEST_CACHE_UPDATE_FF457338
-    CLI_SKILLS_9964CBB8 -->|calls x17| SERVE_API_35EC8E86
-    CLI_SKILLS_9964CBB8 -->|calls x13| TIME_714EEA0F
-    INGEST_CACHE_UPDATE_FF457338 -->|imports x12| TIME_714EEA0F
-    INGEST_CACHE_UPDATE_FF457338 -->|imports x8| DRIVER_PY_0481D266
-    SERVE_API_35EC8E86 -->|imports x8| INGEST_CACHE_UPDATE_FF457338
-    INGEST_CACHE_UPDATE_FF457338 -->|calls x8| SERVE_API_35EC8E86
-    TIME_714EEA0F -->|re exports x7| INGEST_CACHE_UPDATE_FF457338
-    INGEST_CACHE_UPDATE_FF457338 -->|contains x6| CLI_SKILLS_9964CBB8
-    POST_TO_FACEBOOK_78279CEC -->|calls x5| SERVE_API_35EC8E86
-    INGEST_CACHE_UPDATE_FF457338 -->|contains x5| POST_TO_FACEBOOK_78279CEC
-    POST_TO_FACEBOOK_78279CEC -->|calls x4| TIME_714EEA0F
+    CLI_SKILLS_9964CBB8 -->|calls x48| INGEST_CACHE_UPDATE_FF457338
+    INGEST_CACHE_UPDATE_FF457338 -->|calls x28| CLI_SKILLS_9964CBB8
+    ENCRYPTION_PY_94E92AAB -->|calls x10| INGEST_CACHE_UPDATE_FF457338
+    SERVE_API_35EC8E86 -->|imports x7| BUILD_GRAPH_321CBB04
+    CLI_SKILLS_9964CBB8 -->|imports x5| ENCRYPTION_PY_94E92AAB
+    INGEST_CACHE_UPDATE_FF457338 -->|imports x4| ENCRYPTION_PY_94E92AAB
+    LAYOUT_JS_6443F830 -->|imports x2| SERVE_API_35EC8E86
+    CONSTANTS_JS_16C80FBF -->|contains x2| ACCOUNTSPAGE_C80EA1A3
+    CONSTANTS_JS_16C80FBF -->|imports x2| SERVE_API_35EC8E86
+    LAYOUT_JS_6443F830 -->|imports| CONSTANTS_JS_16C80FBF
+    CONSTANTS_JS_16C80FBF -->|contains| PRODUCTSPAGE_16BA95BA
+    CONSTANTS_JS_16C80FBF -->|contains| LAYOUT_JS_6443F830
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -146,24 +146,24 @@ flowchart LR
     <h4>Architecture Layers</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>
-      <tr><td>Extraction Pipeline</td><td>46</td><td><code>11</code></td></tr><tr><td>Graph Build</td><td>30</td><td><code>5, 17</code></td></tr><tr><td>CLI &amp; Skill Installers</td><td>72</td><td><code>1, 3</code></td></tr><tr><td>Ingestion &amp; Updates</td><td>89</td><td><code>7, 16, 4, 9</code></td></tr><tr><td>Serving API</td><td>124</td><td><code>0, 8, 13</code></td></tr><tr><td>constants.js</td><td>42</td><td><code>2</code></td></tr><tr><td>AccountsPage</td><td>16</td><td><code>10</code></td></tr><tr><td>time</td><td>15</td><td><code>6</code></td></tr><tr><td>driver.py</td><td>13</td><td><code>14</code></td></tr><tr><td>layout.js</td><td>11</td><td><code>12</code></td></tr><tr><td>post_to_facebook</td><td>10</td><td><code>22</code></td></tr><tr><td>ProductsPage</td><td>8</td><td><code>15</code></td></tr><tr><td>README.md</td><td>7</td><td><code>23</code></td></tr><tr><td>next.config.mjs</td><td>3</td><td><code>18</code></td></tr><tr><td>Other</td><td>5</td><td><code>24, 19, 20, 21</code></td></tr>
+      <tr><td>Extraction Pipeline</td><td>46</td><td><code>11</code></td></tr><tr><td>Graph Build</td><td>31</td><td><code>5, 17</code></td></tr><tr><td>CLI &amp; Skill Installers</td><td>93</td><td><code>3, 1</code></td></tr><tr><td>Ingestion &amp; Updates</td><td>131</td><td><code>6, 7, 4</code></td></tr><tr><td>Serving API</td><td>95</td><td><code>0, 13</code></td></tr><tr><td>constants.js</td><td>42</td><td><code>2</code></td></tr><tr><td>encryption.py</td><td>20</td><td><code>9</code></td></tr><tr><td>AccountsPage</td><td>16</td><td><code>10</code></td></tr><tr><td>layout.js</td><td>11</td><td><code>12</code></td></tr><tr><td>ProductsPage</td><td>8</td><td><code>15</code></td></tr><tr><td>README.md</td><td>7</td><td><code>23</code></td></tr><tr><td>next.config.mjs</td><td>3</td><td><code>18</code></td></tr><tr><td>AGENTS.md</td><td>2</td><td><code>24</code></td></tr><tr><td>browser/__init__.py</td><td>1</td><td><code>19</code></td></tr><tr><td>Other</td><td>2</td><td><code>20, 21</code></td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Core Flow</h4>
-    <div class="arrow-chain">Extraction Pipeline -&gt; Graph Build -&gt; Serving API -&gt; Ingestion &amp; Updates -&gt; time -&gt; post_to_facebook -&gt; CLI &amp; Skill Installers</div>
+    <div class="arrow-chain">Extraction Pipeline -&gt; Graph Build -&gt; Serving API -&gt; CLI &amp; Skill Installers -&gt; Ingestion &amp; Updates -&gt; encryption.py -&gt; constants.js</div>
   </div>
 </div>
 <div class="grid">
   <div class="card">
     <h4>Graph Report Highlights</h4>
     <ul>
-      <li>491 nodes · 967 edges · 25 communities (17 shown, 8 thin omitted)</li>
-      <li>Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 42 edges (avg confidence: 0.85)</li>
+      <li>508 nodes · 1017 edges · 21 communities (14 shown, 7 thin omitted)</li>
+      <li>Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 59 edges (avg confidence: 0.85)</li>
       <li>Token cost: 0 input · 0 output</li>
       <li>1. `query()` - 26 edges</li>
-      <li>2. `next` - 20 edges</li>
-      <li>3. `handle_command()` - 16 edges</li>
+      <li>2. `generate_social_image()` - 20 edges</li>
+      <li>3. `next` - 20 edges</li>
     </ul>
   </div>
 </div>
@@ -510,12 +510,12 @@ flowchart LR
 
 <!-- ====== 3. Graph Build ====== -->
 <h2 id="build-graph">3. Graph Build</h2>
-<p>Graph Build groups implementation around packagejson, eslint, jsconfigjson, eslintconfigmjs, mostly in package.json, jsconfig.json, eslint.config.mjs. This section covers 30 nodes and 29 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<p>Graph Build groups implementation around packagejson, eslint, jsconfigjson, eslintconfigmjs, mostly in package.json, jsconfig.json, eslint.config.mjs. This section covers 31 nodes and 30 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Graph Build (30 nodes, 29 edges)
+    %% Section: Graph Build (31 nodes, 30 edges)
     subgraph build_graph_package_json_4e40bfbd["package.json"]
         package_582681c2("package.json")
         ref_eslint_91e66023("eslint<br/><small>package.json</small>")
@@ -523,13 +523,13 @@ flowchart LR
         ref_better_sqlite3_150957ed("better-sqlite3<br/><small>package.json</small>")
         ref_pg_848e5969("pg<br/><small>package.json</small>")
         ref_react_dom_61ea372d("react-dom<br/><small>package.json</small>")
+        ref_uuid_cc0937ca("uuid<br/><small>package.json</small>")
         package_dependencies_better_sqlite3_90b8170e("better-sqlite3<br/><small>package.json</small>")
         package_scripts_bot_d2b9a157("bot<br/><small>package.json</small>")
         package_scripts_build_b63da213("build<br/><small>package.json</small>")
         package_dependencies_c512ca5e("dependencies<br/><small>package.json</small>")
         package_scripts_dev_8c0c97d3("dev<br/><small>package.json</small>")
         package_devdependencies_ff8711cc("devDependencies<br/><small>package.json</small>")
-        package_devdependencies_eslint_1c2e9076("eslint<br/><small>package.json</small>")
     end
     subgraph build_graph_jsconfig_json_0f432e08["jsconfig.json"]
         jsconfig_compileroptions_a45271a8("compilerOptions<br/><small>jsconfig.json</small>")
@@ -545,22 +545,23 @@ flowchart LR
     package_582681c2 -->|imports| ref_better_sqlite3_150957ed
     package_582681c2 -->|imports| ref_pg_848e5969
     package_582681c2 -->|imports| ref_react_dom_61ea372d
+    package_582681c2 -->|imports| ref_uuid_cc0937ca
     package_582681c2 -->|imports| ref_eslint_91e66023
     package_582681c2 -->|imports| ref_eslint_config_next_ad6b61f7
-    %% Omitted for readability: 12 nodes, 0 edges
+    %% Omitted for readability: 13 nodes, 0 edges
     class package_582681c2 function;
     class ref_eslint_91e66023 function;
     class ref_eslint_config_next_ad6b61f7 function;
     class ref_better_sqlite3_150957ed function;
     class ref_pg_848e5969 function;
     class ref_react_dom_61ea372d function;
+    class ref_uuid_cc0937ca function;
     class package_dependencies_better_sqlite3_90b8170e function;
     class package_scripts_bot_d2b9a157 function;
     class package_scripts_build_b63da213 function;
     class package_dependencies_c512ca5e function;
     class package_scripts_dev_8c0c97d3 function;
     class package_devdependencies_ff8711cc function;
-    class package_devdependencies_eslint_1c2e9076 function;
     class jsconfig_compileroptions_a45271a8 function;
     class jsconfig_9350a477 function;
     class jsconfig_compileroptions_paths_edfb8ac4 function;
@@ -805,6 +806,14 @@ flowchart LR
 </tr>
 <tr>
   <td>28</td>
+  <td><code>uuid</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>package.json</code><br><small style="color:var(--muted)">package.json</small><br><code>route.js</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small><br><code>route.js</code><br><small style="color:var(--muted)">api/generate/route.js</small><br>+4 more</td>
+  <td>No direct outbound edge</td>
+  <td>uuid node in package.json.</td>
+</tr>
+<tr>
+  <td>29</td>
   <td><code>jsconfig.json</code><br><small style="color:var(--muted)">jsconfig.json</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -812,20 +821,12 @@ flowchart LR
   <td>Reads, resolves, or persists project configuration.</td>
 </tr>
 <tr>
-  <td>29</td>
+  <td>30</td>
   <td><code>compilerOptions</code><br><small style="color:var(--muted)">jsconfig.json</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
   <td>compilerOptions node in jsconfig.json.</td>
-</tr>
-<tr>
-  <td>30</td>
-  <td><code>paths</code><br><small style="color:var(--muted)">jsconfig.json</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>paths node in jsconfig.json.</td>
 </tr>
 </table>
 
@@ -834,26 +835,26 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>package.json</code></td><td>25 nodes</td></tr>
+      <tr><td><code>package.json</code></td><td>26 nodes</td></tr>
 <tr><td><code>jsconfig.json</code></td><td>3 nodes</td></tr>
 <tr><td><code>eslint.config.mjs</code></td><td>2 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: contains x22, imports x5, imports x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x22, imports x6, imports x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
 
 <!-- ====== 4. CLI & Skill Installers ====== -->
 <h2 id="cli-skills">4. CLI &amp; Skill Installers</h2>
-<p>CLI &amp; Skill Installers groups implementation around automation, human, browser, operatorpy, mostly in automation/browser/human_operator.py, automation/llm/__init__.py, automation/main.py. This section covers 72 nodes and 116 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<p>CLI &amp; Skill Installers groups implementation around automation, human, browser, telegram, mostly in automation/browser/human_operator.py, automation/telegram/bot.py, automation/llm/__init__.py. This section covers 93 nodes and 168 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: CLI &amp; Skill Installers (72 nodes, 116 edges)
+    %% Section: CLI &amp; Skill Installers (93 nodes, 168 edges)
     subgraph cli_skills_automation_browser_human_operator_py_f284a65b["automation/browser/human_operator.py"]
         automation_browser_human_operator_execute_human_43985fb6("and telegram flow()<br/><small>automation/browser/human_operator.py</small>")
         automation_browser_human_operator_ddddcad3("human_operator.py")
@@ -869,8 +870,8 @@ flowchart LR
         automation_browser_human_operator_is_port_open_f87b4faa("is_port_open()<br/><small>automation/browser/human_operator.py</small>")
     end
     subgraph cli_skills_External_generated_0c226fa1["External / generated"]
+        json_05d97e6e("json")
         random_a415ab5c("random")
-        subprocess_d2d1e1c0("subprocess")
     end
     subgraph cli_skills_automation_llm_init_py_4aa6d5ed["automation/llm/__init__.py"]
         automation_llm_init_generate_marketing_content_2b1fdf36("generate_marketing_content()<br/><small>automation/llm/__init__.py</small>")
@@ -880,10 +881,12 @@ flowchart LR
         automation_main_021b6954("main.py")
         automation_main_handle_command_61956c79("handle_command()<br/><small>automation/main.py</small>")
     end
+    automation_browser_human_operator_ensure_profile_835ecc92 -->|calls| json_05d97e6e
     automation_browser_human_operator_ensure_profile_835ecc92 -->|calls| automation_browser_human_operator_get_real_chrom_9f1c97d5
     automation_browser_human_operator_execute_full_h_c5cbd7d9 -->|calls| automation_browser_human_operator_step1_click_an_7593dc12
     automation_browser_human_operator_execute_full_h_c5cbd7d9 -->|calls| automation_browser_human_operator_step2_select_s_e2f22db1
     automation_browser_human_operator_execute_full_h_c5cbd7d9 -->|calls| automation_browser_human_operator_step3_search_a_de32114c
+    automation_browser_human_operator_execute_human_43985fb6 -->|calls| json_05d97e6e
     automation_browser_human_operator_execute_human_43985fb6 -->|calls| automation_browser_human_operator_step1_click_an_7593dc12
     automation_browser_human_operator_execute_human_43985fb6 -->|calls| automation_browser_human_operator_step2_select_s_e2f22db1
     automation_browser_human_operator_execute_human_43985fb6 -->|calls| automation_browser_human_operator_human_sleep_4d8b98ab
@@ -892,19 +895,17 @@ flowchart LR
     automation_browser_human_operator_human_type_4c4cc512 -->|calls| random_a415ab5c
     automation_browser_human_operator_step1_click_an_7593dc12 -->|calls| automation_browser_human_operator_find_chrome_ex_a2007a3c
     automation_browser_human_operator_step1_click_an_7593dc12 -->|calls| automation_browser_human_operator_is_port_open_f87b4faa
-    automation_browser_human_operator_step1_click_an_7593dc12 -->|calls| subprocess_d2d1e1c0
     automation_browser_human_operator_step1_click_an_7593dc12 -->|calls| automation_browser_human_operator_ensure_profile_835ecc92
     automation_browser_human_operator_step1_click_an_7593dc12 -->|calls| automation_browser_human_operator_human_sleep_4d8b98ab
     automation_browser_human_operator_step2_select_s_e2f22db1 -->|calls| automation_browser_human_operator_human_sleep_4d8b98ab
     automation_browser_human_operator_step3_search_a_de32114c -->|calls| automation_browser_human_operator_human_sleep_4d8b98ab
     automation_browser_human_operator_step3_search_a_de32114c -->|calls| random_a415ab5c
     automation_browser_human_operator_step3_search_a_de32114c -->|calls| automation_browser_human_operator_human_type_4c4cc512
+    automation_llm_init_generate_marketing_content_2b1fdf36 -->|calls| json_05d97e6e
+    automation_browser_human_operator_ddddcad3 -->|imports| json_05d97e6e
     automation_browser_human_operator_ddddcad3 -->|imports| random_a415ab5c
-    automation_browser_human_operator_ddddcad3 -->|imports| subprocess_d2d1e1c0
-    automation_main_handle_command_61956c79 -->|calls| automation_browser_human_operator_execute_full_h_c5cbd7d9
-    automation_main_handle_command_61956c79 -->|calls| automation_browser_human_operator_execute_human_43985fb6
-    automation_main_handle_command_61956c79 -->|calls| automation_llm_init_generate_marketing_content_2b1fdf36
-    %% Omitted for readability: 54 nodes, 0 edges
+    automation_llm_init_74e546c8 -->|imports| json_05d97e6e
+    %% Omitted for readability: 75 nodes, 4 edges
     class automation_browser_human_operator_execute_human_43985fb6 function;
     class automation_browser_human_operator_ddddcad3 module;
     class automation_browser_human_operator_ensure_profile_835ecc92 function;
@@ -917,8 +918,8 @@ flowchart LR
     class automation_browser_human_operator_human_type_4c4cc512 function;
     class automation_browser_human_operator_find_chrome_ex_a2007a3c function;
     class automation_browser_human_operator_is_port_open_f87b4faa function;
+    class json_05d97e6e function;
     class random_a415ab5c function;
-    class subprocess_d2d1e1c0 function;
     class automation_llm_init_generate_marketing_content_2b1fdf36 function;
     class automation_llm_init_74e546c8 module;
     class automation_main_021b6954 module;
@@ -946,118 +947,70 @@ flowchart LR
 </tr>
 <tr>
   <td>1</td>
-  <td><code>ensure_profile_ready()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>generate_with_chatgpt_browser()</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><code>json</code><br><code>user data dir()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td>ensure_profile_ready() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>2</td>
-  <td><code>execute_full_human_flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>select shivam account()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>step3_search_ai_platform()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td>execute_full_human_flow() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>3</td>
-  <td><code>execute_human_generation_and_telegram_flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>build_social_prompt()</code><br><small style="color:var(--muted)">automation/llm/prompts.py</small><br><code>extract_json_or_fallback()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br>+8 more</td>
-  <td>execute_human_generation_and_telegram_flow() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>4</td>
-  <td><code>find_chrome_executable()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>find_chrome_executable() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>5</td>
-  <td><code>get_real_chrome_user_data_dir()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>ensure_profile_ready()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>get_real_chrome_user_data_dir() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>6</td>
-  <td><code>human_sleep()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>image and telegram()</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small><br>+2 more</td>
-  <td><code>random</code><br><code>time</code></td>
-  <td>human_sleep() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>7</td>
-  <td><code>human_type()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>step3_search_ai_platform()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><code>random</code><br><code>time</code></td>
-  <td>human_type() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>8</td>
-  <td><code>is_port_open()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>is_port_open() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>9</td>
-  <td><code>step1_click_and_launch_chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-cmd">Entry</span></td>
-  <td><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>execute_full_human_flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>image and telegram()</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small></td>
-  <td><code>ensure_profile_ready()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>find_chrome_executable()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>human_sleep()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br>+3 more</td>
-  <td>step1_click_and_launch_chrome() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>10</td>
-  <td><code>step2_select_shivam_account()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>execute_full_human_flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>image and telegram()</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small></td>
-  <td><code>human_sleep()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td>step2_select_shivam_account() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>11</td>
-  <td><code>step3_search_ai_platform()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>execute_full_human_flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
-  <td><code>human_sleep()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>human_type()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>random</code><br>+1 more</td>
-  <td>step3_search_ai_platform() node in automation/browser/human_operator.py.</td>
-</tr>
-<tr>
-  <td>12</td>
-  <td><code>get_profile_dir()</code><br><small style="color:var(--muted)">automation/browser/profiles.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>get_profile_dir() node in automation/browser/profiles.py.</td>
-</tr>
-<tr>
-  <td>13</td>
-  <td><code>run_chatgpt_human_image_and_telegram()</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>base64</code><br><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br>+5 more</td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><code>time</code></td>
   <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
 </tr>
 <tr>
-  <td>14</td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><span class="tag tag-cmd">Entry</span></td>
-  <td><code>interactive_mode()</code><br><small style="color:var(--muted)">automation/main.py</small><br><code>main()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>execute_full_human_flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br>+9 more</td>
-  <td>handle_command() node in automation/main.py.</td>
+  <td>2</td>
+  <td><code>generate_with_claude_browser()</code><br><small style="color:var(--muted)">automation/llm/claude.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><code>time</code></td>
+  <td>generate_with_claude_browser() node in automation/llm/claude.py.</td>
 </tr>
 <tr>
-  <td>15</td>
+  <td>3</td>
+  <td><code>generate_with_gemini_browser()</code><br><small style="color:var(--muted)">automation/llm/gemini.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><code>time</code></td>
+  <td>generate_with_gemini_browser() node in automation/llm/gemini.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>extract_json_or_fallback()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><code>json</code></td>
+  <td>extract_json_or_fallback() node in automation/llm/__init__.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
+  <td><code>build_social_prompt()</code><br><small style="color:var(--muted)">automation/llm/prompts.py</small><br><code>extract_json_or_fallback()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>generate_with_gemini_api()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br>+6 more</td>
+  <td>generate_marketing_content() node in automation/llm/__init__.py.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>generate_smart_marketing_copy()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>generate_smart_marketing_copy() node in automation/llm/__init__.py.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>generate_with_gemini_api()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><span class="tag tag-endpoint">API</span></td>
+  <td><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><code>json</code></td>
+  <td>generate_with_gemini_api() node in automation/llm/__init__.py.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>build_social_prompt()</code><br><small style="color:var(--muted)">automation/llm/prompts.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Builds structured prompts for model calls.</td>
+</tr>
+<tr>
+  <td>9</td>
   <td><code>interactive_mode()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>main()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
@@ -1065,7 +1018,7 @@ flowchart LR
   <td>interactive_mode() node in automation/main.py.</td>
 </tr>
 <tr>
-  <td>16</td>
+  <td>10</td>
   <td><code>main()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1073,7 +1026,7 @@ flowchart LR
   <td>main() node in automation/main.py.</td>
 </tr>
 <tr>
-  <td>17</td>
+  <td>11</td>
   <td><code>send_response()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small><br><code>interactive_mode()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
@@ -1081,39 +1034,79 @@ flowchart LR
   <td>send_response() node in automation/main.py.</td>
 </tr>
 <tr>
+  <td>12</td>
+  <td><code>answer_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>make_telegram_request()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td>answer_callback_query() node in automation/telegram/bot.py.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>delete_telegram_message()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>make_telegram_request()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td>delete_telegram_message() node in automation/telegram/bot.py.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>make_telegram_request()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>answer_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>delete_telegram_message()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>password request prompt()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br>+5 more</td>
+  <td><code>json</code><br><code>os</code></td>
+  <td>make_telegram_request() node in automation/telegram/bot.py.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>send_password_request_prompt()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>make_telegram_request()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td>Builds structured prompts for model calls.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>send_platform_selection_menu()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>json</code><br><code>make_telegram_request()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td>send_platform_selection_menu() node in automation/telegram/bot.py.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>send_start_dashboard()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>json</code><br><code>make_telegram_request()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td>send_start_dashboard() node in automation/telegram/bot.py.</td>
+</tr>
+<tr>
   <td>18</td>
-  <td><code>human_operator.py</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>claude.py</code><br><small style="color:var(--muted)">automation/llm/claude.py</small></td>
   <td><span class="tag tag-class">Module</span></td>
-  <td><code>chatgpt_human_image_telegram.py</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small></td>
-  <td><code>common action chains</code><br><code>json</code><br><code>logging</code><br>+11 more</td>
-  <td>Module file in automation/browser/human_operator.py.</td>
+  <td>External entry / no inbound edge</td>
+  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>logging</code><br>+1 more</td>
+  <td>Module file in automation/llm/claude.py.</td>
 </tr>
 <tr>
   <td>19</td>
-  <td><code>Path</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-class">Class</span></td>
+  <td><code>llm/__init__.py</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Path node in project.</td>
+  <td><code>build_social_prompt()</code><br><small style="color:var(--muted)">automation/llm/prompts.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>json</code><br>+7 more</td>
+  <td>Module file in automation/llm/__init__.py.</td>
 </tr>
 <tr>
   <td>20</td>
-  <td><code>chatgpt_human_image_telegram.py</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small></td>
+  <td><code>prompts.py</code><br><small style="color:var(--muted)">automation/llm/prompts.py</small></td>
   <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
-  <td><code>base64</code><br><code>bot.py</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br>+9 more</td>
-  <td>Module file in automation/chatgpt_human_image_telegram.py.</td>
+  <td>No direct outbound edge</td>
+  <td>Module file in automation/llm/prompts.py.</td>
 </tr>
 <tr>
   <td>21</td>
-  <td><code>automation/__init__.py</code><br><small style="color:var(--muted)">automation/__init__.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>pathlib</code><br><code>sys</code></td>
-  <td>Module file in automation/__init__.py.</td>
-</tr>
-<tr>
-  <td>22</td>
   <td><code>main.py</code><br><small style="color:var(--muted)">automation/main.py</small></td>
   <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
@@ -1121,68 +1114,76 @@ flowchart LR
   <td>Module file in automation/main.py.</td>
 </tr>
 <tr>
+  <td>22</td>
+  <td><code>bot.py</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>chatgpt_human_image_telegram.py</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small><br><code>download_chatgpt_image.py</code><br><small style="color:var(--muted)">automation/download_chatgpt_image.py</small><br><code>main.py</code><br><small style="color:var(--muted)">automation/main.py</small><br>+1 more</td>
+  <td><code>dotenv</code><br><code>json</code><br><code>logging</code><br>+5 more</td>
+  <td>Module file in automation/telegram/bot.py.</td>
+</tr>
+<tr>
   <td>23</td>
-  <td><code>Human-like Chrome Operator. Simulates human interactions for: Step 1: Smoothly…</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Interacts with chatgpt.com via Selenium to generate text content.</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Human-like Chrome Operator. Simulates human interactions for: Step 1: Smoothly….</td>
+  <td>Design note for Interacts with chatgpt.com via Selenium to generate text content..</td>
 </tr>
 <tr>
   <td>24</td>
-  <td><code>Check if remote debugging port is open.</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Claude Web Interactor via Selenium with saved profile.</code><br><small style="color:var(--muted)">automation/llm/claude.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Check if remote debugging port is open..</td>
+  <td>Design note for Claude Web Interactor via Selenium with saved profile..</td>
 </tr>
 <tr>
   <td>25</td>
-  <td><code>Step 1: Open / click the Chrome tab like a human from the app. Launches Chrome…</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Interacts with claude.ai via Selenium using saved Chrome profile.</code><br><small style="color:var(--muted)">automation/llm/claude.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Step 1: Open / click the Chrome tab like a human from the app. Launches Chrome….</td>
+  <td>Design note for Interacts with claude.ai via Selenium using saved Chrome profile..</td>
 </tr>
 <tr>
   <td>26</td>
-  <td><code>Step 2: Verify and select the 2003shivam1990@gmail.com Shivam Mishra account…</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Interacts with gemini.google.com via Selenium using saved Chrome profile.</code><br><small style="color:var(--muted)">automation/llm/gemini.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Step 2: Verify and select the 2003shivam1990@gmail.com Shivam Mishra account….</td>
+  <td>Design note for Interacts with gemini.google.com via Selenium using saved Chrome profile..</td>
 </tr>
 <tr>
   <td>27</td>
-  <td><code>Types text into a web input field with natural human cadence. For longer…</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Unified LLM orchestrator. Supports Gemini API, OpenAI API, active browser…</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Types text into a web input field with natural human cadence. For longer….</td>
+  <td>Design note for Unified LLM orchestrator. Supports Gemini API, OpenAI API, active browser….</td>
 </tr>
 <tr>
   <td>28</td>
-  <td><code>Step 3: Navigate to the requested AI (Gemini, Claude, or ChatGPT), search/type…</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Main generator function for captions, hashtags, graphic headlines, and video…</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Step 3: Navigate to the requested AI (Gemini, Claude, or ChatGPT), search/type….</td>
+  <td>Design note for Main generator function for captions, hashtags, graphic headlines, and video….</td>
 </tr>
 <tr>
   <td>29</td>
-  <td><code>Sleep with human-like randomized delay.</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Tries to extract JSON object from raw response text.</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Sleep with human-like randomized delay..</td>
+  <td>Design note for Tries to extract JSON object from raw response text..</td>
 </tr>
 <tr>
   <td>30</td>
-  <td><code>Locate Google Chrome executable on Windows.</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small></td>
+  <td><code>Direct Google Gemini REST API call for instant, high-quality generation.</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small></td>
   <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>Design note for Locate Google Chrome executable on Windows..</td>
+  <td>Design note for Direct Google Gemini REST API call for instant, high-quality generation..</td>
 </tr>
 </table>
 
@@ -1192,30 +1193,30 @@ flowchart LR
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
       <tr><td><code>automation/browser/human_operator.py</code></td><td>24 nodes</td></tr>
+<tr><td><code>automation/telegram/bot.py</code></td><td>18 nodes</td></tr>
 <tr><td><code>automation/llm/__init__.py</code></td><td>10 nodes</td></tr>
 <tr><td><code>automation/main.py</code></td><td>9 nodes</td></tr>
+<tr><td><code>automation/media/template_engine.py</code></td><td>6 nodes</td></tr>
 <tr><td><code>automation/llm/claude.py</code></td><td>4 nodes</td></tr>
-<tr><td><code>automation/chatgpt_human_image_telegram.py</code></td><td>3 nodes</td></tr>
 <tr><td><code>automation/llm/prompts.py</code></td><td>3 nodes</td></tr>
 <tr><td><code>automation/browser/profiles.py</code></td><td>2 nodes</td></tr>
-<tr><td><code>automation/llm/chatgpt.py</code></td><td>2 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x43, explains x28, contains x22, imports x13. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x74, explains x39, contains x31, imports x14. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
 
 <!-- ====== 5. Ingestion & Updates ====== -->
 <h2 id="ingest-cache-update">5. Ingestion &amp; Updates</h2>
-<p>Ingestion &amp; Updates groups implementation around automation, browser, driverpy, media, mostly in automation/browser/driver.py, automation/utils/encryption.py, automation/media/image_generator.py. This section covers 89 nodes and 150 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<p>Ingestion &amp; Updates groups implementation around automation, browser, social, driverpy, mostly in automation/browser/driver.py, automation/media/image_generator.py, automation/telegram/poller.py. This section covers 131 nodes and 263 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Ingestion &amp; Updates (89 nodes, 150 edges)
+    %% Section: Ingestion &amp; Updates (131 nodes, 263 edges)
     subgraph ingest_cache_update_automation_browser_driver_py_54cf9582["automation/browser/driver.py"]
         automation_browser_driver_browserdriver_3de98078("BrowserDriver<br/><small>automation/browser/driver.py</small>")
         automation_browser_driver_browserdriver_navigate_e194a709("navigate()<br/><small>automation/browser/driver.py</small>")
@@ -1228,16 +1229,14 @@ flowchart LR
         automation_browser_driver_browserdriver_safe_cli_738e2ce6("safe_click()<br/><small>automation/browser/driver.py</small>")
         automation_browser_driver_browserdriver_scroll_t_d09a6d91("scroll_to_element()<br/><small>automation/browser/driver.py</small>")
         automation_browser_driver_browserdriver_init_354331a7("__init__()<br/><small>automation/browser/driver.py</small>")
+        automation_browser_driver_browserdriver_get_driv_1af442c8("get_driver()<br/><small>automation/browser/driver.py</small>")
+        automation_browser_driver_is_debugging_port_open_6d0444ce("is_debugging_port_open()<br/><small>automation/browser/driver.py</small>")
     end
-    subgraph ingest_cache_update_automation_llm_chatgpt_py_22b5c150["automation/llm/chatgpt.py"]
-        automation_llm_chatgpt_83f35dbe("chatgpt.py")
-        automation_llm_chatgpt_generate_image_with_chatg_38de9d52("with chatgpt browser()<br/><small>automation/llm/chatgpt.py</small>")
-    end
-    base64_8095e159("base64")
+    automation_chatgpt_human_image_telegram_03c715f4("chatgpt_human_image_telegram.py")
     automation_download_chatgpt_image_abdbc9aa("download_chatgpt_image.py")
+    automation_llm_chatgpt_83f35dbe("chatgpt.py")
     automation_llm_gemini_ee25799a("gemini.py")
-    automation_media_video_generator_0bc4c563("video_generator.py")
-    automation_utils_encryption_8e5419b3("encryption.py")
+    automation_telegram_poller_90fcf166("poller.py")
     automation_browser_driver_browserdriver_3de98078 -->|method| automation_browser_driver_browserdriver_navigate_e194a709
     automation_browser_driver_browserdriver_3de98078 -->|method| automation_browser_driver_browserdriver_close_907f7c3e
     automation_browser_driver_browserdriver_3de98078 -->|method| automation_browser_driver_browserdriver_close_al_0320f857
@@ -1248,16 +1247,14 @@ flowchart LR
     automation_browser_driver_browserdriver_3de98078 -->|method| automation_browser_driver_browserdriver_safe_cli_738e2ce6
     automation_browser_driver_browserdriver_3de98078 -->|method| automation_browser_driver_browserdriver_scroll_t_d09a6d91
     automation_browser_driver_browserdriver_3de98078 -->|method| automation_browser_driver_browserdriver_init_354331a7
+    automation_browser_driver_browserdriver_3de98078 -->|method| automation_browser_driver_browserdriver_get_driv_1af442c8
     automation_browser_driver_browserdriver_close_al_0320f857 -->|calls| automation_browser_driver_browserdriver_close_907f7c3e
+    automation_browser_driver_browserdriver_navigate_e194a709 -->|calls| automation_browser_driver_browserdriver_get_driv_1af442c8
     automation_browser_driver_browserdriver_navigate_e194a709 -->|calls| automation_browser_driver_browserdriver_human_wa_1c165293
     automation_browser_driver_browserdriver_safe_cli_738e2ce6 -->|calls| automation_browser_driver_browserdriver_human_wa_1c165293
     automation_browser_driver_browserdriver_scroll_t_d09a6d91 -->|calls| automation_browser_driver_browserdriver_human_wa_1c165293
-    automation_llm_chatgpt_generate_image_with_chatg_38de9d52 -->|calls| base64_8095e159
-    automation_llm_chatgpt_83f35dbe -->|imports| base64_8095e159
-    automation_llm_gemini_ee25799a -->|imports| base64_8095e159
-    automation_download_chatgpt_image_abdbc9aa -->|imports| base64_8095e159
-    automation_utils_encryption_8e5419b3 -->|imports| base64_8095e159
-    %% Omitted for readability: 71 nodes, 0 edges
+    automation_browser_driver_browserdriver_get_driv_1af442c8 -->|calls| automation_browser_driver_is_debugging_port_open_6d0444ce
+    %% Omitted for readability: 113 nodes, 0 edges
     class automation_browser_driver_browserdriver_3de98078 klass;
     class automation_browser_driver_browserdriver_navigate_e194a709 function;
     class automation_browser_driver_browserdriver_close_907f7c3e function;
@@ -1269,13 +1266,13 @@ flowchart LR
     class automation_browser_driver_browserdriver_safe_cli_738e2ce6 entry;
     class automation_browser_driver_browserdriver_scroll_t_d09a6d91 function;
     class automation_browser_driver_browserdriver_init_354331a7 function;
-    class automation_llm_chatgpt_83f35dbe module;
-    class automation_llm_chatgpt_generate_image_with_chatg_38de9d52 function;
-    class base64_8095e159 function;
+    class automation_browser_driver_browserdriver_get_driv_1af442c8 function;
+    class automation_browser_driver_is_debugging_port_open_6d0444ce function;
+    class automation_chatgpt_human_image_telegram_03c715f4 module;
     class automation_download_chatgpt_image_abdbc9aa module;
+    class automation_llm_chatgpt_83f35dbe module;
     class automation_llm_gemini_ee25799a module;
-    class automation_media_video_generator_0bc4c563 module;
-    class automation_utils_encryption_8e5419b3 module;
+    class automation_telegram_poller_90fcf166 module;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -1299,243 +1296,243 @@ flowchart LR
 </tr>
 <tr>
   <td>1</td>
-  <td><code>generate_image_with_chatgpt_browser()</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small></td>
+  <td><code>.get_driver()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>base64</code><br><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br><code>time</code><br>+1 more</td>
-  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+  <td><code>BrowserDriver</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>navigate()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td><code>ensure_debugging_browser()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>is_debugging_port_open()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td>.get_driver() node in automation/browser/driver.py.</td>
 </tr>
 <tr>
   <td>2</td>
-  <td><code>generate_image_with_gemini_browser()</code><br><small style="color:var(--muted)">automation/llm/gemini.py</small></td>
+  <td><code>ensure_debugging_browser()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>base64</code><br><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br><code>time</code><br>+1 more</td>
-  <td>generate_image_with_gemini_browser() node in automation/llm/gemini.py.</td>
+  <td><code>get_driver()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td><code>is_debugging_port_open()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>time</code></td>
+  <td>ensure_debugging_browser() node in automation/browser/driver.py.</td>
 </tr>
 <tr>
   <td>3</td>
-  <td><code>create_gradient_canvas()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
+  <td><code>get_chrome_version_main()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
+  <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>create_gradient_canvas() node in automation/media/image_generator.py.</td>
+  <td>get_chrome_version_main() node in automation/browser/driver.py.</td>
 </tr>
 <tr>
   <td>4</td>
-  <td><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
+  <td><code>is_debugging_port_open()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/media/__init__.py</small><br><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>generate_promo_video()</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small><br>+5 more</td>
-  <td><code>create_gradient_canvas()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br><code>hex_to_rgb()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br><code>uuid</code></td>
-  <td>generate_social_image() node in automation/media/image_generator.py.</td>
+  <td><code>ensure_debugging_browser()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>get_driver()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>is_debugging_port_open() node in automation/browser/driver.py.</td>
 </tr>
 <tr>
   <td>5</td>
-  <td><code>get_font()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
+  <td><code>is_facebook_login_needed()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>submit_facebook_login()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
   <td>No direct outbound edge</td>
-  <td>get_font() node in automation/media/image_generator.py.</td>
+  <td>is_facebook_login_needed() node in automation/social/facebook.py.</td>
 </tr>
 <tr>
   <td>6</td>
-  <td><code>wrap_text()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
+  <td><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>wrap_text() node in automation/media/image_generator.py.</td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small><br><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>is_facebook_login_needed()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>submit_facebook_login()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>time</code></td>
+  <td>post_to_facebook() node in automation/social/facebook.py.</td>
 </tr>
 <tr>
   <td>7</td>
-  <td><code>hex_to_rgb()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
+  <td><code>submit_facebook_login()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>hex_to_rgb() node in automation/media/image_generator.py.</td>
+  <td><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
+  <td><code>is_facebook_login_needed()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>time</code></td>
+  <td>submit_facebook_login() node in automation/social/facebook.py.</td>
 </tr>
 <tr>
   <td>8</td>
-  <td><code>generate_promo_video()</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small></td>
+  <td><code>publish_to_all_platforms()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/media/__init__.py</small><br><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br><code>uuid</code></td>
-  <td>generate_promo_video() node in automation/media/video_generator.py.</td>
+  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
+  <td><code>publish_to_platform()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
+  <td>publish_to_all_platforms() node in automation/social/__init__.py.</td>
 </tr>
 <tr>
   <td>9</td>
-  <td><code>Path</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-class">Class</span></td>
-  <td>External entry / no inbound edge</td>
+  <td><code>publish_to_platform()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>publish_to_all_platforms()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
   <td>No direct outbound edge</td>
-  <td>Path node in project.</td>
+  <td>publish_to_platform() node in automation/social/__init__.py.</td>
 </tr>
 <tr>
   <td>10</td>
-  <td><code>Path</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-class">Class</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Path node in project.</td>
+  <td><code>post_to_instagram()</code><br><small style="color:var(--muted)">automation/social/instagram.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
+  <td><code>time</code></td>
+  <td>post_to_instagram() node in automation/social/instagram.py.</td>
 </tr>
 <tr>
   <td>11</td>
-  <td><code>image_generator.py</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td><code>chatgpt_human_image_telegram.py</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small><br><code>video_generator.py</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small></td>
-  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>logging</code><br><code>os</code><br>+3 more</td>
-  <td>Module file in automation/media/image_generator.py.</td>
+  <td><code>post_to_linkedin()</code><br><small style="color:var(--muted)">automation/social/linkedin.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
+  <td><code>time</code></td>
+  <td>post_to_linkedin() node in automation/social/linkedin.py.</td>
 </tr>
 <tr>
   <td>12</td>
-  <td><code>Path</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-class">Class</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Path node in project.</td>
+  <td><code>post_to_whatsapp()</code><br><small style="color:var(--muted)">automation/social/whatsapp.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
+  <td><code>time</code></td>
+  <td>post_to_whatsapp() node in automation/social/whatsapp.py.</td>
 </tr>
 <tr>
   <td>13</td>
-  <td><code>media/__init__.py</code><br><small style="color:var(--muted)">automation/media/__init__.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>generate_promo_video()</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small><br><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
-  <td>Module file in automation/media/__init__.py.</td>
+  <td><code>send_text_message()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>_run_human_flow()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>make_telegram_request()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td>send_text_message() node in automation/telegram/bot.py.</td>
 </tr>
 <tr>
   <td>14</td>
-  <td><code>video_generator.py</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>generate_social_image()</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br><code>image_generator.py</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small><br>+3 more</td>
-  <td>Module file in automation/media/video_generator.py.</td>
+  <td><code>get_all_products()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>get_all_products() node in automation/telegram/poller.py.</td>
 </tr>
 <tr>
   <td>15</td>
-  <td><code>Path</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-class">Class</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Path node in project.</td>
+  <td><code>get_campaign_data()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>json</code></td>
+  <td>get_campaign_data() node in automation/telegram/poller.py.</td>
 </tr>
 <tr>
   <td>16</td>
-  <td><code>Automates ChatGPT in the browser via Selenium to: 1. Open ChatGPT…</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Automates ChatGPT in the browser via Selenium to: 1. Open ChatGPT….</td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>start_polling()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>_run_human_flow()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>answer_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>get_all_products()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br>+7 more</td>
+  <td>handle_callback_query() node in automation/telegram/poller.py.</td>
 </tr>
 <tr>
   <td>17</td>
-  <td><code>Automates Google Gemini in the browser via Selenium to: 1. Open Gemini…</code><br><small style="color:var(--muted)">automation/llm/gemini.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Automates Google Gemini in the browser via Selenium to: 1. Open Gemini….</td>
+  <td><code>_run_human_flow()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>send_text_message()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small></td>
+  <td>_run_human_flow() node in automation/telegram/poller.py.</td>
 </tr>
 <tr>
   <td>18</td>
-  <td><code>Image Generation Engine. Creates high-converting branded social media graphics…</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Image Generation Engine. Creates high-converting branded social media graphics….</td>
+  <td><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>start_polling()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>delete_telegram_message()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>get_all_products()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br>+4 more</td>
+  <td>handle_text_message() node in automation/telegram/poller.py.</td>
 </tr>
 <tr>
   <td>19</td>
-  <td><code>Creates a sleek, rich dark-gradient canvas with glowing radial accents.</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
+  <td><code>start_polling()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Creates a sleek, rich dark-gradient canvas with glowing radial accents..</td>
+  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br>+2 more</td>
+  <td>start_polling() node in automation/telegram/poller.py.</td>
 </tr>
 <tr>
   <td>20</td>
-  <td><code>Renders an eye-catching, branded social graphic.</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Renders an eye-catching, branded social graphic..</td>
+  <td><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>chatgpt.py</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small><br><code>claude.py</code><br><small style="color:var(--muted)">automation/llm/claude.py</small><br>+7 more</td>
+  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>logging</code><br><code>pathlib</code><br>+7 more</td>
+  <td>Module file in automation/browser/driver.py.</td>
 </tr>
 <tr>
   <td>21</td>
-  <td><code>Media generation package.</code><br><small style="color:var(--muted)">automation/media/__init__.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Media generation package..</td>
+  <td><code>facebook.py</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>poller.py</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>logging</code><br>+3 more</td>
+  <td>Module file in automation/social/facebook.py.</td>
 </tr>
 <tr>
   <td>22</td>
-  <td><code>Video Generation Engine. Creates promotional MP4 videos from product slides and…</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
+  <td><code>social/__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Video Generation Engine. Creates promotional MP4 videos from product slides and….</td>
+  <td><code>logging</code><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>post_to_instagram()</code><br><small style="color:var(--muted)">automation/social/instagram.py</small><br>+2 more</td>
+  <td>Module file in automation/social/__init__.py.</td>
 </tr>
 <tr>
   <td>23</td>
-  <td><code>Generates a promotional video for Reels, Stories, Shorts, or Feed.</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
+  <td><code>instagram.py</code><br><small style="color:var(--muted)">automation/social/instagram.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Generates a promotional video for Reels, Stories, Shorts, or Feed..</td>
+  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>logging</code><br>+2 more</td>
+  <td>Module file in automation/social/instagram.py.</td>
 </tr>
 <tr>
   <td>24</td>
-  <td><code>pil</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>image_generator.py</code><br><small style="color:var(--muted)">automation/media/image_generator.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>pil node in project.</td>
+  <td><code>linkedin.py</code><br><small style="color:var(--muted)">automation/social/linkedin.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>logging</code><br>+2 more</td>
+  <td>Module file in automation/social/linkedin.py.</td>
 </tr>
 <tr>
   <td>25</td>
-  <td><code>uuid</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>chatgpt.py</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small><br><code>gemini.py</code><br><small style="color:var(--muted)">automation/llm/gemini.py</small><br><code>generate_promo_video()</code><br><small style="color:var(--muted)">automation/media/video_generator.py</small><br>+6 more</td>
-  <td>No direct outbound edge</td>
-  <td>uuid node in project.</td>
+  <td><code>whatsapp.py</code><br><small style="color:var(--muted)">automation/social/whatsapp.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>logging</code><br>+2 more</td>
+  <td>Module file in automation/social/whatsapp.py.</td>
 </tr>
 <tr>
   <td>26</td>
-  <td><code>get_target_url()</code><br><small style="color:var(--muted)">automation/browser/profiles.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
+  <td><code>poller.py</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>get_target_url() node in automation/browser/profiles.py.</td>
+  <td><code>bot.py</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br>+7 more</td>
+  <td>Module file in automation/telegram/poller.py.</td>
 </tr>
 <tr>
   <td>27</td>
-  <td><code>is_profile_initialized()</code><br><small style="color:var(--muted)">automation/browser/profiles.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
+  <td><code>Chrome WebDriver setup using undetected-chromedriver. Manages browser instances…</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>is_profile_initialized() node in automation/browser/profiles.py.</td>
+  <td>Design note for Chrome WebDriver setup using undetected-chromedriver. Manages browser instances….</td>
 </tr>
 <tr>
   <td>28</td>
-  <td><code>profiles.py</code><br><small style="color:var(--muted)">automation/browser/profiles.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td><code>main.py</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>logging</code><br><code>pathlib</code></td>
-  <td>Module file in automation/browser/profiles.py.</td>
+  <td><code>Detect installed Chrome major version on Windows.</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Detect installed Chrome major version on Windows..</td>
 </tr>
 <tr>
   <td>29</td>
-  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td><code>chatgpt.py</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small><br><code>chatgpt_human_image_telegram.py</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small><br><code>claude.py</code><br><small style="color:var(--muted)">automation/llm/claude.py</small><br>+12 more</td>
-  <td><code>dotenv</code><br><code>os</code><br><code>pathlib</code></td>
-  <td>Module file in automation/config.py.</td>
+  <td><code>Check if Chrome is running with remote debugging port active.</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Check if Chrome is running with remote debugging port active..</td>
 </tr>
 <tr>
   <td>30</td>
-  <td><code>chatgpt.py</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
+  <td><code>Ensure Chrome is running with remote debugging enabled on port 9222.</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
   <td>External entry / no inbound edge</td>
-  <td><code>base64</code><br><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br>+6 more</td>
-  <td>Module file in automation/llm/chatgpt.py.</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Ensure Chrome is running with remote debugging enabled on port 9222..</td>
 </tr>
 </table>
 
@@ -1544,31 +1541,31 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>automation/browser/driver.py</code></td><td>21 nodes</td></tr>
-<tr><td><code>automation/utils/encryption.py</code></td><td>10 nodes</td></tr>
-<tr><td><code>automation/media/image_generator.py</code></td><td>9 nodes</td></tr>
+      <tr><td><code>automation/browser/driver.py</code></td><td>31 nodes</td></tr>
+<tr><td><code>automation/media/image_generator.py</code></td><td>15 nodes</td></tr>
+<tr><td><code>automation/telegram/poller.py</code></td><td>13 nodes</td></tr>
+<tr><td><code>automation/social/facebook.py</code></td><td>8 nodes</td></tr>
 <tr><td><code>automation/browser/profiles.py</code></td><td>6 nodes</td></tr>
+<tr><td><code>automation/social/__init__.py</code></td><td>6 nodes</td></tr>
 <tr><td><code>automation/llm/chatgpt.py</code></td><td>4 nodes</td></tr>
 <tr><td><code>automation/llm/gemini.py</code></td><td>4 nodes</td></tr>
-<tr><td><code>automation/media/video_generator.py</code></td><td>4 nodes</td></tr>
-<tr><td><code>automation/download_chatgpt_image.py</code></td><td>3 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: imports x35, explains x34, imports x27, calls x23. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x59, explains x52, imports x51, imports x36. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
 
 <!-- ====== 6. Serving API ====== -->
 <h2 id="serve-api">6. Serving API</h2>
-<p>Serving API groups implementation around routejs, api, app, telegram, mostly in src/lib/db.js, automation/telegram/bot.py, api/browser/route.js. This section covers 124 nodes and 300 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<p>Serving API groups implementation around routejs, app, api, dbjs, mostly in src/lib/db.js, api/browser/route.js, api/chrome-profiles/route.js. This section covers 95 nodes and 243 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Serving API (124 nodes, 300 edges)
+    %% Section: Serving API (95 nodes, 243 edges)
     subgraph serve_api_src_lib_db_js_6dbfc60e["src/lib/db.js"]
         src_lib_db_deleteaccount_0e567fb6("deleteAccount()<br/><small>src/lib/db.js</small>")
         src_lib_db_getallaccounts_f3385419("getAllAccounts()<br/><small>src/lib/db.js</small>")
@@ -1613,11 +1610,11 @@ flowchart LR
     src_app_api_accounts_test_route_a8ffe4ee -->|imports| src_lib_encryption_decrypt_03f96447
     src_app_api_accounts_test_route_a8ffe4ee -->|imports| src_lib_automation_runautomationcommand_0225cf68
     src_app_api_campaigns_id_route_3e524ead -->|imports| src_lib_automation_runautomationcommand_0225cf68
-    src_app_api_generate_route_7778fbdf -->|imports| src_lib_automation_runautomationcommand_0225cf68
-    src_app_api_telegram_route_1adbbd59 -->|imports| src_lib_automation_runautomationcommand_0225cf68
     src_app_api_chrome_profiles_route_ddea45f8 -->|imports| src_lib_db_getaccountbyplatform_7c8e5f10
     src_app_api_chrome_profiles_route_ddea45f8 -->|imports| src_lib_db_upsertaccount_9a38704b
-    %% Omitted for readability: 106 nodes, 0 edges
+    src_app_api_generate_route_7778fbdf -->|imports| src_lib_automation_runautomationcommand_0225cf68
+    src_app_api_telegram_route_1adbbd59 -->|imports| src_lib_automation_runautomationcommand_0225cf68
+    %% Omitted for readability: 77 nodes, 0 edges
     class src_lib_db_deleteaccount_0e567fb6 function;
     class src_lib_db_getallaccounts_f3385419 function;
     class src_lib_db_upsertaccount_9a38704b function;
@@ -1747,6 +1744,54 @@ flowchart LR
 </tr>
 <tr>
   <td>12</td>
+  <td><code>detectProfileLogins()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>GET()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>detectProfileLogins() node in api/chrome-profiles/route.js.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>GET()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>detectProfileLogins()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small><br><code>getChromeUserDataDir()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td>GET() node in api/chrome-profiles/route.js.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>getChromeUserDataDir()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>GET()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small><br><code>POST()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>getChromeUserDataDir() node in api/chrome-profiles/route.js.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>POST()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>getAccountByPlatform()</code><br><small style="color:var(--muted)">src/lib/db.js</small><br><code>getChromeUserDataDir()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small><br><code>upsertAccount()</code><br><small style="color:var(--muted)">src/lib/db.js</small></td>
+  <td>POST() node in api/chrome-profiles/route.js.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>copyDirClean()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>copyDirClean()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td><code>copyDirClean()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td>copyDirClean() node in api/chrome-profiles/route.js.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>copyFileSafe()</code><br><small style="color:var(--muted)">api/chrome-profiles/route.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>copyFileSafe() node in api/chrome-profiles/route.js.</td>
+</tr>
+<tr>
+  <td>18</td>
   <td><code>POST()</code><br><small style="color:var(--muted)">api/generate/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1754,7 +1799,7 @@ flowchart LR
   <td>POST() node in api/generate/route.js.</td>
 </tr>
 <tr>
-  <td>13</td>
+  <td>19</td>
   <td><code>safeParseJson()</code><br><small style="color:var(--muted)">api/generate/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1762,7 +1807,7 @@ flowchart LR
   <td>safeParseJson() node in api/generate/route.js.</td>
 </tr>
 <tr>
-  <td>14</td>
+  <td>20</td>
   <td><code>GET()</code><br><small style="color:var(--muted)">api/media/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1770,7 +1815,7 @@ flowchart LR
   <td>GET() node in api/media/route.js.</td>
 </tr>
 <tr>
-  <td>15</td>
+  <td>21</td>
   <td><code>DELETE()</code><br><small style="color:var(--muted)">products/[id]/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1778,7 +1823,7 @@ flowchart LR
   <td>DELETE() node in products/[id]/route.js.</td>
 </tr>
 <tr>
-  <td>16</td>
+  <td>22</td>
   <td><code>GET()</code><br><small style="color:var(--muted)">products/[id]/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1786,7 +1831,7 @@ flowchart LR
   <td>GET() node in products/[id]/route.js.</td>
 </tr>
 <tr>
-  <td>17</td>
+  <td>23</td>
   <td><code>PUT()</code><br><small style="color:var(--muted)">products/[id]/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1794,7 +1839,7 @@ flowchart LR
   <td>PUT() node in products/[id]/route.js.</td>
 </tr>
 <tr>
-  <td>18</td>
+  <td>24</td>
   <td><code>DELETE()</code><br><small style="color:var(--muted)">api/products/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1802,7 +1847,7 @@ flowchart LR
   <td>DELETE() node in api/products/route.js.</td>
 </tr>
 <tr>
-  <td>19</td>
+  <td>25</td>
   <td><code>GET()</code><br><small style="color:var(--muted)">api/products/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1810,7 +1855,7 @@ flowchart LR
   <td>GET() node in api/products/route.js.</td>
 </tr>
 <tr>
-  <td>20</td>
+  <td>26</td>
   <td><code>POST()</code><br><small style="color:var(--muted)">api/products/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1818,7 +1863,7 @@ flowchart LR
   <td>POST() node in api/products/route.js.</td>
 </tr>
 <tr>
-  <td>21</td>
+  <td>27</td>
   <td><code>GET()</code><br><small style="color:var(--muted)">api/settings/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1826,7 +1871,7 @@ flowchart LR
   <td>GET() node in api/settings/route.js.</td>
 </tr>
 <tr>
-  <td>22</td>
+  <td>28</td>
   <td><code>PUT()</code><br><small style="color:var(--muted)">api/settings/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1834,7 +1879,7 @@ flowchart LR
   <td>PUT() node in api/settings/route.js.</td>
 </tr>
 <tr>
-  <td>23</td>
+  <td>29</td>
   <td><code>GET()</code><br><small style="color:var(--muted)">api/stats/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1842,60 +1887,12 @@ flowchart LR
   <td>GET() node in api/stats/route.js.</td>
 </tr>
 <tr>
-  <td>24</td>
+  <td>30</td>
   <td><code>GET()</code><br><small style="color:var(--muted)">api/telegram/route.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
   <td><code>getSetting()</code><br><small style="color:var(--muted)">src/lib/db.js</small></td>
   <td>GET() node in api/telegram/route.js.</td>
-</tr>
-<tr>
-  <td>25</td>
-  <td><code>POST()</code><br><small style="color:var(--muted)">api/telegram/route.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>getCampaignById()</code><br><small style="color:var(--muted)">src/lib/db.js</small><br><code>getProductById()</code><br><small style="color:var(--muted)">src/lib/db.js</small><br><code>getSetting()</code><br><small style="color:var(--muted)">src/lib/db.js</small><br>+3 more</td>
-  <td>POST() node in api/telegram/route.js.</td>
-</tr>
-<tr>
-  <td>26</td>
-  <td><code>safeParseArray()</code><br><small style="color:var(--muted)">api/telegram/route.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>POST()</code><br><small style="color:var(--muted)">api/telegram/route.js</small></td>
-  <td>No direct outbound edge</td>
-  <td>safeParseArray() node in api/telegram/route.js.</td>
-</tr>
-<tr>
-  <td>27</td>
-  <td><code>POST()</code><br><small style="color:var(--muted)">api/upload/route.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>POST() node in api/upload/route.js.</td>
-</tr>
-<tr>
-  <td>28</td>
-  <td><code>runAutomationCommand()</code><br><small style="color:var(--muted)">src/lib/automation.js</small></td>
-  <td><span class="tag tag-cmd">Entry</span></td>
-  <td><code>POST()</code><br><small style="color:var(--muted)">browser/human-flow/route.js</small><br><code>POST()</code><br><small style="color:var(--muted)">api/telegram/route.js</small><br><code>POST()</code><br><small style="color:var(--muted)">accounts/test/route.js</small><br>+7 more</td>
-  <td>No direct outbound edge</td>
-  <td>runAutomationCommand() node in src/lib/automation.js.</td>
-</tr>
-<tr>
-  <td>29</td>
-  <td><code>createCampaign()</code><br><small style="color:var(--muted)">src/lib/db.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>POST()</code><br><small style="color:var(--muted)">api/generate/route.js</small><br><code>POST()</code><br><small style="color:var(--muted)">api/campaigns/route.js</small><br><code>route.js</code><br><small style="color:var(--muted)">api/campaigns/route.js</small><br>+1 more</td>
-  <td><code>query()</code><br><small style="color:var(--muted)">src/lib/db.js</small></td>
-  <td>createCampaign() node in src/lib/db.js.</td>
-</tr>
-<tr>
-  <td>30</td>
-  <td><code>createProduct()</code><br><small style="color:var(--muted)">src/lib/db.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>POST()</code><br><small style="color:var(--muted)">api/products/route.js</small><br><code>route.js</code><br><small style="color:var(--muted)">api/products/route.js</small></td>
-  <td><code>query()</code><br><small style="color:var(--muted)">src/lib/db.js</small></td>
-  <td>createProduct() node in src/lib/db.js.</td>
 </tr>
 </table>
 
@@ -1905,18 +1902,18 @@ flowchart LR
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
       <tr><td><code>src/lib/db.js</code></td><td>25 nodes</td></tr>
-<tr><td><code>automation/telegram/bot.py</code></td><td>18 nodes</td></tr>
 <tr><td><code>api/browser/route.js</code></td><td>9 nodes</td></tr>
 <tr><td><code>api/chrome-profiles/route.js</code></td><td>7 nodes</td></tr>
 <tr><td><code>campaigns/[id]/route.js</code></td><td>5 nodes</td></tr>
-<tr><td><code>automation/telegram/poller.py</code></td><td>4 nodes</td></tr>
 <tr><td><code>api/accounts/route.js</code></td><td>4 nodes</td></tr>
 <tr><td><code>products/[id]/route.js</code></td><td>4 nodes</td></tr>
+<tr><td><code>api/products/route.js</code></td><td>4 nodes</td></tr>
+<tr><td><code>api/telegram/route.js</code></td><td>4 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x107, contains x80, imports x56, imports x46. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x82, contains x71, imports x50, imports x40. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
@@ -2279,8 +2276,277 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 8. AccountsPage ====== -->
-<h2 id="accountspage">8. AccountsPage</h2>
+<!-- ====== 8. encryption.py ====== -->
+<h2 id="encryption-py">8. encryption.py</h2>
+<p>encryption.py groups implementation around automation, utils, encryptionpy, detect, mostly in automation/utils/encryption.py, automation/utils/detect_logins.py, automation/__init__.py. This section covers 20 nodes and 28 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: encryption.py (20 nodes, 28 edges)
+    subgraph encryption_py_automation_utils_encryption_py_05c92803["automation/utils/encryption.py"]
+        automation_utils_encryption_8e5419b3("encryption.py")
+        automation_utils_encryption_test_roundtrip_440ee447("test_roundtrip()<br/><small>automation/utils/encryption.py</small>")
+        automation_utils_encryption_decrypt_password_d7b0c740("decrypt_password()<br/><small>automation/utils/encryption.py</small>")
+        automation_utils_encryption_get_master_secret_21ae912f("get_master_secret()<br/><small>automation/utils/encryption.py</small>")
+        automation_utils_encryption_encrypt_password_e197753f("encrypt_password()<br/><small>automation/utils/encryption.py</small>")
+        automation_utils_encryption_rationale_1_bda143c0("AES-256-GCM Encryption &amp; Decryption mod...<br/><small>automation/utils/encryption.py</small>")
+        automation_utils_encryption_rationale_133_4905d7f0("Decrypts a base64 payload formatted as:...<br/><small>automation/utils/encryption.py</small>")
+        automation_utils_encryption_rationale_97_9fc8d3fa("Encrypts plain text using AES-256-GCM a...<br/><small>automation/utils/encryption.py</small>")
+    end
+    subgraph encryption_py_External_generated_3433fa57["External / generated"]
+        tempfile_30fe567d("tempfile")
+        shutil_74870859("shutil")
+        sqlite3_b54e393c("sqlite3")
+        sys_b4c56ee8("sys")
+        dotenv_4de95cba("dotenv")
+        cryptography_hazmat_primitives_kdf_scrypt_f1ebdeaa("primitives kdf scrypt")
+        cryptography_hazmat_primitives_ciphers_aead_8a900e46("primitives ciphers aead")
+    end
+    subgraph encryption_py_automation_utils_detect_logins_py_0c5d2df6["automation/utils/detect_logins.py"]
+        automation_utils_detect_logins_f21c634a("detect_logins.py")
+        automation_utils_detect_logins_scan_profile_cook_c2468572("scan_profile_cookies()<br/><small>automation/utils/detect_logins.py</small>")
+    end
+    automation_init_13522418("__init__.py")
+    automation_utils_detect_logins_scan_profile_cook_c2468572 -->|calls| tempfile_30fe567d
+    automation_utils_detect_logins_scan_profile_cook_c2468572 -->|calls| shutil_74870859
+    automation_utils_detect_logins_scan_profile_cook_c2468572 -->|calls| sqlite3_b54e393c
+    automation_utils_encryption_decrypt_password_d7b0c740 -->|calls| automation_utils_encryption_get_master_secret_21ae912f
+    automation_utils_encryption_encrypt_password_e197753f -->|calls| automation_utils_encryption_get_master_secret_21ae912f
+    automation_utils_encryption_get_master_secret_21ae912f -->|calls| sqlite3_b54e393c
+    automation_utils_encryption_test_roundtrip_440ee447 -->|calls| automation_utils_encryption_encrypt_password_e197753f
+    automation_utils_encryption_test_roundtrip_440ee447 -->|calls| automation_utils_encryption_decrypt_password_d7b0c740
+    automation_init_13522418 -->|imports| sys_b4c56ee8
+    automation_utils_detect_logins_f21c634a -->|imports| sys_b4c56ee8
+    automation_utils_detect_logins_f21c634a -->|imports| sqlite3_b54e393c
+    automation_utils_detect_logins_f21c634a -->|imports| shutil_74870859
+    automation_utils_detect_logins_f21c634a -->|imports| tempfile_30fe567d
+    automation_utils_encryption_8e5419b3 -->|imports| sys_b4c56ee8
+    automation_utils_encryption_8e5419b3 -->|imports| sqlite3_b54e393c
+    automation_utils_encryption_8e5419b3 -->|imports| dotenv_4de95cba
+    automation_utils_encryption_8e5419b3 -->|imports| cryptography_hazmat_primitives_kdf_scrypt_f1ebdeaa
+    automation_utils_encryption_8e5419b3 -->|imports| cryptography_hazmat_primitives_ciphers_aead_8a900e46
+    %% Omitted for readability: 2 nodes, 0 edges
+    class automation_utils_encryption_8e5419b3 module;
+    class automation_utils_encryption_test_roundtrip_440ee447 test;
+    class automation_utils_encryption_decrypt_password_d7b0c740 function;
+    class automation_utils_encryption_get_master_secret_21ae912f function;
+    class automation_utils_encryption_encrypt_password_e197753f function;
+    class automation_utils_encryption_rationale_1_bda143c0 concept;
+    class automation_utils_encryption_rationale_133_4905d7f0 concept;
+    class automation_utils_encryption_rationale_97_9fc8d3fa concept;
+    class tempfile_30fe567d function;
+    class shutil_74870859 function;
+    class sqlite3_b54e393c function;
+    class sys_b4c56ee8 function;
+    class dotenv_4de95cba function;
+    class cryptography_hazmat_primitives_kdf_scrypt_f1ebdeaa function;
+    class cryptography_hazmat_primitives_ciphers_aead_8a900e46 function;
+    class automation_utils_detect_logins_f21c634a module;
+    class automation_utils_detect_logins_scan_profile_cook_c2468572 function;
+    class automation_init_13522418 module;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>scan_profile_cookies()</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>os</code><br><code>shutil</code><br><code>sqlite3</code><br>+1 more</td>
+  <td>Starts scanning or handles scan status.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>decrypt_password()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>test_roundtrip()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><code>base64</code><br><code>get_master_secret()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td>decrypt_password() node in automation/utils/encryption.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>encrypt_password()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>test_roundtrip()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><code>base64</code><br><code>get_master_secret()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small><br><code>os</code></td>
+  <td>encrypt_password() node in automation/utils/encryption.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>get_master_secret()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>decrypt_password()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small><br><code>encrypt_password()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><code>sqlite3</code></td>
+  <td>get_master_secret() node in automation/utils/encryption.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>test_roundtrip()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>decrypt_password()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small><br><code>encrypt_password()</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>automation/__init__.py</code><br><small style="color:var(--muted)">automation/__init__.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>pathlib</code><br><code>sys</code></td>
+  <td>Module file in automation/__init__.py.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>detect_logins.py</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>json</code><br><code>os</code><br><code>shutil</code><br>+3 more</td>
+  <td>Module file in automation/utils/detect_logins.py.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>encryption.py</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>base64</code><br><code>dotenv</code><br><code>logging</code><br>+6 more</td>
+  <td>Module file in automation/utils/encryption.py.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>AES-256-GCM Encryption &amp; Decryption module for credentials. Full two-way…</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for AES-256-GCM Encryption &amp; Decryption module for credentials. Full two-way….</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>Decrypts a base64 payload formatted as: salt (32) + iv (16) + tag (16) +…</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Decrypts a base64 payload formatted as: salt (32) + iv (16) + tag (16) +….</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>Verifies that encrypt and decrypt roundtrip matches perfectly.</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Verifies that encrypt and decrypt roundtrip matches perfectly..</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>Retrieve master secret from environment (.env.local / env vars) or database…</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Retrieve master secret from environment (.env.local / env vars) or database….</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>Encrypts plain text using AES-256-GCM and scrypt key derivation. Output:…</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Encrypts plain text using AES-256-GCM and scrypt key derivation. Output:….</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>cryptography_hazmat_primitives_ciphers_aead</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>encryption.py</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Builds dependency relationships and graph data.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>cryptography_hazmat_primitives_kdf_scrypt</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>encryption.py</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Builds dependency relationships and graph data.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>dotenv</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>bot.py</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>encryption.py</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>dotenv node in project.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>shutil</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>detect_logins.py</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small><br><code>scan_profile_cookies()</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>shutil node in project.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>sqlite3</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>bot.py</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>detect_logins.py</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small><br><code>encryption.py</code><br><small style="color:var(--muted)">automation/utils/encryption.py</small><br>+3 more</td>
+  <td>No direct outbound edge</td>
+  <td>sqlite3 node in project.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>sys</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/__init__.py</small><br><code>chatgpt_human_image_telegram.py</code><br><small style="color:var(--muted)">automation/chatgpt_human_image_telegram.py</small><br><code>detect_logins.py</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small><br>+5 more</td>
+  <td>No direct outbound edge</td>
+  <td>sys node in project.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>tempfile</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>detect_logins.py</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small><br><code>scan_profile_cookies()</code><br><small style="color:var(--muted)">automation/utils/detect_logins.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>tempfile node in project.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>automation/utils/encryption.py</code></td><td>10 nodes</td></tr>
+<tr><td><code>automation/utils/detect_logins.py</code></td><td>2 nodes</td></tr>
+<tr><td><code>automation/__init__.py</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x8, imports x7, contains x5, explains x5. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 9. AccountsPage ====== -->
+<h2 id="accountspage">9. AccountsPage</h2>
 <p>AccountsPage groups implementation around app, accounts, pagejs, accountspage, mostly in app/accounts/page.js. This section covers 16 nodes and 24 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
@@ -2495,406 +2761,8 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 9. time ====== -->
-<h2 id="time">9. time</h2>
-<p>time groups implementation around social, automation, post, instagrampy, mostly in automation/social/__init__.py, automation/social/instagram.py, automation/social/linkedin.py. This section covers 15 nodes and 19 internal edges; the diagram shows only representative relationships to stay readable.</p>
-
-<div class="mermaid">
-%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
-flowchart LR
-    %% Section: time (15 nodes, 19 edges)
-    subgraph time_automation_social_init_py_60ed6591["automation/social/__init__.py"]
-        automation_social_init_publish_to_all_platforms_9453daa1("publish_to_all_platforms()<br/><small>automation/social/__init__.py</small>")
-        automation_social_init_publish_to_platform_c2277d07("publish_to_platform()<br/><small>automation/social/__init__.py</small>")
-        automation_social_init_8cfda41e("__init__.py")
-        automation_social_init_rationale_22_0e189551("Dispatches post to a specific platform.<br/><small>automation/social/__init__.py</small>")
-        automation_social_init_rationale_31_0cbd056f("Publishes content across multiple selec...<br/><small>automation/social/__init__.py</small>")
-        automation_social_init_rationale_1_6acd504c("Social media publishing package. Dispat...<br/><small>automation/social/__init__.py</small>")
-    end
-    subgraph time_automation_social_instagram_py_7644b4ab["automation/social/instagram.py"]
-        automation_social_instagram_5554fdc0("instagram.py")
-        automation_social_instagram_post_to_instagram_8745021d("post_to_instagram()<br/><small>automation/social/instagram.py</small>")
-        automation_social_instagram_rationale_1_b05f4f03("Instagram Social Poster via Selenium us...<br/><small>automation/social/instagram.py</small>")
-        automation_social_instagram_rationale_14_783e3e52("Publishes a post/reel to Instagram.<br/><small>automation/social/instagram.py</small>")
-    end
-    subgraph time_automation_social_linkedin_py_7fb8c490["automation/social/linkedin.py"]
-        automation_social_linkedin_post_to_linkedin_8e294692("post_to_linkedin()<br/><small>automation/social/linkedin.py</small>")
-        automation_social_linkedin_rationale_14_db7b0b49("Publishes a post with media and copy to...<br/><small>automation/social/linkedin.py</small>")
-    end
-    subgraph time_automation_social_whatsapp_py_f9dd00df["automation/social/whatsapp.py"]
-        automation_social_whatsapp_post_to_whatsapp_212c65a8("post_to_whatsapp()<br/><small>automation/social/whatsapp.py</small>")
-        automation_social_whatsapp_rationale_14_cb88e619("Sends to WhatsApp Web (Status or design...<br/><small>automation/social/whatsapp.py</small>")
-    end
-    time_714eea0f("time")
-    automation_social_init_publish_to_all_platforms_9453daa1 -->|calls| automation_social_init_publish_to_platform_c2277d07
-    automation_social_instagram_post_to_instagram_8745021d -->|calls| time_714eea0f
-    automation_social_linkedin_post_to_linkedin_8e294692 -->|calls| time_714eea0f
-    automation_social_whatsapp_post_to_whatsapp_212c65a8 -->|calls| time_714eea0f
-    automation_social_instagram_5554fdc0 -->|imports| time_714eea0f
-    class automation_social_init_publish_to_all_platforms_9453daa1 function;
-    class automation_social_init_publish_to_platform_c2277d07 function;
-    class automation_social_init_8cfda41e module;
-    class automation_social_init_rationale_22_0e189551 concept;
-    class automation_social_init_rationale_31_0cbd056f concept;
-    class automation_social_init_rationale_1_6acd504c concept;
-    class automation_social_instagram_5554fdc0 module;
-    class automation_social_instagram_post_to_instagram_8745021d function;
-    class automation_social_instagram_rationale_1_b05f4f03 concept;
-    class automation_social_instagram_rationale_14_783e3e52 concept;
-    class automation_social_linkedin_post_to_linkedin_8e294692 function;
-    class automation_social_linkedin_rationale_14_db7b0b49 concept;
-    class automation_social_whatsapp_post_to_whatsapp_212c65a8 function;
-    class automation_social_whatsapp_rationale_14_cb88e619 concept;
-    class time_714eea0f function;
-    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
-    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
-    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
-    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
-    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
-    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
-    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
-    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
-    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
-</div>
-
-<h3>Call Details</h3>
-<table class="call-table">
-<tr>
-  <th style="width:5%">#</th>
-  <th style="width:28%">Node</th>
-  <th style="width:10%">Type</th>
-  <th style="width:17%">Caller</th>
-  <th style="width:20%">Callees</th>
-  <th style="width:20%">Description</th>
-</tr>
-<tr>
-  <td>1</td>
-  <td><code>publish_to_all_platforms()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_command()</code><br><small style="color:var(--muted)">automation/main.py</small></td>
-  <td><code>publish_to_platform()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td>publish_to_all_platforms() node in automation/social/__init__.py.</td>
-</tr>
-<tr>
-  <td>2</td>
-  <td><code>publish_to_platform()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>publish_to_all_platforms()</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>publish_to_platform() node in automation/social/__init__.py.</td>
-</tr>
-<tr>
-  <td>3</td>
-  <td><code>post_to_instagram()</code><br><small style="color:var(--muted)">automation/social/instagram.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><code>time</code></td>
-  <td>post_to_instagram() node in automation/social/instagram.py.</td>
-</tr>
-<tr>
-  <td>4</td>
-  <td><code>post_to_linkedin()</code><br><small style="color:var(--muted)">automation/social/linkedin.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><code>time</code></td>
-  <td>post_to_linkedin() node in automation/social/linkedin.py.</td>
-</tr>
-<tr>
-  <td>5</td>
-  <td><code>post_to_whatsapp()</code><br><small style="color:var(--muted)">automation/social/whatsapp.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><code>time</code></td>
-  <td>post_to_whatsapp() node in automation/social/whatsapp.py.</td>
-</tr>
-<tr>
-  <td>6</td>
-  <td><code>social/__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>logging</code><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>post_to_instagram()</code><br><small style="color:var(--muted)">automation/social/instagram.py</small><br>+2 more</td>
-  <td>Module file in automation/social/__init__.py.</td>
-</tr>
-<tr>
-  <td>7</td>
-  <td><code>instagram.py</code><br><small style="color:var(--muted)">automation/social/instagram.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>logging</code><br>+2 more</td>
-  <td>Module file in automation/social/instagram.py.</td>
-</tr>
-<tr>
-  <td>8</td>
-  <td><code>Social media publishing package. Dispatches posts across Facebook, Instagram,…</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Social media publishing package. Dispatches posts across Facebook, Instagram,….</td>
-</tr>
-<tr>
-  <td>9</td>
-  <td><code>Dispatches post to a specific platform.</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Dispatches post to a specific platform..</td>
-</tr>
-<tr>
-  <td>10</td>
-  <td><code>Publishes content across multiple selected platforms.</code><br><small style="color:var(--muted)">automation/social/__init__.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Publishes content across multiple selected platforms..</td>
-</tr>
-<tr>
-  <td>11</td>
-  <td><code>Instagram Social Poster via Selenium using persistent Chrome profile.</code><br><small style="color:var(--muted)">automation/social/instagram.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Instagram Social Poster via Selenium using persistent Chrome profile..</td>
-</tr>
-<tr>
-  <td>12</td>
-  <td><code>Publishes a post/reel to Instagram.</code><br><small style="color:var(--muted)">automation/social/instagram.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Publishes a post/reel to Instagram..</td>
-</tr>
-<tr>
-  <td>13</td>
-  <td><code>Publishes a post with media and copy to LinkedIn.</code><br><small style="color:var(--muted)">automation/social/linkedin.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Publishes a post with media and copy to LinkedIn..</td>
-</tr>
-<tr>
-  <td>14</td>
-  <td><code>Sends to WhatsApp Web (Status or designated group/chat).</code><br><small style="color:var(--muted)">automation/social/whatsapp.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Sends to WhatsApp Web (Status or designated group/chat)..</td>
-</tr>
-<tr>
-  <td>15</td>
-  <td><code>time</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>active chatgpt image()</code><br><small style="color:var(--muted)">automation/download_chatgpt_image.py</small><br><code>and launch chrome()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br><code>and telegram flow()</code><br><small style="color:var(--muted)">automation/browser/human_operator.py</small><br>+30 more</td>
-  <td>No direct outbound edge</td>
-  <td>time node in project.</td>
-</tr>
-</table>
-
-<div class="grid">
-  <div class="card">
-    <h4>Key Files</h4>
-    <table style="width:100%;font-size:0.85rem;">
-      <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>automation/social/__init__.py</code></td><td>6 nodes</td></tr>
-<tr><td><code>automation/social/instagram.py</code></td><td>4 nodes</td></tr>
-<tr><td><code>automation/social/linkedin.py</code></td><td>2 nodes</td></tr>
-<tr><td><code>automation/social/whatsapp.py</code></td><td>2 nodes</td></tr>
-    </table>
-  </div>
-  <div class="card">
-    <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: explains x7, calls x4, contains x3, indirect call x3. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
-  </div>
-</div>
-<hr>
-
-<!-- ====== 10. driver.py ====== -->
-<h2 id="driver-py">10. driver.py</h2>
-<p>driver.py groups implementation around browser, driverpy, automation, chrome, mostly in automation/browser/driver.py. This section covers 13 nodes and 14 internal edges; the diagram shows only representative relationships to stay readable.</p>
-
-<div class="mermaid">
-%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
-flowchart LR
-    %% Section: driver.py (13 nodes, 14 edges)
-    subgraph driver_py_automation_browser_driver_py_9eb7c21e["automation/browser/driver.py"]
-        automation_browser_driver_ee1f0cce("driver.py")
-        automation_browser_driver_browserdriver_get_driv_1af442c8("get_driver()<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_ensure_debugging_brows_21340a66("ensure_debugging_browser()<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_is_debugging_port_open_6d0444ce("is_debugging_port_open()<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_get_chrome_version_mai_9bb1e624("get_chrome_version_main()<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_rationale_43_1cc769dd("Check if Chrome is running with remote...<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_rationale_1_0bd8e438("Chrome WebDriver setup using undetected...<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_rationale_27_5a04db4b("Detect installed Chrome major version o...<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_rationale_54_54dc0ebc("Ensure Chrome is running with remote de...<br/><small>automation/browser/driver.py</small>")
-        automation_browser_driver_rationale_98_85bd1c93("Get or create a Chrome driver. Prioriti...<br/><small>automation/browser/driver.py</small>")
-    end
-    subgraph driver_py_External_generated_2695c287["External / generated"]
-        undetected_chromedriver_8bba2c0e("undetected_chromedriver")
-        selenium_webdriver_support_ui_d0b658b5("webdriver support ui")
-        selenium_webdriver_support_ad388e21("selenium_webdriver_support")
-    end
-    automation_browser_driver_browserdriver_get_driv_1af442c8 -->|calls| automation_browser_driver_is_debugging_port_open_6d0444ce
-    automation_browser_driver_browserdriver_get_driv_1af442c8 -->|calls| automation_browser_driver_ensure_debugging_brows_21340a66
-    automation_browser_driver_ensure_debugging_brows_21340a66 -->|calls| automation_browser_driver_is_debugging_port_open_6d0444ce
-    automation_browser_driver_ee1f0cce -->|imports| undetected_chromedriver_8bba2c0e
-    automation_browser_driver_ee1f0cce -->|imports| selenium_webdriver_support_ui_d0b658b5
-    automation_browser_driver_ee1f0cce -->|imports| selenium_webdriver_support_ad388e21
-    class automation_browser_driver_ee1f0cce module;
-    class automation_browser_driver_browserdriver_get_driv_1af442c8 function;
-    class automation_browser_driver_ensure_debugging_brows_21340a66 function;
-    class automation_browser_driver_is_debugging_port_open_6d0444ce function;
-    class automation_browser_driver_get_chrome_version_mai_9bb1e624 function;
-    class automation_browser_driver_rationale_43_1cc769dd concept;
-    class automation_browser_driver_rationale_1_0bd8e438 concept;
-    class automation_browser_driver_rationale_27_5a04db4b concept;
-    class automation_browser_driver_rationale_54_54dc0ebc concept;
-    class automation_browser_driver_rationale_98_85bd1c93 concept;
-    class undetected_chromedriver_8bba2c0e function;
-    class selenium_webdriver_support_ui_d0b658b5 function;
-    class selenium_webdriver_support_ad388e21 function;
-    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
-    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
-    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
-    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
-    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
-    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
-    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
-    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
-    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
-</div>
-
-<h3>Call Details</h3>
-<table class="call-table">
-<tr>
-  <th style="width:5%">#</th>
-  <th style="width:28%">Node</th>
-  <th style="width:10%">Type</th>
-  <th style="width:17%">Caller</th>
-  <th style="width:20%">Callees</th>
-  <th style="width:20%">Description</th>
-</tr>
-<tr>
-  <td>1</td>
-  <td><code>.get_driver()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>BrowserDriver</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>navigate()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><code>ensure_debugging_browser()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>is_debugging_port_open()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td>.get_driver() node in automation/browser/driver.py.</td>
-</tr>
-<tr>
-  <td>2</td>
-  <td><code>ensure_debugging_browser()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>get_driver()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><code>is_debugging_port_open()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>time</code></td>
-  <td>ensure_debugging_browser() node in automation/browser/driver.py.</td>
-</tr>
-<tr>
-  <td>3</td>
-  <td><code>get_chrome_version_main()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>get_chrome_version_main() node in automation/browser/driver.py.</td>
-</tr>
-<tr>
-  <td>4</td>
-  <td><code>is_debugging_port_open()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>ensure_debugging_browser()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small><br><code>generate_marketing_content()</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>get_driver()</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>is_debugging_port_open() node in automation/browser/driver.py.</td>
-</tr>
-<tr>
-  <td>5</td>
-  <td><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/llm/__init__.py</small><br><code>chatgpt.py</code><br><small style="color:var(--muted)">automation/llm/chatgpt.py</small><br><code>claude.py</code><br><small style="color:var(--muted)">automation/llm/claude.py</small><br>+7 more</td>
-  <td><code>config.py</code><br><small style="color:var(--muted)">automation/config.py</small><br><code>logging</code><br><code>pathlib</code><br>+7 more</td>
-  <td>Module file in automation/browser/driver.py.</td>
-</tr>
-<tr>
-  <td>6</td>
-  <td><code>Chrome WebDriver setup using undetected-chromedriver. Manages browser instances…</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Chrome WebDriver setup using undetected-chromedriver. Manages browser instances….</td>
-</tr>
-<tr>
-  <td>7</td>
-  <td><code>Detect installed Chrome major version on Windows.</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Detect installed Chrome major version on Windows..</td>
-</tr>
-<tr>
-  <td>8</td>
-  <td><code>Check if Chrome is running with remote debugging port active.</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Check if Chrome is running with remote debugging port active..</td>
-</tr>
-<tr>
-  <td>9</td>
-  <td><code>Ensure Chrome is running with remote debugging enabled on port 9222.</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Ensure Chrome is running with remote debugging enabled on port 9222..</td>
-</tr>
-<tr>
-  <td>10</td>
-  <td><code>Get or create a Chrome driver. Prioritizes connecting to user&#x27;s open browser if…</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Get or create a Chrome driver. Prioritizes connecting to user&#x27;s open browser if….</td>
-</tr>
-<tr>
-  <td>11</td>
-  <td><code>selenium_webdriver_support</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>selenium_webdriver_support node in project.</td>
-</tr>
-<tr>
-  <td>12</td>
-  <td><code>selenium_webdriver_support_ui</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>selenium_webdriver_support_ui node in project.</td>
-</tr>
-<tr>
-  <td>13</td>
-  <td><code>undetected_chromedriver</code><br><small style="color:var(--muted)"></small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>driver.py</code><br><small style="color:var(--muted)">automation/browser/driver.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>undetected_chromedriver node in project.</td>
-</tr>
-</table>
-
-<div class="grid">
-  <div class="card">
-    <h4>Key Files</h4>
-    <table style="width:100%;font-size:0.85rem;">
-      <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>automation/browser/driver.py</code></td><td>10 nodes</td></tr>
-    </table>
-  </div>
-  <div class="card">
-    <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: explains x5, calls x3, contains x3, imports x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
-  </div>
-</div>
-<hr>
-
-<!-- ====== 11. layout.js ====== -->
-<h2 id="layout-js">11. layout.js</h2>
+<!-- ====== 10. layout.js ====== -->
+<h2 id="layout-js">10. layout.js</h2>
 <p>layout.js groups implementation around components, layout, app, layoutjs, mostly in src/app/layout.js, components/layout/Header.js, components/layout/Sidebar.js. This section covers 11 nodes and 14 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
@@ -3064,165 +2932,8 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 12. post_to_facebook ====== -->
-<h2 id="post-to-facebook">12. post_to_facebook</h2>
-<p>post_to_facebook groups implementation around automation, facebook, social, facebookpy, mostly in automation/social/facebook.py, automation/telegram/poller.py. This section covers 10 nodes and 11 internal edges; the diagram shows only representative relationships to stay readable.</p>
-
-<div class="mermaid">
-%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
-flowchart LR
-    %% Section: post_to_facebook (10 nodes, 11 edges)
-    subgraph post_to_facebook_automation_social_facebook_py_70cda9ab["automation/social/facebook.py"]
-        automation_social_facebook_post_to_facebook_40b9290f("post_to_facebook()<br/><small>automation/social/facebook.py</small>")
-        automation_social_facebook_is_facebook_login_nee_f1510cca("is_facebook_login_needed()<br/><small>automation/social/facebook.py</small>")
-        automation_social_facebook_submit_facebook_login_48a8a1ee("submit_facebook_login()<br/><small>automation/social/facebook.py</small>")
-        automation_social_facebook_rationale_22_43d840ab("Checks if Facebook is currently showing...<br/><small>automation/social/facebook.py</small>")
-        automation_social_facebook_rationale_46_afc988d4("Injects password (and optional email) i...<br/><small>automation/social/facebook.py</small>")
-        automation_social_facebook_rationale_109_f5721b8d("Publishes a post with optional image/vi...<br/><small>automation/social/facebook.py</small>")
-    end
-    subgraph post_to_facebook_automation_telegram_poller_py_5e2bdfb5["automation/telegram/poller.py"]
-        automation_telegram_poller_handle_text_message_8766933f("handle_text_message()<br/><small>automation/telegram/poller.py</small>")
-        automation_telegram_poller_start_polling_2d0ce1db("start_polling()<br/><small>automation/telegram/poller.py</small>")
-        automation_telegram_poller_rationale_263_ec554b62("Continuously long-polls Telegram for up...<br/><small>automation/telegram/poller.py</small>")
-        automation_telegram_poller_rationale_200_a37312a1("Processes user text messages in Telegra...<br/><small>automation/telegram/poller.py</small>")
-    end
-    automation_social_facebook_post_to_facebook_40b9290f -->|calls| automation_social_facebook_is_facebook_login_nee_f1510cca
-    automation_social_facebook_post_to_facebook_40b9290f -->|calls| automation_social_facebook_submit_facebook_login_48a8a1ee
-    automation_social_facebook_submit_facebook_login_48a8a1ee -->|calls| automation_social_facebook_is_facebook_login_nee_f1510cca
-    automation_telegram_poller_start_polling_2d0ce1db -->|calls| automation_telegram_poller_handle_text_message_8766933f
-    automation_telegram_poller_handle_text_message_8766933f -->|calls| automation_social_facebook_submit_facebook_login_48a8a1ee
-    automation_telegram_poller_handle_text_message_8766933f -->|calls| automation_social_facebook_post_to_facebook_40b9290f
-    class automation_social_facebook_post_to_facebook_40b9290f function;
-    class automation_social_facebook_is_facebook_login_nee_f1510cca function;
-    class automation_social_facebook_submit_facebook_login_48a8a1ee function;
-    class automation_social_facebook_rationale_22_43d840ab concept;
-    class automation_social_facebook_rationale_46_afc988d4 concept;
-    class automation_social_facebook_rationale_109_f5721b8d concept;
-    class automation_telegram_poller_handle_text_message_8766933f function;
-    class automation_telegram_poller_start_polling_2d0ce1db function;
-    class automation_telegram_poller_rationale_263_ec554b62 concept;
-    class automation_telegram_poller_rationale_200_a37312a1 concept;
-    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
-    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
-    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
-    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
-    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
-    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
-    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
-    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
-    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
-</div>
-
-<h3>Call Details</h3>
-<table class="call-table">
-<tr>
-  <th style="width:5%">#</th>
-  <th style="width:28%">Node</th>
-  <th style="width:10%">Type</th>
-  <th style="width:17%">Caller</th>
-  <th style="width:20%">Callees</th>
-  <th style="width:20%">Description</th>
-</tr>
-<tr>
-  <td>1</td>
-  <td><code>is_facebook_login_needed()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>submit_facebook_login()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td>No direct outbound edge</td>
-  <td>is_facebook_login_needed() node in automation/social/facebook.py.</td>
-</tr>
-<tr>
-  <td>2</td>
-  <td><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>__init__.py</code><br><small style="color:var(--muted)">automation/social/__init__.py</small><br><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
-  <td><code>is_facebook_login_needed()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>submit_facebook_login()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>time</code></td>
-  <td>post_to_facebook() node in automation/social/facebook.py.</td>
-</tr>
-<tr>
-  <td>3</td>
-  <td><code>submit_facebook_login()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td><code>is_facebook_login_needed()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>time</code></td>
-  <td>submit_facebook_login() node in automation/social/facebook.py.</td>
-</tr>
-<tr>
-  <td>4</td>
-  <td><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>start_polling()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
-  <td><code>delete_telegram_message()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>post_to_facebook()</code><br><small style="color:var(--muted)">automation/social/facebook.py</small><br><code>send_text_message()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br>+2 more</td>
-  <td>handle_text_message() node in automation/telegram/poller.py.</td>
-</tr>
-<tr>
-  <td>5</td>
-  <td><code>start_polling()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>get_telegram_credentials()</code><br><small style="color:var(--muted)">automation/telegram/bot.py</small><br><code>handle_callback_query()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br><code>handle_text_message()</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small><br>+2 more</td>
-  <td>start_polling() node in automation/telegram/poller.py.</td>
-</tr>
-<tr>
-  <td>6</td>
-  <td><code>Publishes a post with optional image/video and caption to Facebook. If login is…</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Publishes a post with optional image/video and caption to Facebook. If login is….</td>
-</tr>
-<tr>
-  <td>7</td>
-  <td><code>Checks if Facebook is currently showing a login screen.</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Checks if Facebook is currently showing a login screen..</td>
-</tr>
-<tr>
-  <td>8</td>
-  <td><code>Injects password (and optional email) into Facebook login form and submits.</code><br><small style="color:var(--muted)">automation/social/facebook.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Injects password (and optional email) into Facebook login form and submits..</td>
-</tr>
-<tr>
-  <td>9</td>
-  <td><code>Processes user text messages in Telegram (such as passwords or revision…</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Processes user text messages in Telegram (such as passwords or revision….</td>
-</tr>
-<tr>
-  <td>10</td>
-  <td><code>Continuously long-polls Telegram for updates.</code><br><small style="color:var(--muted)">automation/telegram/poller.py</small></td>
-  <td><span class="tag tag-func">Concept</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Design note for Continuously long-polls Telegram for updates..</td>
-</tr>
-</table>
-
-<div class="grid">
-  <div class="card">
-    <h4>Key Files</h4>
-    <table style="width:100%;font-size:0.85rem;">
-      <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>automation/social/facebook.py</code></td><td>6 nodes</td></tr>
-<tr><td><code>automation/telegram/poller.py</code></td><td>4 nodes</td></tr>
-    </table>
-  </div>
-  <div class="card">
-    <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x6, explains x5. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
-  </div>
-</div>
-<hr>
-
-<!-- ====== 13. ProductsPage ====== -->
-<h2 id="productspage">13. ProductsPage</h2>
+<!-- ====== 11. ProductsPage ====== -->
+<h2 id="productspage">11. ProductsPage</h2>
 <p>ProductsPage groups implementation around app, products, pagejs, productspage, mostly in app/products/page.js. This section covers 8 nodes and 9 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
@@ -3349,8 +3060,8 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 14. README.md ====== -->
-<h2 id="readme-md">14. README.md</h2>
+<!-- ====== 12. README.md ====== -->
+<h2 id="readme-md">12. README.md</h2>
 <p>README.md groups implementation around readmemd, check, lines, code, mostly in README.md. This section covers 7 nodes and 6 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
@@ -3471,8 +3182,8 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 15. next.config.mjs ====== -->
-<h2 id="next-config-mjs">15. next.config.mjs</h2>
+<!-- ====== 13. next.config.mjs ====== -->
+<h2 id="next-config-mjs">13. next.config.mjs</h2>
 <p>next.config.mjs groups implementation around nextconfigmjs, next, nextconfig, mostly in next.config.mjs, next. This section covers 3 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
@@ -3552,27 +3263,19 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 16. Other ====== -->
-<h2 id="other">16. Other</h2>
-<p>Other groups implementation around agentsmd, automation, browser, telegram, mostly in AGENTS.md, automation/browser/__init__.py, automation/telegram/__init__.py. This section covers 5 nodes and 1 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 14. AGENTS.md ====== -->
+<h2 id="agents-md">14. AGENTS.md</h2>
+<p>AGENTS.md groups implementation around agentsmd, not, nextjs, you, mostly in AGENTS.md. This section covers 2 nodes and 1 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Other (5 nodes, 1 edges)
-    subgraph other_AGENTS_md_b8f71333["AGENTS.md"]
-        agents_e7052aeb("AGENTS.md")
-        agents_this_is_not_the_next_js_you_know_84c753c3("This is NOT the Next.js you know<br/><small>AGENTS.md</small>")
-    end
-    automation_browser_init_ba15ec3f("__init__.py")
-    automation_telegram_init_1cfb1558("__init__.py")
-    automation_utils_init_8d9c9e93("__init__.py")
+    %% Section: AGENTS.md (2 nodes, 1 edges)
+    agents_e7052aeb("AGENTS.md")
+    agents_this_is_not_the_next_js_you_know_84c753c3("This is NOT the Next.js you know<br/><small>AGENTS.md</small>")
     agents_e7052aeb -->|contains| agents_this_is_not_the_next_js_you_know_84c753c3
     class agents_e7052aeb concept;
     class agents_this_is_not_the_next_js_you_know_84c753c3 concept;
-    class automation_browser_init_ba15ec3f module;
-    class automation_telegram_init_1cfb1558 module;
-    class automation_utils_init_8d9c9e93 module;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -3610,16 +3313,114 @@ flowchart LR
   <td>No direct outbound edge</td>
   <td>Documentation node describing This is NOT the Next.js you know.</td>
 </tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>AGENTS.md</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 15. browser/__init__.py ====== -->
+<h2 id="browser-init-py">15. browser/__init__.py</h2>
+<p>browser/__init__.py groups implementation around browser, automation, mostly in automation/browser/__init__.py. This section covers 1 nodes and 0 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: browser/__init__.py (1 nodes, 0 edges)
+    automation_browser_init_ba15ec3f("__init__.py")
+    class automation_browser_init_ba15ec3f module;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
 <tr>
-  <td>3</td>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
   <td><code>browser/__init__.py</code><br><small style="color:var(--muted)">automation/browser/__init__.py</small></td>
   <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
   <td>Module file in automation/browser/__init__.py.</td>
 </tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>automation/browser/__init__.py</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: No high-confidence call edges detected. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 16. Other ====== -->
+<h2 id="other">16. Other</h2>
+<p>Other groups implementation around telegram, automation, utils, mostly in automation/telegram/__init__.py, automation/utils/__init__.py. This section covers 2 nodes and 0 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Other (2 nodes, 0 edges)
+    automation_telegram_init_1cfb1558("__init__.py")
+    automation_utils_init_8d9c9e93("__init__.py")
+    class automation_telegram_init_1cfb1558 module;
+    class automation_utils_init_8d9c9e93 module;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
 <tr>
-  <td>4</td>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
   <td><code>telegram/__init__.py</code><br><small style="color:var(--muted)">automation/telegram/__init__.py</small></td>
   <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
@@ -3627,7 +3428,7 @@ flowchart LR
   <td>Module file in automation/telegram/__init__.py.</td>
 </tr>
 <tr>
-  <td>5</td>
+  <td>2</td>
   <td><code>utils/__init__.py</code><br><small style="color:var(--muted)">automation/utils/__init__.py</small></td>
   <td><span class="tag tag-class">Module</span></td>
   <td>External entry / no inbound edge</td>
@@ -3641,15 +3442,13 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>AGENTS.md</code></td><td>2 nodes</td></tr>
-<tr><td><code>automation/browser/__init__.py</code></td><td>1 nodes</td></tr>
-<tr><td><code>automation/telegram/__init__.py</code></td><td>1 nodes</td></tr>
+      <tr><td><code>automation/telegram/__init__.py</code></td><td>1 nodes</td></tr>
 <tr><td><code>automation/utils/__init__.py</code></td><td>1 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: No high-confidence call edges detected. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
@@ -3660,18 +3459,18 @@ flowchart LR
   <div class="card">
     <h4>Graph</h4>
     <table style="width:100%;font-size:0.85rem;">
-      <tr><td>Nodes</td><td>491</td></tr>
-      <tr><td>Edges</td><td>967</td></tr>
+      <tr><td>Nodes</td><td>508</td></tr>
+      <tr><td>Edges</td><td>1017</td></tr>
       <tr><td>Hyperedges</td><td>0</td></tr>
-      <tr><td>Communities</td><td>25</td></tr>
+      <tr><td>Communities</td><td>21</td></tr>
       <tr><td>Documented Sections</td><td>15</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Edge Confidence</h4>
     <table style="width:100%;font-size:0.85rem;">
-      <tr><td>EXTRACTED</td><td>925</td></tr>
-      <tr><td>INFERRED</td><td>42</td></tr>
+      <tr><td>EXTRACTED</td><td>958</td></tr>
+      <tr><td>INFERRED</td><td>59</td></tr>
       <tr><td>AMBIGUOUS</td><td>0</td></tr>
     </table>
   </div>
@@ -3679,7 +3478,7 @@ flowchart LR
 
 <div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
   <p>AI Powered Social Media — Architecture Documentation</p>
-  <p>Generated: 2026-10-13 06:27 UTC · graphify callflow-html</p>
+  <p>Generated: 2026-10-13 07:52 UTC · graphify callflow-html</p>
 </div>
 
 </div><!-- .container -->
