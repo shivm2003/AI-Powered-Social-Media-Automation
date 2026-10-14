@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 
 const navItems = [
   {
@@ -11,6 +12,7 @@ const navItems = [
       { href: "/products", icon: "📦", label: "Products" },
       { href: "/accounts", icon: "🔗", label: "Accounts" },
       { href: "/generate", icon: "✨", label: "Generate" },
+      { href: "/growth", icon: "👥", label: "Outreach & Growth" },
     ],
   },
   {
@@ -24,8 +26,14 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isActive = (href) => {
+    if (!mounted || !pathname) return false;
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
   };
@@ -46,6 +54,7 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={`nav-item ${isActive(item.href) ? "active" : ""}`}
+                suppressHydrationWarning
               >
                 <span className="nav-item-icon">{item.icon}</span>
                 <span>{item.label}</span>

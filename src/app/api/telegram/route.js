@@ -83,40 +83,88 @@ export async function POST(request) {
       const callbackData = callback.data || "";
       const chatId = callback.message?.chat?.id;
 
+      // Acknowledge callback query to stop button loading spinner
+      if (token && callback.id) {
+        fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ callback_query_id: callback.id }),
+        }).catch(() => {});
+      }
+
       if (callbackData.startsWith("approve:")) {
         const campaignId = callbackData.split(":")[1];
+        if (token && chatId) {
+          // Send platform selection menu with Cancel button
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: "🚀 <b>Campaign Approved!</b>\n\nWhich social media platform would you like to publish this post to?",
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: "📘 Facebook", callback_data: `post_to:facebook:${campaignId}` },
+                    { text: "📸 Instagram", callback_data: `post_to:instagram:${campaignId}` },
+                  ],
+                  [
+                    { text: "💼 LinkedIn", callback_data: `post_to:linkedin:${campaignId}` },
+                    { text: "💬 WhatsApp", callback_data: `post_to:whatsapp:${campaignId}` },
+                  ],
+                  [
+                    { text: "❌ Cancel", callback_data: `cancel_post:${campaignId}` },
+                  ],
+                ],
+              },
+            }),
+          });
+        }
+      } else if (callbackData.startsWith("cancel_post:")) {
+        if (token && chatId) {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: "❌ <b>Post publication was cancelled.</b> No post will be made.",
+              parse_mode: "HTML",
+            }),
+          });
+        }
+      } else if (callbackData.startsWith("post_to:")) {
+        const parts = callbackData.split(":");
+        const platform = parts[1] || "facebook";
+        const campaignId = parts[2] || "";
         const campaign = await getCampaignById(campaignId);
 
         if (campaign) {
-          await updateCampaignStatus(campaignId, "approved");
-
-          // Post to selected social platforms via Selenium
-          const platforms = safeParseArray(campaign.platforms);
-          const mediaPaths = safeParseArray(campaign.media_paths);
-          const hashtags = safeParseArray(campaign.generated_hashtags);
-          const caption = `${campaign.generated_caption || ""}\n\n${hashtags.join(" ")}`;
-
-          runAutomationCommand({
-            action: "post",
-            platforms,
-            media_path: mediaPaths[0] || null,
-            caption,
-          }).catch(console.error);
-
-          await updateCampaignStatus(campaignId, "posted");
-
-          // Notify in Telegram
           if (token && chatId) {
             await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chat_id: chatId,
-                text: `🎉 <b>Approved!</b> Dispatched automatic posting to ${platforms.join(", ")}.`,
+                text: `🚀 <b>Selected ${platform.toUpperCase()}</b>. Connecting to browser and verifying session...`,
                 parse_mode: "HTML",
               }),
             });
           }
+
+          const mediaPaths = safeParseArray(campaign.media_paths);
+          const hashtags = safeParseArray(campaign.generated_hashtags);
+          const caption = `${campaign.generated_caption || ""}\n\n${hashtags.join(" ")}`;
+
+          runAutomationCommand({
+            action: "post",
+            platforms: [platform],
+            campaign_id: campaignId,
+            media_path: mediaPaths[0] || null,
+            caption,
+          }).catch(console.error);
+
+          await updateCampaignStatus(campaignId, "posted");
         }
       } else if (callbackData.startsWith("revise:")) {
         const campaignId = callbackData.split(":")[1];

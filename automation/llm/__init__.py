@@ -73,51 +73,89 @@ def generate_smart_marketing_copy(
     }
     action_cta = cta_labels.get(cta, "Discover More Today")
 
-    # Clean hashtags
+    # Clean hashtags with Indian market relevance
     clean_name = "".join(ch for ch in product_name.title() if ch.isalnum())
     clean_cat = "".join(ch for ch in category.title() if ch.isalnum())
-    hashtags = [
-        f"#{clean_name}" if clean_name else "#Innovation",
-        f"#{clean_cat}" if clean_cat and clean_cat != "Other" else "#Trending",
-        "#SmallBusiness",
-        "#Success",
-        "#Growth",
-        "#Solutions",
-    ]
+    is_finance = "loan" in product_name.lower() or "loan" in desc.lower() or "finance" in category.lower()
+    
+    if is_finance:
+        hashtags = [
+            f"#{clean_name}" if clean_name else "#LoanSolutions",
+            "#HomeLoanIndia",
+            "#PersonalLoan",
+            "#IndianMiddleClass",
+            "#LowEMI",
+            "#ApnaGhar",
+        ]
+        default_bullets = (
+            "✅ Fast Disbursal directly to bank account\n"
+            "✅ Easy EMIs starting at low monthly rates in ₹\n"
+            "✅ Minimal paperwork & zero hidden charges\n"
+            "✅ Trusted financial partner for your family's dreams"
+        )
+    else:
+        hashtags = [
+            f"#{clean_name}" if clean_name else "#Innovation",
+            f"#{clean_cat}" if clean_cat and clean_cat != "Other" else "#IndiaBusiness",
+            "#IndianMiddleClass",
+            "#MadeInIndia",
+            "#Growth",
+            "#TrustedSolutions",
+        ]
+        default_bullets = f"✅ Fast & reliable\n✅ Designed for {audience or 'Indian families'}\n✅ 100% transparent and hassle-free experience"
 
     # Benefits formatted
     bullet_points = ""
     if benefits and len(benefits) > 0:
         bullet_points = "\n".join([f"✅ {b}" for b in benefits[:4]])
     else:
-        bullet_points = f"✅ Fast & reliable\n✅ Designed for {audience or 'everyone'}\n✅ Hassle-free experience"
+        bullet_points = default_bullets
 
-    # Tone adjustments
-    if tone.lower() == "urgency":
-        hook = f"⏳ Don't wait! Transform your results with {product_name} today."
-    elif tone.lower() == "inspirational":
-        hook = f"✨ Unlock your full potential with {product_name}."
-    elif tone.lower() == "casual":
-        hook = f"👋 Check this out — {product_name} is a game changer!"
+    # Tone adjustments for Indian middle-class audience
+    if is_finance:
+        if tone.lower() == "urgency":
+            hook = f"⏳ Don't let financial worries pause your dreams! Secure easy loans with {product_name} today."
+        elif tone.lower() == "inspirational":
+            hook = f"✨ Apne sapno ko dein ek nayi udaan! Turn every family aspiration into reality with {product_name}."
+        elif tone.lower() == "casual":
+            hook = f"👋 Need quick funds with low monthly EMIs? {product_name} makes borrowing completely hassle-free!"
+        else:
+            hook = f"🏡 Ab har sapna hoga poora — Quick, transparent, and trusted financial solutions with {product_name}!"
     else:
-        hook = f"🚀 Ready to level up with {product_name}?"
+        if tone.lower() == "urgency":
+            hook = f"⏳ Don't wait! Transform your results with {product_name} today."
+        elif tone.lower() == "inspirational":
+            hook = f"✨ Unlock your family's full potential with {product_name}."
+        elif tone.lower() == "casual":
+            hook = f"👋 Check this out — {product_name} is a game changer for you and your family!"
+        else:
+            hook = f"🚀 Ready to take the next big step with {product_name}?"
+
+    if is_finance:
+        action_cta = "Apply Now"
+        cta_line = "👉 Apply Now: https://loansolutions.everythingrental.in/application"
+    else:
+        cta_line = f"👉 Click below to {action_cta.lower()}!"
 
     caption = (
         f"{hook}\n\n"
         f"{desc}\n\n"
         f"Key Highlights:\n"
         f"{bullet_points}\n\n"
-        f"👉 Click below to {action_cta.lower()}!"
+        f"{cta_line}"
     )
 
-    short_caption = f"Level up with {product_name}! {desc[:80]}... 👉 {action_cta} 🚀"
-    headline = f"Discover {product_name}"
-    subheadline = desc[:65] if desc else "The smart solution built for you."
+    if is_finance:
+        short_caption = f"Level up with {product_name}! {desc[:80]}... 👉 Apply Now: https://loansolutions.everythingrental.in/application"
+    else:
+        short_caption = f"Level up with {product_name}! {desc[:80]}... 👉 {action_cta} 🚀"
+    headline = f"Apne Sapne Sach Karein — {product_name}" if is_finance else f"Discover {product_name}"
+    subheadline = desc[:65] if desc else "Trusted financial solutions for Indian middle-class families."
 
     video_slides = [
-        {"slide": 1, "text": f"Need a better solution?", "visual": f"Introduction hook highlighting {product_name}"},
-        {"slide": 2, "text": f"Meet {product_name}", "visual": "Hero reveal with branded aesthetic"},
-        {"slide": 3, "text": f"{benefits[0] if benefits else 'Fast & Seamless'}", "visual": "Key benefit demonstration"},
+        {"slide": 1, "text": f"Need reliable financial support?", "visual": f"Indian family planning their dreams with {product_name}"},
+        {"slide": 2, "text": f"Meet {product_name}", "visual": "Warm home reveal with glowing Indian Rupee (₹) symbol"},
+        {"slide": 3, "text": f"{benefits[0] if benefits else 'Low EMIs in ₹ & Fast Disbursal'}", "visual": "Checkmark approval on Indian digital banking screen"},
         {"slide": 4, "text": f"{action_cta}!", "visual": "Logo and clear call to action"}
     ]
 
@@ -127,7 +165,7 @@ def generate_smart_marketing_copy(
         "hashtags": hashtags,
         "headline": headline,
         "subheadline": subheadline,
-        "visual_prompt": f"Professional high-end commercial hero graphic for {product_name}, vibrant modern lighting, clean background, 8k aesthetic.",
+        "visual_prompt": f"A warm, authentic, happy Indian middle-class family celebrating loan approval in a modern Indian living room, glowing Indian Rupee symbol (₹), clean 8k commercial advertising photography.",
         "video_script_slides": video_slides,
     }
 
@@ -220,4 +258,13 @@ def generate_marketing_content(
 
     # ── 3. Ultra-fast dynamic generator engine (completes in <0.05s) ──
     logger.info("Delivering customized marketing copy via smart copy synthesizer.")
-    return fallback_data
+    final_data = fallback_data
+
+    # Ensure Loan Solutions always includes the official Apply Now link
+    is_finance = "loan" in product_name.lower() or "loan" in desc.lower() or "finance" in category.lower()
+    if is_finance:
+        apply_url_str = "https://loansolutions.everythingrental.in/application"
+        if apply_url_str not in final_data.get("caption", ""):
+            final_data["caption"] = f"{final_data.get('caption', '').rstrip()}\n\n👉 Apply Now: {apply_url_str}"
+
+    return final_data

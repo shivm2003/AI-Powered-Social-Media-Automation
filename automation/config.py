@@ -15,6 +15,25 @@ try:
 except ImportError:
     pass
 
+# Direct fallback parser for .env.local and .env
+for env_name in [".env.local", ".env"]:
+    env_file = BASE_DIR / env_name
+    if env_file.exists():
+        try:
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip('"').strip("'")
+                    if k not in os.environ:
+                        os.environ[k] = v
+        except Exception:
+            pass
+
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+
 # Chrome profiles directory
 CHROME_PROFILES_DIR = BASE_DIR / "chrome_profiles"
 

@@ -75,10 +75,6 @@ export default function GeneratePage() {
     }
   }
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
   async function fetchProducts() {
     try {
       const res = await fetch("/api/products");
@@ -90,6 +86,10 @@ export default function GeneratePage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
   function toggleProduct(id) {
     setConfig((prev) => ({
@@ -125,6 +125,72 @@ export default function GeneratePage() {
   const [humanCurrentStep, setHumanCurrentStep] = useState(1);
   const [humanLogs, setHumanLogs] = useState([]);
   const [telegramDispatched, setTelegramDispatched] = useState(false);
+
+  // Direct Social Publishing from Webpage
+  const [directPosting, setDirectPosting] = useState(false);
+  const [directPostPlatform, setDirectPostPlatform] = useState("facebook");
+  const [directPostStatus, setDirectPostStatus] = useState("idle");
+  const [directPostMessage, setDirectPostMessage] = useState("");
+
+  async function handleDirectPublish(platToPost) {
+    if (!generatedCampaign) return;
+    const plat = platToPost || directPostPlatform || "facebook";
+    setDirectPosting(true);
+    setDirectPostStatus("posting");
+    setDirectPostMessage(`Connecting to browser and publishing to ${plat.toUpperCase()}...`);
+
+    try {
+      const res = await fetch(`/api/campaigns/${generatedCampaign.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve", platform: plat }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDirectPostStatus("success");
+        setDirectPostMessage(data.message || `🎉 Successfully published to ${plat.toUpperCase()} and saved in campaigns!`);
+        setGeneratedCampaign((prev) => ({ ...prev, status: "posted" }));
+      } else {
+        setDirectPostStatus("error");
+        setDirectPostMessage(data.error || "Failed to publish post.");
+      }
+    } catch (err) {
+      setDirectPostStatus("error");
+      setDirectPostMessage(err.message || "An unexpected error occurred.");
+    } finally {
+      setDirectPosting(false);
+    }
+  }
+
+  function startNewGenerate() {
+    setCurrentStep(1);
+    setGenerating(false);
+    setGenerateStatus("");
+    setGeneratedCampaign(null);
+    setTelegramDispatched(false);
+    setHumanLogs([]);
+    setHumanCurrentStep(1);
+    setDirectPosting(false);
+    setDirectPostStatus("idle");
+    setDirectPostMessage("");
+    setConfig({
+      selectedProducts: products.length > 0 ? [products[0].id] : [],
+      llmProvider: "chatgpt",
+      selectedPlatforms: ["facebook", "instagram"],
+      contentType: "image",
+      language: "english",
+      tone: "professional",
+      cta: "learn_more",
+      hashtagStrategy: "auto",
+      aspectRatio: "1:1",
+      videoDuration: 15,
+      visualStyle: "auto",
+      customInstructions: "",
+      skillImagePath: "",
+      skillImageUrl: "",
+      skillImageName: "",
+    });
+  }
 
   async function handleGenerate() {
     setGenerating(true);
@@ -236,11 +302,20 @@ export default function GeneratePage() {
 
   return (
     <div className="animate-fadeIn">
-      <div className="page-header">
+      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
         <div>
           <h1 className="page-title">Generate Content</h1>
           <p className="page-subtitle">Create AI-powered social media posts in a few steps</p>
         </div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={startNewGenerate}
+          title="Reset wizard and start a new content generation"
+          style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
+        >
+          <span>✨</span> Start New Generate
+        </button>
       </div>
 
       {/* Stepper */}
@@ -585,7 +660,7 @@ export default function GeneratePage() {
                         🎯 Skill / Product Reference Image
                       </label>
                       <span style={{ fontSize: "var(--font-xs)", color: "var(--text-tertiary)" }}>
-                        ChatGPT will use this as visual inspiration & branding
+                        AI (ChatGPT / Gemini) will use this as visual inspiration & branding
                       </span>
                     </div>
 
@@ -611,7 +686,7 @@ export default function GeneratePage() {
                             {config.skillImageName || "Skill Reference Image"}
                           </div>
                           <div style={{ fontSize: "var(--font-xs)", color: "var(--success)", display: "flex", alignItems: "center", gap: 4 }}>
-                            <span>✓</span> Image attached for ChatGPT generation
+                            <span>✓</span> Image attached for AI generation
                           </div>
                         </div>
                         <button
@@ -986,6 +1061,7 @@ export default function GeneratePage() {
                     const firstMedia = mediaArr[0];
                     const filename = firstMedia ? firstMedia.split(/[/\\]/).pop() : null;
                     const mediaUrl = filename ? `/api/media?file=${encodeURIComponent(filename)}` : null;
+                    const isVideo = generatedCampaign.content_type === "video" || (filename && (filename.endsWith(".mp4") || filename.endsWith(".mov") || filename.endsWith(".webm")));
 
                     if (!mediaUrl) return null;
 
@@ -993,7 +1069,7 @@ export default function GeneratePage() {
                       <div style={{ marginBottom: "var(--space-4)", display: "flex", justifyContent: "center" }}>
                         <div
                           style={{
-                            maxWidth: 360,
+                            maxWidth: isVideo ? 280 : 360,
                             width: "100%",
                             borderRadius: "var(--radius-lg)",
                             overflow: "hidden",
@@ -1002,11 +1078,23 @@ export default function GeneratePage() {
                             background: "#0d0f17",
                           }}
                         >
-                          <img
-                            src={mediaUrl}
-                            alt="Generated Graphic"
-                            style={{ width: "100%", height: "auto", display: "block" }}
-                          />
+                          {isVideo ? (
+                            <video
+                              src={mediaUrl}
+                              controls
+                              autoPlay
+                              muted
+                              loop
+                              playsInline
+                              style={{ width: "100%", height: "auto", display: "block", aspectRatio: "9/16", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <img
+                              src={mediaUrl}
+                              alt="Generated Graphic"
+                              style={{ width: "100%", height: "auto", display: "block" }}
+                            />
+                          )}
                         </div>
                       </div>
                     );
@@ -1030,19 +1118,164 @@ export default function GeneratePage() {
                     </div>
                   )}
 
+                  {/* Direct Publishing Box */}
+                  <div
+                    style={{
+                      marginBottom: "var(--space-4)",
+                      padding: "var(--space-4)",
+                      background: "linear-gradient(135deg, rgba(124, 92, 252, 0.12), rgba(61, 214, 208, 0.08))",
+                      border: "1px solid rgba(124, 92, 252, 0.35)",
+                      borderRadius: "var(--radius-lg)",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-3)", flexWrap: "wrap", gap: "var(--space-2)" }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: "var(--font-md)", fontWeight: 700, display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                          <span>🚀</span> Publish Directly to Social Media
+                        </h4>
+                        <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-secondary)" }}>
+                          Post this {generatedCampaign.content_type === "video" ? "video reel" : "graphic"} now & automatically save in campaigns
+                        </p>
+                      </div>
+                      {generatedCampaign.status === "posted" ? (
+                        <span className="tag tag-success" style={{ fontWeight: 700 }}>
+                          ✓ Published & Saved in Campaigns
+                        </span>
+                      ) : (
+                        <span className="tag tag-info" style={{ fontWeight: 600 }}>
+                          Ready to Post
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", marginBottom: "var(--space-3)" }}>
+                      {[
+                        { id: "facebook", label: "Facebook", icon: "📘" },
+                        { id: "instagram", label: "Instagram", icon: "📸" },
+                        { id: "linkedin", label: "LinkedIn", icon: "💼" },
+                        { id: "whatsapp", label: "WhatsApp", icon: "💬" },
+                      ].map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setDirectPostPlatform(p.id)}
+                          disabled={directPosting}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "var(--space-1)",
+                            padding: "var(--space-2) var(--space-3)",
+                            borderRadius: "var(--radius-md)",
+                            fontSize: "var(--font-xs)",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            border: directPostPlatform === p.id ? "2px solid var(--accent-primary)" : "1px solid var(--border)",
+                            background: directPostPlatform === p.id ? "rgba(124, 92, 252, 0.25)" : "var(--bg-secondary)",
+                            color: directPostPlatform === p.id ? "#fff" : "var(--text-secondary)",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span>{p.icon}</span> {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => handleDirectPublish(directPostPlatform)}
+                        disabled={directPosting}
+                        className="btn btn-primary"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "var(--space-2)",
+                          padding: "var(--space-2) var(--space-4)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {directPosting ? (
+                          <>
+                            <span className="spinner" style={{ width: 16, height: 16 }} />
+                            Publishing to {directPostPlatform.toUpperCase()}...
+                          </>
+                        ) : (
+                          <>
+                            <span>⚡</span> Publish to {directPostPlatform.toUpperCase()} & Save Campaign
+                          </>
+                        )}
+                      </button>
+                      {((generatedCampaign.product_name || "").toLowerCase().includes("loan") ||
+                        (generatedCampaign.generated_caption || "").toLowerCase().includes("loan")) && (
+                        <a
+                          href="https://loansolutions.everythingrental.in/application"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "var(--space-2)",
+                            padding: "var(--space-2) var(--space-4)",
+                            fontWeight: 700,
+                            background: "linear-gradient(135deg, #10B981, #059669)",
+                            color: "#fff",
+                            borderRadius: "var(--radius-md)",
+                            textDecoration: "none",
+                          }}
+                          title="Open official Loan Solutions application page"
+                        >
+                          <span>📝</span> Apply Now 🔗
+                        </a>
+                      )}
+                    </div>
+
+                    {directPostMessage && (
+                      <div
+                        style={{
+                          marginTop: "var(--space-3)",
+                          padding: "var(--space-2) var(--space-3)",
+                          borderRadius: "var(--radius-md)",
+                          fontSize: "var(--font-xs)",
+                          background:
+                            directPostStatus === "success"
+                              ? "rgba(16, 185, 129, 0.15)"
+                              : directPostStatus === "error"
+                              ? "rgba(239, 68, 68, 0.15)"
+                              : "rgba(59, 130, 246, 0.15)",
+                          border: `1px solid ${
+                            directPostStatus === "success"
+                              ? "rgba(16, 185, 129, 0.4)"
+                              : directPostStatus === "error"
+                              ? "rgba(239, 68, 68, 0.4)"
+                              : "rgba(59, 130, 246, 0.4)"
+                          }`,
+                          color:
+                            directPostStatus === "success"
+                              ? "var(--success)"
+                              : directPostStatus === "error"
+                              ? "var(--danger)"
+                              : "#60A5FA",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {directPostMessage}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Action Buttons */}
                   <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
-                    <a href="/campaigns" className="btn btn-primary" style={{ flex: 1, textAlign: "center" }}>
-                      🚀 View in Campaigns
+                    <a href="/campaigns" className="btn btn-secondary" style={{ flex: 1, textAlign: "center" }}>
+                      📋 View in Campaigns List
                     </a>
                     <button
-                      onClick={() => {
-                        setGeneratedCampaign(null);
-                        setGenerateStatus("");
-                      }}
+                      onClick={startNewGenerate}
                       className="btn btn-secondary"
+                      style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
+                      title="Reset and start a fresh content generation"
                     >
-                      ✨ Generate Another
+                      <span>✨</span> Start New Generate
                     </button>
                   </div>
                 </div>

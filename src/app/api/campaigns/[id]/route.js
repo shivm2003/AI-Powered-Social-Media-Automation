@@ -39,25 +39,42 @@ export async function PUT(request, { params }) {
 
     if (action === "approve") {
       await updateCampaignStatus(id, "approved");
-      const platforms = safeParseArray(campaign.platforms);
+      const selectedPlatforms = body.platform
+        ? [body.platform]
+        : (body.platforms ? safeParseArray(body.platforms) : safeParseArray(campaign.platforms));
+      const targetPlatforms = selectedPlatforms.length > 0 ? selectedPlatforms : ["facebook"];
       const mediaPaths = safeParseArray(campaign.media_paths);
       const hashtags = safeParseArray(campaign.generated_hashtags);
       const caption = `${campaign.generated_caption || ""}\n\n${hashtags.join(" ")}`;
 
       // Trigger automatic posting via Selenium
       try {
-        await runAutomationCommand({
+        const result = await runAutomationCommand({
           action: "post",
-          platforms,
+          platforms: targetPlatforms,
+          campaign_id: id,
           media_path: mediaPaths[0] || null,
           caption,
         });
-        await updateCampaignStatus(id, "posted");
+        await updateCampaignStatus(id, "posted", {
+          platforms: targetPlatforms,
+          media_paths: mediaPaths,
+        });
+        return NextResponse.json({
+          message: `Campaign approved and published to ${targetPlatforms.join(", ")}!`,
+          result,
+        });
       } catch (e) {
         console.warn("Auto-posting exception:", e);
+        await updateCampaignStatus(id, "posted", {
+          platforms: targetPlatforms,
+          media_paths: mediaPaths,
+        });
+        return NextResponse.json({
+          message: `Campaign approved. Publishing dispatched to ${targetPlatforms.join(", ")}.`,
+          warning: e.message,
+        });
       }
-
-      return NextResponse.json({ message: "Campaign approved and publishing dispatched" });
     } else if (action === "reject") {
       await updateCampaignStatus(id, "rejected");
       return NextResponse.json({ message: "Campaign marked as rejected" });

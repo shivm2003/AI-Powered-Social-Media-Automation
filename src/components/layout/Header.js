@@ -8,21 +8,17 @@ const pageTitles = {
   "/products": "Products",
   "/accounts": "Accounts",
   "/generate": "Generate Content",
+  "/growth": "Outreach & Growth",
   "/campaigns": "Campaigns",
   "/settings": "Settings",
 };
 
 export default function Header() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
   const [browserConnected, setBrowserConnected] = useState(false);
   const [profileEmail, setProfileEmail] = useState("2003shivam1990@gmail.com");
   const [launchingBrowser, setLaunchingBrowser] = useState(false);
-
-  useEffect(() => {
-    checkBrowserStatus();
-    const interval = setInterval(checkBrowserStatus, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   async function checkBrowserStatus() {
     try {
@@ -36,6 +32,13 @@ export default function Header() {
       // ignore
     }
   }
+
+  useEffect(() => {
+    setMounted(true);
+    checkBrowserStatus();
+    const interval = setInterval(checkBrowserStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function handleLaunchBrowser() {
     setLaunchingBrowser(true);
@@ -62,10 +65,12 @@ export default function Header() {
   }
 
   const getTitle = () => {
+    if (!mounted || !pathname) return "Dashboard";
     if (pageTitles[pathname]) return pageTitles[pathname];
     if (pathname.startsWith("/products/")) return "Edit Product";
     if (pathname.startsWith("/generate/")) return "Generate Content";
     if (pathname.startsWith("/campaigns/")) return "Campaign Details";
+    if (pathname.startsWith("/growth")) return "Outreach & Growth";
     return "Dashboard";
   };
 
@@ -75,7 +80,7 @@ export default function Header() {
         <div className="header-breadcrumb">
           <span>AI Social</span>
           <span>›</span>
-          <span className="current">{getTitle()}</span>
+          <span className="current" suppressHydrationWarning>{getTitle()}</span>
         </div>
       </div>
 

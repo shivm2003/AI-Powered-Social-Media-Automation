@@ -9,14 +9,14 @@ import uuid
 # 12+ Core Creative Design Archetypes
 DESIGN_ARCHETYPES = {
     "lifestyle": {
-        "name": "Authentic Lifestyle Photography",
-        "description": "Candid, relatable real-world human moment showing customers enjoying benefits",
+        "name": "Authentic Indian Lifestyle Photography",
+        "description": "Candid, relatable real-world moment showing an Indian middle-class family enjoying benefits",
         "keywords": [
-            "candid commercial lifestyle photography",
-            "relatable professional in contemporary environment",
-            "authentic emotion, warm smiling expression",
-            "natural high-end editorial shot, 35mm film lens look",
-            "unposed realistic human interaction",
+            "candid Indian commercial lifestyle photography",
+            "relatable Indian middle-class family in warm contemporary living room",
+            "authentic emotion, warm smiling Indian expressions",
+            "natural high-end editorial shot with warm sunlit daylight",
+            "unposed realistic Indian family interaction and joy",
         ]
     },
     "minimal": {
@@ -186,44 +186,46 @@ COLOR_THEMES = [
     "pure clinical white, soft cloud grey, and authoritative medical/fintech azure",
 ]
 
-# Domain-specific Context Enhancers
+# Domain-specific Context Enhancers tailored for Indian Market & Middle-Class Aspirations
 DOMAIN_CONTEXTS = {
     "finance": [
-        "modern digital banking smartphone display, clear approved loan checkmark, peaceful customer",
-        "warm handshake between advisor and happy family in modern sunlit office",
-        "sleek growing financial wealth growth charts, golden coins subtly integrated, security padlock emblem",
-        "relieved entrepreneur celebrating fast business loan approval in their vibrant boutique store",
-        "clean credit card and instant digital cash disbursement concept on sleek marble counter",
+        "Authentic happy Indian middle-class family (smiling parents and cheerful child) sitting together on a comfortable sofa in their bright modern Indian apartment living room, joyfully celebrating their dream home loan approval with relief, subtle glowing 3D Indian Rupee symbol (₹) and trusted green checkmark badge in background",
+        "Delighted Indian couple holding the keys to their dream new home during Griha Pravesh moment on their sunlit balcony, warm golden hour glow, financial security concept with glowing Indian Rupee (₹) growth accent",
+        "Hardworking Indian small business owner / shopkeeper smiling with immense pride in his thriving, colorful retail store, holding a smartphone displaying instant business loan approval in Indian Rupees (₹ Lakhs)",
+        "Affectionate Indian parents celebrating their daughter's college admission, studying with a modern laptop, happy family securing education loan with Indian Rupee (₹) emblem",
+        "Confident Indian salaried professional checking digital banking loan approval notification on smartphone displaying Indian Rupee (₹) disbursement, modern Indian urban apartment backdrop",
+        "Smiling Indian family posing happily beside their brand new family car in a pleasant Indian residential neighborhood, hassle-free auto loan with low Indian Rupee (₹) monthly EMI accent",
+        "Respectable Indian financial advisor with warm pleasant smile explaining easy EMI loan options to an appreciative Indian middle-class couple in a modern glass office",
     ],
     "software": [
-        "holographic analytics dashboard floating seamlessly above modern glass workspace",
-        "collaborative startup team celebrating milestone in sun-drenched industrial loft",
-        "sleek laptop displaying intelligent automated workflows with glowing connectivity nodes",
+        "holographic analytics dashboard floating seamlessly above modern glass workspace with Indian Rupee (₹) growth metrics",
+        "collaborative startup team celebrating milestone in sun-drenched modern Bangalore / Gurgaon tech hub loft",
+        "sleek laptop displaying intelligent automated workflows with glowing connectivity nodes and Rupee financial tracking",
         "modern developer workspace with curved monitors, ambient light strips, and clean code graphics",
     ],
     "service": [
-        "dedicated professional specialist delivering top-tier service with warm confident smile",
-        "clock and speed visual metaphor representing instant 24/7 turnaround and hassle-free assistance",
-        "relieved customer experiencing seamless five-star service experience",
-        "modern tablet displaying instant one-tap booking and glowing five-star review badge",
+        "dedicated Indian professional specialist delivering top-tier service with warm confident smile in modern environment",
+        "clock and speed visual metaphor representing instant 24/7 turnaround and hassle-free assistance for Indian clients",
+        "relieved Indian middle-class customer experiencing seamless five-star service experience",
+        "modern tablet displaying instant one-tap booking and glowing five-star review badge with Indian Rupee pricing",
     ],
     "ecommerce": [
-        "premium unboxing experience with branded packaging, luxury tissue wrap, and glowing ribbon",
-        "satisfied customer receiving package at door with bright sunny smile",
-        "curated flat-lay showcase of lifestyle essentials surrounding the hero product",
-        "express delivery box with wings and speed motion lines arriving at contemporary porch",
+        "premium unboxing experience with branded packaging, luxury tissue wrap, and glowing festive ribbon",
+        "satisfied Indian customer receiving package at door of modern Indian home with bright sunny smile",
+        "curated flat-lay showcase of lifestyle essentials surrounding the hero product with Indian festive accents",
+        "express delivery box with wings and speed motion lines arriving at contemporary Indian porch",
     ],
     "healthcare": [
-        "compassionate modern healthcare professional in clean bright modern clinic",
-        "radiant healthy individual full of energy enjoying outdoor morning sunlight",
+        "compassionate modern healthcare professional in clean bright modern clinic serving Indian family",
+        "radiant healthy Indian individual full of energy enjoying outdoor morning sunlight in park",
         "cutting-edge medical science visualization with clean white and calm cyan hues",
-        "peace of mind visual metaphor with hands cradling a glowing green health emblem",
+        "peace of mind visual metaphor with hands cradling a glowing green health emblem for family security",
     ],
     "education": [
-        "engaged student mastering new skill on sleek tablet in inspiring library cafe",
-        "glowing graduation cap and upward trending learning milestone charts",
+        "engaged Indian student mastering new skill on sleek tablet in inspiring library cafe",
+        "glowing graduation cap and upward trending learning milestone charts with proud Indian parents",
         "interactive digital blackboard with futuristic holographic learning modules",
-        "confident professional receiving accredited certificate of achievement",
+        "confident Indian professional receiving accredited certificate of achievement",
     ],
 }
 
@@ -264,11 +266,12 @@ def build_diverse_visual_prompt(
     brand_colors: dict = None,
     platforms: list = None,
     custom_instructions: str = "",
+    skill_image_path: str = None,
 ) -> dict:
     """
-    Builds a rich, highly diverse visual prompt for ChatGPT / DALL-E.
-    Combines design archetype, camera perspective, lighting, color theme,
-    and product-specific context into a completely unique visual specification.
+    Builds a rich, highly diverse visual prompt for ChatGPT / DALL-E / Gemini.
+    Strictly tailored to Indian standards (Indian middle-class families, Indian Rupee ₹ currency,
+    authentic domestic aspirations, and clean commercial advertising quality).
     """
     platforms = platforms or ["facebook", "instagram"]
     archetype_key = get_archetype_key(visual_style)
@@ -306,10 +309,12 @@ def build_diverse_visual_prompt(
     else:
         color_hint = f"Color harmony: {selected_color_theme}."
 
-    # Assemble unique image prompt with strict visual purity
+    # Assemble unique image prompt with strict visual purity & Indian standards
     unique_seed = uuid.uuid4().hex[:6]
     image_prompt = (
         f"Generate a masterclass commercial advertising graphic for '{product_name}' [Style Variant #{unique_seed}].\n"
+        f"• Target Demographic & Cultural Context: Authentic Indian middle-class family and individuals. Warm, relatable, respectful, and contemporary Indian home or business setting with natural smiling expressions.\n"
+        f"• Currency Standard: Indian Rupee (₹). Any currency symbols, digital banking screens, approval badges, or visual coin accents MUST show the Indian Rupee symbol '₹' (NEVER use US Dollar '$' or foreign currency). All financial scales in Indian standards (₹, Lakhs).\n"
         f"• Core Subject & Scene: {domain_scene}.\n"
         f"• Product Context: {description[:130] if description else product_name}.\n"
         f"• Design Archetype: {archetype['name']} — {', '.join(archetype['keywords'][:3])}.\n"
@@ -323,16 +328,22 @@ def build_diverse_visual_prompt(
     if custom_instructions and custom_instructions.strip():
         image_prompt += f"\n• Special User Instructions: {custom_instructions.strip()}."
 
-    # Assemble complete unified prompt with strict visual vs. text copy separation
+    if skill_image_path:
+        image_prompt += f"\n• Attached Reference Branding: The official brand image for '{product_name}' is uploaded into this conversation. Harmonize the visual concept, color palette, and styling with this branding."
+
+    is_loan = "loan" in product_name.lower() or "loan" in description.lower() or category.lower() == "finance"
+    apply_cta_rule = "\nMandatory Call-to-Action Link: You MUST end the post caption with this exact application link: 👉 Apply Now: https://loansolutions.everythingrental.in/application" if is_loan else ""
+
+    # Assemble complete unified prompt with strict visual vs. text copy separation for Indian audience
     unified_prompt = (
         f"--- TASK 1: CLEAN VISUAL ARTWORK (IMAGE GENERATION) ---\n"
         f"{image_prompt}\n"
         f"CRITICAL: Do NOT draw or paint hashtags (#...) or long descriptive text inside the image. The image must be clean visual art.\n\n"
         f"--- TASK 2: SOCIAL MEDIA POST (IN CHAT TEXT BELOW THE IMAGE ONLY) ---\n"
-        f"In your text reply beneath the image, write the social media post:\n"
-        f"Headline: A compelling hook for {product_name}\n"
-        f"Caption: An engaging 2-3 paragraph marketing copy highlighting benefits, trust, and a clear call-to-action.\n"
-        f"Hashtags: 5-6 viral hashtags for {', '.join(platforms)} (written ONLY here in text, NEVER painted inside the image)."
+        f"In your text reply beneath the image, write the social media post tailored for an Indian middle-class audience:\n"
+        f"Headline: A compelling, emotional hook for {product_name} celebrating family dreams, financial security, and easy approvals\n"
+        f"Caption: An engaging 2-3 paragraph marketing copy highlighting trust, transparent process, low monthly EMIs in Indian Rupees (₹), quick disbursal, and a clear call-to-action.{apply_cta_rule}\n"
+        f"Hashtags: 5-6 viral India-relevant hashtags for {', '.join(platforms)} (e.g. #LoanSolutions #HomeLoanIndia #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom - written ONLY here in text, NEVER painted inside the image)."
     )
 
     return {

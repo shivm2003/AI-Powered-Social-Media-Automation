@@ -8,10 +8,6 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
   async function fetchStats() {
     try {
       const res = await fetch("/api/stats");
@@ -23,6 +19,10 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
 
   if (loading) {
     return (

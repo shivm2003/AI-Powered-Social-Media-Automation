@@ -12,6 +12,7 @@ Handles:
 """
 import sys
 import json
+import uuid
 import argparse
 import logging
 from pathlib import Path
@@ -198,13 +199,17 @@ def handle_command(command: dict):
             media_path = command.get("media_path", "")
             platforms = command.get("platforms", [])
             revision_count = command.get("revision_count", 0)
+            product_name = command.get("product_name")
+            apply_url = command.get("apply_url")
 
             result = send_preview_to_telegram(
                 campaign_id=campaign_id,
                 caption=caption,
                 media_path=media_path,
                 platforms=platforms,
-                revision_count=revision_count
+                revision_count=revision_count,
+                product_name=product_name,
+                apply_url=apply_url
             )
 
             send_response({
@@ -221,6 +226,7 @@ def handle_command(command: dict):
 
             media_path = command.get("media_path")
             caption = command.get("caption", "")
+            campaign_id = command.get("campaign_id") or str(uuid.uuid4())
 
             results = publish_to_all_platforms(
                 platforms=platforms,
@@ -228,9 +234,24 @@ def handle_command(command: dict):
                 caption=caption
             )
 
+            # Persist campaign status in PostgreSQL & SQLite database
+            try:
+                from db_campaigns import save_or_update_campaign
+                save_or_update_campaign(
+                    campaign_id=campaign_id,
+                    status="posted",
+                    platforms=platforms,
+                    media_path=media_path,
+                    caption=caption,
+                    posted_at_now=True
+                )
+            except Exception as e_p_db:
+                logger.warning(f"Database save error during post action: {e_p_db}")
+
             send_response({
                 "status": "success",
                 "action": action,
+                "campaign_id": campaign_id,
                 "results": results,
                 "message": f"Posted to {', '.join(platforms)}",
             })
@@ -281,6 +302,38 @@ def handle_command(command: dict):
             from chatgpt_human_image_telegram import run_chatgpt_human_image_and_telegram
             result = run_chatgpt_human_image_and_telegram(custom_product=product)
             send_response(result)
+
+        elif action == "growth_outreach":
+            campaign_id = command.get("campaign_id") or str(uuid.uuid4())
+            platform = command.get("platform", "both")
+            location = command.get("location", "New Delhi")
+            target_count = int(command.get("target_count", 10))
+            safety_delay = int(command.get("safety_delay", 15))
+            tg_chat_id = command.get("telegram_chat_id", None)
+            tg_message_id = command.get("telegram_message_id", None)
+
+            logger.info(f"Executing growth_outreach for {platform} in {location}...")
+            from social.growth_orchestrator import run_growth_campaign
+            result = run_growth_campaign(
+                campaign_id=campaign_id,
+                platform=platform,
+                location=location,
+                target_count=target_count,
+                safety_delay=safety_delay,
+                tg_chat_id=tg_chat_id,
+                tg_message_id=tg_message_id
+            )
+            send_response(result)
+
+        elif action == "growth_stop":
+            campaign_id = command.get("campaign_id", "")
+            from social.growth_orchestrator import stop_growth_campaign
+            stopped = stop_growth_campaign(campaign_id)
+            send_response({
+                "status": "success",
+                "campaign_id": campaign_id,
+                "stopped": stopped
+            })
 
         else:
             send_response({

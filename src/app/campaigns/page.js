@@ -24,11 +24,13 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
-  const [previewImage, setPreviewImage] = useState(null);
+  const [previewMedia, setPreviewMedia] = useState(null);
 
-  useEffect(() => {
-    fetchCampaigns();
-  }, []);
+  // Platform selection modal state
+  const [selectedCampaignForPost, setSelectedCampaignForPost] = useState(null);
+  const [targetPlatform, setTargetPlatform] = useState("facebook");
+  const [postingStatus, setPostingStatus] = useState("idle"); // "idle" | "posting" | "success" | "error"
+  const [postingMessage, setPostingMessage] = useState("");
 
   async function fetchCampaigns() {
     try {
@@ -44,20 +46,44 @@ export default function CampaignsPage() {
     }
   }
 
-  async function handleApprove(id) {
-    if (!confirm("Are you sure you want to approve and publish this campaign to selected social accounts?")) return;
+  useEffect(() => {
+    fetchCampaigns();
+  }, []);
+
+  function openPlatformModal(campaign) {
+    setSelectedCampaignForPost(campaign);
+    setTargetPlatform("facebook");
+    setPostingStatus("idle");
+    setPostingMessage("");
+  }
+
+  async function handlePublishToSelectedPlatform() {
+    if (!selectedCampaignForPost) return;
+    setPostingStatus("posting");
+    setPostingMessage(
+      targetPlatform === "facebook"
+        ? "Opening Chrome and verifying Facebook login... If login is required, please check your Telegram bot to enter your password!"
+        : `Connecting to browser and preparing to publish to ${targetPlatform}...`
+    );
+
     try {
-      const res = await fetch(`/api/campaigns/${id}`, {
+      const res = await fetch(`/api/campaigns/${selectedCampaignForPost.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve" }),
+        body: JSON.stringify({ action: "approve", platform: targetPlatform }),
       });
+      const data = await res.json();
       if (res.ok) {
-        alert("🚀 Campaign approved and publishing dispatched!");
+        setPostingStatus("success");
+        setPostingMessage(data.message || `🎉 Successfully published to ${targetPlatform}!`);
         fetchCampaigns();
+      } else {
+        setPostingStatus("error");
+        setPostingMessage(data.error || "Failed to publish post.");
       }
     } catch (err) {
-      alert("Error: " + err.message);
+      setPostingStatus("error");
+      setPostingMessage(err.message || "An unexpected error occurred.");
     }
   }
 
@@ -139,6 +165,8 @@ export default function CampaignsPage() {
             const mediaPaths = safeArray(campaign.media_paths);
             const primaryMediaUrl = mediaPaths.length > 0 ? getMediaUrl(mediaPaths[0]) : null;
 
+            const isVideo = campaign.content_type === "video" || (primaryMediaUrl && (primaryMediaUrl.endsWith(".mp4") || primaryMediaUrl.endsWith(".mov") || primaryMediaUrl.endsWith(".webm")));
+
             return (
               <div className="card" key={campaign.id} style={{ overflow: "hidden" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-4)" }}>
@@ -146,7 +174,7 @@ export default function CampaignsPage() {
                     {/* Media Thumbnail or Fallback Icon */}
                     {primaryMediaUrl ? (
                       <div
-                        onClick={() => setPreviewImage(primaryMediaUrl)}
+                        onClick={() => setPreviewMedia({ url: primaryMediaUrl, isVideo, title: campaign.product_name })}
                         style={{
                           width: 130,
                           height: 130,
@@ -159,13 +187,22 @@ export default function CampaignsPage() {
                           boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
                           background: "#0d0f17",
                         }}
-                        title="Click to view full image in high-res"
+                        title={isVideo ? "Click to play full video reel" : "Click to view full image in high-res"}
                       >
-                        <img
-                          src={primaryMediaUrl}
-                          alt={campaign.product_name || "Generated Media"}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
+                        {isVideo ? (
+                          <video
+                            src={primaryMediaUrl}
+                            muted
+                            playsInline
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <img
+                            src={primaryMediaUrl}
+                            alt={campaign.product_name || "Generated Media"}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        )}
                         <div
                           style={{
                             position: "absolute",
@@ -179,7 +216,7 @@ export default function CampaignsPage() {
                             backdropFilter: "blur(4px)",
                           }}
                         >
-                          🔍 View Full
+                          {isVideo ? "▶️ Play Reel" : "🔍 View Full"}
                         </div>
                       </div>
                     ) : (
@@ -297,20 +334,41 @@ export default function CampaignsPage() {
                       {primaryMediaUrl && (
                         <a
                           href={primaryMediaUrl}
-                          download={`campaign-${campaign.id}.png`}
+                          download={`campaign-${campaign.id}.${isVideo ? "mp4" : "png"}`}
                           className="btn btn-sm btn-secondary"
-                          title="Download generated graphic"
+                          title={isVideo ? "Download video reel" : "Download generated graphic"}
                         >
-                          ⬇️ Download Image
+                          {isVideo ? "⬇️ Download Video" : "⬇️ Download Image"}
+                        </a>
+                      )}
+                      {((campaign.product_name || "").toLowerCase().includes("loan") ||
+                        (campaign.generated_caption || "").toLowerCase().includes("loan")) && (
+                        <a
+                          href="https://loansolutions.everythingrental.in/application"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-sm"
+                          style={{
+                            background: "linear-gradient(135deg, #10B981, #059669)",
+                            color: "#fff",
+                            border: "none",
+                            fontWeight: 600,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                          title="Open official Loan Solutions application page"
+                        >
+                          📝 Apply Now 🔗
                         </a>
                       )}
                       {campaign.status !== "posted" && (
                         <button
                           className="btn btn-sm btn-primary"
-                          onClick={() => handleApprove(campaign.id)}
-                          title="Approve and post to social accounts"
+                          onClick={() => openPlatformModal(campaign)}
+                          title="Approve and choose social account to publish"
                         >
-                          🚀 Post Now
+                          🚀 Approve & Post
                         </button>
                       )}
                       <button
@@ -349,10 +407,10 @@ export default function CampaignsPage() {
         </div>
       )}
 
-      {/* Lightbox Image Modal */}
-      {previewImage && (
+      {/* Lightbox Media Modal (Image or Video) */}
+      {previewMedia && (
         <div
-          onClick={() => setPreviewImage(null)}
+          onClick={() => setPreviewMedia(null)}
           style={{
             position: "fixed",
             inset: 0,
@@ -377,9 +435,11 @@ export default function CampaignsPage() {
             }}
           >
             <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
-              <span style={{ color: "#fff", fontWeight: 600, fontSize: "var(--font-sm)" }}>Generated Social Graphic Preview</span>
+              <span style={{ color: "#fff", fontWeight: 600, fontSize: "var(--font-sm)" }}>
+                {previewMedia.isVideo ? "🎬 Generated Video Reel Preview" : "🖼️ Generated Social Graphic Preview"}
+              </span>
               <button
-                onClick={() => setPreviewImage(null)}
+                onClick={() => setPreviewMedia(null)}
                 style={{
                   background: "rgba(255,255,255,0.15)",
                   border: "none",
@@ -397,31 +457,336 @@ export default function CampaignsPage() {
                 ✕
               </button>
             </div>
-            <img
-              src={previewImage}
-              alt="Generated Social Graphic"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "78vh",
-                borderRadius: "var(--radius-md)",
-                boxShadow: "0 16px 48px rgba(0,0,0,0.8)",
-                border: "1px solid rgba(255,255,255,0.2)",
-              }}
-            />
+            {previewMedia.isVideo ? (
+              <video
+                src={previewMedia.url}
+                controls
+                autoPlay
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "78vh",
+                  borderRadius: "var(--radius-md)",
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.8)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}
+              />
+            ) : (
+              <img
+                src={previewMedia.url}
+                alt="Generated Social Graphic"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "78vh",
+                  borderRadius: "var(--radius-md)",
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.8)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}
+              />
+            )}
             <div style={{ marginTop: "var(--space-3)", display: "flex", gap: "var(--space-3)" }}>
               <a
-                href={previewImage}
-                download="social-media-graphic.png"
+                href={previewMedia.url}
+                download={previewMedia.isVideo ? "social-media-reel.mp4" : "social-media-graphic.png"}
                 className="btn btn-primary btn-sm"
               >
-                ⬇️ Download High-Res Graphic
+                {previewMedia.isVideo ? "⬇️ Download HD Video Reel" : "⬇️ Download High-Res Graphic"}
               </a>
               <button
-                onClick={() => setPreviewImage(null)}
+                onClick={() => setPreviewMedia(null)}
                 className="btn btn-secondary btn-sm"
               >
                 Close Preview
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Platform Selection & Approval Modal */}
+      {selectedCampaignForPost && (
+        <div
+          onClick={() => {
+            if (postingStatus !== "posting") setSelectedCampaignForPost(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.82)",
+            backdropFilter: "blur(12px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "var(--space-4)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative",
+              maxWidth: 560,
+              width: "100%",
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border-light)",
+              borderRadius: "var(--radius-xl)",
+              padding: "var(--space-6)",
+              boxShadow: "0 24px 64px rgba(0, 0, 0, 0.6)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-5)",
+              animation: "fadeIn 0.25s ease-out",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "var(--font-xl)", fontWeight: 700, display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <span>🚀</span> Approve & Post
+                </h3>
+                <p style={{ margin: "var(--space-1) 0 0", fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>
+                  Which social media platform would you like to publish this post to?
+                </p>
+              </div>
+              <button
+                disabled={postingStatus === "posting"}
+                onClick={() => setSelectedCampaignForPost(null)}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-secondary)",
+                  borderRadius: "50%",
+                  width: 32,
+                  height: 32,
+                  cursor: postingStatus === "posting" ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1rem",
+                }}
+                title="Cancel and close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Campaign Summary snippet */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-3)",
+                padding: "var(--space-3)",
+                background: "var(--bg-tertiary)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              {(() => {
+                const mediaArr = safeArray(selectedCampaignForPost.media_paths);
+                const firstMediaUrl = mediaArr.length > 0 ? getMediaUrl(mediaArr[0]) : null;
+                return firstMediaUrl ? (
+                  <img
+                    src={firstMediaUrl}
+                    alt="Preview"
+                    style={{ width: 50, height: 50, objectFit: "cover", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
+                  />
+                ) : (
+                  <div style={{ width: 50, height: 50, background: "var(--bg-primary)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm)", fontSize: "1.4rem" }}>
+                    📋
+                  </div>
+                );
+              })()}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "var(--font-xs)", color: "var(--text-tertiary)", textTransform: "uppercase", fontWeight: 600 }}>
+                  Selected Campaign #{selectedCampaignForPost.id.slice(0, 8)}
+                </div>
+                <div style={{ fontSize: "var(--font-sm)", fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {selectedCampaignForPost.generated_caption?.slice(0, 60) || "Social Media Post"}...
+                </div>
+              </div>
+            </div>
+
+            {/* Platform Selection Options */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              <div style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+                Select Social Platform:
+              </div>
+
+              {[
+                {
+                  id: "facebook",
+                  name: "Facebook",
+                  icon: "📘",
+                  desc: "Publishes directly to Facebook Feed with media & hashtags",
+                  highlight: "🔐 Checks login · Prompts for password via Telegram if required",
+                },
+                {
+                  id: "instagram",
+                  name: "Instagram",
+                  icon: "📸",
+                  desc: "Publishes image and captions directly to your Instagram profile",
+                },
+                {
+                  id: "linkedin",
+                  name: "LinkedIn",
+                  icon: "💼",
+                  desc: "Shares marketing update with attached image to LinkedIn feed",
+                },
+                {
+                  id: "whatsapp",
+                  name: "WhatsApp",
+                  icon: "💬",
+                  desc: "Broadcasts graphic and copy via WhatsApp Web",
+                },
+              ].map((plat) => {
+                const isSelected = targetPlatform === plat.id;
+                return (
+                  <div
+                    key={plat.id}
+                    onClick={() => {
+                      if (postingStatus !== "posting") setTargetPlatform(plat.id);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "var(--space-3) var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      border: `1.5px solid ${isSelected ? "var(--primary)" : "var(--border)"}`,
+                      background: isSelected ? "rgba(99, 102, 241, 0.12)" : "var(--bg-tertiary)",
+                      cursor: postingStatus === "posting" ? "not-allowed" : "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                      <span style={{ fontSize: "1.5rem" }}>{plat.icon}</span>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                          <strong style={{ fontSize: "var(--font-sm)", color: isSelected ? "var(--primary-light)" : "var(--text-primary)" }}>
+                            {plat.name}
+                          </strong>
+                          {plat.highlight && (
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                padding: "1px 6px",
+                                borderRadius: "4px",
+                                background: "rgba(59, 130, 246, 0.2)",
+                                color: "#60A5FA",
+                                border: "1px solid rgba(59, 130, 246, 0.4)",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {plat.highlight}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: "var(--font-xs)", color: "var(--text-secondary)", marginTop: 2 }}>
+                          {plat.desc}
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        border: `2px solid ${isSelected ? "var(--primary)" : "var(--border-light)"}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: isSelected ? "var(--primary)" : "transparent",
+                      }}
+                    >
+                      {isSelected && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Posting Status Feedback Banner */}
+            {postingStatus !== "idle" && (
+              <div
+                style={{
+                  padding: "var(--space-3) var(--space-4)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "var(--font-sm)",
+                  background:
+                    postingStatus === "posting"
+                      ? "rgba(59, 130, 246, 0.12)"
+                      : postingStatus === "success"
+                      ? "rgba(16, 185, 129, 0.12)"
+                      : "rgba(239, 68, 68, 0.12)",
+                  border: `1px solid ${
+                    postingStatus === "posting"
+                      ? "rgba(59, 130, 246, 0.3)"
+                      : postingStatus === "success"
+                      ? "rgba(16, 185, 129, 0.3)"
+                      : "rgba(239, 68, 68, 0.3)"
+                  }`,
+                  color:
+                    postingStatus === "posting"
+                      ? "#93C5FD"
+                      : postingStatus === "success"
+                      ? "var(--success)"
+                      : "var(--danger)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-3)",
+                }}
+              >
+                {postingStatus === "posting" && <span className="spinner" style={{ width: 18, height: 18 }} />}
+                {postingStatus === "success" && <span style={{ fontSize: "1.2rem" }}>✅</span>}
+                {postingStatus === "error" && <span style={{ fontSize: "1.2rem" }}>⚠️</span>}
+                <div style={{ flex: 1, lineHeight: 1.4 }}>{postingMessage}</div>
+              </div>
+            )}
+
+            {/* Action Buttons: Cancel + Confirm */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)", marginTop: "var(--space-2)" }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={postingStatus === "posting"}
+                onClick={() => {
+                  setSelectedCampaignForPost(null);
+                  setPostingStatus("idle");
+                  setPostingMessage("");
+                }}
+              >
+                ❌ Cancel
+              </button>
+
+              {postingStatus === "success" ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setSelectedCampaignForPost(null);
+                    setPostingStatus("idle");
+                    setPostingMessage("");
+                  }}
+                >
+                  Done
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={postingStatus === "posting"}
+                  onClick={handlePublishToSelectedPlatform}
+                >
+                  {postingStatus === "posting" ? (
+                    <>
+                      <span className="spinner" style={{ width: 16, height: 16, borderTopColor: "#fff" }} />
+                      Publishing to {targetPlatform.toUpperCase()}...
+                    </>
+                  ) : (
+                    `🚀 Post to ${targetPlatform.charAt(0).toUpperCase() + targetPlatform.slice(1)}`
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

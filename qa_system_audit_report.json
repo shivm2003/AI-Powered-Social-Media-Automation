@@ -1,0 +1,182 @@
+{
+  "total": 14,
+  "passed": 14,
+  "failed": 0,
+  "pass_rate": 100.0,
+  "results": [
+    {
+      "id": "TC-WEB-01",
+      "name": "Next.js Web Server Liveness (Port 3000)",
+      "module": "Frontend",
+      "status": "PASSED",
+      "duration": 0.0737919807434082,
+      "error": null,
+      "details": {
+        "http_code": 200,
+        "html_length": 13818
+      }
+    },
+    {
+      "id": "TC-WEB-02",
+      "name": "Campaigns REST API Endpoint (/api/campaigns)",
+      "module": "API",
+      "status": "PASSED",
+      "duration": 0.054859161376953125,
+      "error": null,
+      "details": {
+        "record_count": 12
+      }
+    },
+    {
+      "id": "TC-WEB-03",
+      "name": "Growth Outreach API Endpoint (/api/growth)",
+      "module": "API",
+      "status": "PASSED",
+      "duration": 0.0181887149810791,
+      "error": null,
+      "details": {
+        "status": "ok"
+      }
+    },
+    {
+      "id": "TC-WEB-04",
+      "name": "Accounts API Endpoint (/api/accounts)",
+      "module": "API",
+      "status": "PASSED",
+      "duration": 0.015555143356323242,
+      "error": null,
+      "details": {
+        "accounts_found": 6
+      }
+    },
+    {
+      "id": "TC-DB-01",
+      "name": "SQLite Campaigns & Accounts Table Integrity",
+      "module": "Database",
+      "status": "PASSED",
+      "duration": 0.0060253143310546875,
+      "error": null,
+      "details": {
+        "db_file": "database.sqlite",
+        "tables": [
+          "products",
+          "product_images",
+          "social_accounts",
+          "campaigns",
+          "settings",
+          "growth_campaigns",
+          "growth_logs"
+        ]
+      }
+    },
+    {
+      "id": "TC-TG-01",
+      "name": "Telegram Configuration & Token Audit",
+      "module": "Telegram",
+      "status": "PASSED",
+      "duration": 0.010814666748046875,
+      "error": null,
+      "details": {
+        "chat_id": "6543226262",
+        "token_prefix": "8625065539..."
+      }
+    },
+    {
+      "id": "TC-TG-02",
+      "name": "Mandatory 'Apply Now' Inline Button Audit",
+      "module": "Telegram",
+      "status": "PASSED",
+      "duration": 0.0007839202880859375,
+      "error": null,
+      "details": {
+        "verified_url": "https://loansolutions.everythingrental.in/application"
+      }
+    },
+    {
+      "id": "TC-TG-03",
+      "name": "Telegram Outreach Custom Friend Request Counter",
+      "module": "Telegram",
+      "status": "PASSED",
+      "duration": 0.0005221366882324219,
+      "error": null,
+      "details": {
+        "custom_counter_supported": true
+      }
+    },
+    {
+      "id": "TC-AI-01",
+      "name": "Indian Financial Standard Prompt Specifications (\u20b9, Middle Class, Loans)",
+      "module": "AI",
+      "status": "PASSED",
+      "duration": 0.0,
+      "error": null,
+      "details": {
+        "has_rupee": true,
+        "has_indian": true,
+        "has_middle_class": true,
+        "has_loan_url": true
+      }
+    },
+    {
+      "id": "TC-AI-02",
+      "name": "Gemini Image Download Pipeline Integrity",
+      "module": "AI",
+      "status": "PASSED",
+      "duration": 0.0,
+      "error": null,
+      "details": {
+        "scripts_present": true
+      }
+    },
+    {
+      "id": "TC-BR-01",
+      "name": "Chrome Remote Debugging (Port 9222) Attachment",
+      "module": "Browser",
+      "status": "PASSED",
+      "duration": 1.1284232139587402,
+      "error": null,
+      "details": {
+        "window_title": "AI Social Media Automation",
+        "port": 9222
+      }
+    },
+    {
+      "id": "TC-BR-02",
+      "name": "Tab-Safe Navigation (navigate() without trapping)",
+      "module": "Browser",
+      "status": "PASSED",
+      "duration": 5.401591062545776,
+      "error": null,
+      "details": {
+        "current_url": "https://www.instagram.com/"
+      }
+    },
+    {
+      "id": "TC-FB-01",
+      "name": "Facebook Post Engine Syntax & Link Attachment",
+      "module": "Facebook",
+      "status": "PASSED",
+      "duration": 0.0,
+      "error": null,
+      "details": {
+        "file_size_bytes": 14918
+      }
+    },
+    {
+      "id": "TC-IG-01",
+      "name": "End-to-End Instagram Media Post with Fitted Caption & Link",
+      "module": "Instagram",
+      "status": "PASSED",
+      "duration": 45.59697890281677,
+      "error": null,
+      "details": {
+        "status": "success",
+        "platform": "instagram",
+        "message": "Posted to Instagram successfully with complete caption and media.",
+        "caption_length": 359,
+        "media_path": "C:\\Users\\shivam\\Desktop\\For marketing\\AI-Powered-Social-Media-Automation\\Loan Solutions.png",
+        "confirmed": true
+      }
+    }
+  ]
+}

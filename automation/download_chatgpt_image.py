@@ -146,7 +146,7 @@ def download_active_chatgpt_image():
         "🌟 <b>Loan Solutions — Official Social Media Post</b>\n\n"
         "Need financial flexibility? Discover customized Loan Solutions designed for your goals.\n"
         "Fast approvals, transparent terms, and dedicated support every step of the way.\n\n"
-        "👉 <i>Learn more & apply today!</i>\n\n"
+        "👉 Apply Now: https://loansolutions.everythingrental.in/application\n\n"
         "#LoanSolutions #PersonalLoans #FinancialFreedom #Fintech #SmartFinancing"
     )
 
@@ -158,7 +158,9 @@ def download_active_chatgpt_image():
         caption=caption,
         media_path=str(out_file),
         platforms=["Facebook", "Instagram", "LinkedIn"],
-        revision_count=0
+        revision_count=0,
+        product_name="Loan Solutions",
+        apply_url="https://loansolutions.everythingrental.in/application"
     )
 
     print(f"Telegram dispatch result: {tg_res.get('status')}", flush=True)

@@ -228,12 +228,52 @@ class BrowserDriver:
         self.drivers[platform] = driver
         return driver
 
-    def navigate(self, platform, url=None):
-        """Navigate to a URL or the platform's default URL. Respects existing user tabs if attached."""
+    def refresh_and_ensure_fresh(self, driver, platform_name="Webpage", timeout=20):
+        """
+        Refreshes the current webpage and ensures all content is fresh, visible,
+        and fully loaded before any interactions take place.
+        """
+        try:
+            curr_url = driver.current_url
+            logger.info(f"🔄 Refreshing {platform_name} page first ({curr_url}) to ensure fresh content and clean state...")
+            driver.refresh()
+            time.sleep(1.5)
+
+            # 1. Wait for document.readyState == 'complete'
+            WebDriverWait(driver, timeout).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+
+            # 2. Wait for <body> to be present and visible
+            WebDriverWait(driver, timeout).until(
+                lambda d: d.find_element(By.TAG_NAME, "body").is_displayed()
+            )
+
+            # 3. Extra settle time for SPAs (React/Angular/Vue feeds, chat history, Facebook/Instagram/ChatGPT/Gemini DOM)
+            time.sleep(2.5)
+
+            # 4. Quick micro-scroll to activate dynamic viewport rendering if lazy-loaded
+            try:
+                driver.execute_script("window.scrollBy(0, 80);")
+                time.sleep(0.3)
+                driver.execute_script("window.scrollBy(0, -80);")
+                time.sleep(0.4)
+            except Exception:
+                pass
+
+            logger.info(f"✅ {platform_name} refreshed successfully. All fresh content is now visible and ready for actions!")
+            return True
+        except Exception as e:
+            logger.warning(f"Refresh and wait note on {platform_name}: {e}")
+            time.sleep(2.0)
+            return False
+
+    def navigate(self, platform, url=None, refresh_first=True):
+        """Navigate to a URL or the platform's default URL. Respects existing user tabs if attached. Refreshes first by default."""
         import urllib.parse
         driver = self.get_driver(platform)
         target_url = url or PLATFORM_URLS.get(platform, "https://google.com")
-        logger.info(f"Navigating {platform} to {target_url}")
+        logger.info(f"Navigating {platform} to {target_url} (refresh_first={refresh_first})")
 
         if getattr(driver, "_is_shared", False):
             # Working inside user's active browser: check if domain is already open in a tab
@@ -245,8 +285,12 @@ class BrowserDriver:
                     current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
                     if target_netloc and (target_netloc in current_netloc or current_netloc in target_netloc):
                         found = True
-                        if driver.current_url != target_url:
+                        cur_clean = driver.current_url.rstrip('/')
+                        tgt_clean = target_url.rstrip('/')
+                        if cur_clean != tgt_clean:
                             driver.get(target_url)
+                        elif refresh_first:
+                            refresh_and_wait(driver, platform)
                         break
 
                 if not found:
@@ -259,7 +303,10 @@ class BrowserDriver:
         else:
             driver.get(target_url)
 
-        self.human_wait("page")
+        if refresh_first:
+            self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
+        else:
+            self.human_wait("page")
         return driver
 
     def close(self, platform):
@@ -332,3 +379,8 @@ class BrowserDriver:
 
 # Singleton instance
 browser = BrowserDriver()
+
+
+def refresh_and_ensure_fresh(driver, platform_name="Webpage", timeout=20):
+    """Module-level helper to refresh a page and ensure all fresh content is visible."""
+    return browser.refresh_and_ensure_fresh(driver, platform_name=platform_name, timeout=timeout)

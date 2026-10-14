@@ -10,32 +10,80 @@ import os
 import sys
 import time
 import json
+import uuid
 import logging
 from pathlib import Path
 
-# Ensure UTF-8 output on Windows
-if sys.stdout.encoding != 'utf-8':
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
+# Ensure UTF-8 output on Windows and unbuffered streaming
+try:
+    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+except Exception:
+    pass
 
 BASE_DIR = Path(__file__).parent.parent.parent
-sys.path.append(str(BASE_DIR / "automation"))
+sys.path.insert(0, str(BASE_DIR / "automation"))
+sys.path.insert(0, str(Path(__file__).parent))
 
 import config
-from telegram.bot import (
-    get_telegram_credentials,
-    make_telegram_request,
-    answer_callback_query,
-    send_platform_selection_menu,
-    send_password_request_prompt,
-    delete_telegram_message,
-    send_text_message,
-    send_start_dashboard,
-)
+
+try:
+    from bot import (
+        get_telegram_credentials,
+        make_telegram_request,
+        answer_callback_query,
+        send_platform_selection_menu,
+        send_password_request_prompt,
+        delete_telegram_message,
+        send_text_message,
+        send_start_dashboard,
+        send_start_flow_menu,
+        send_llm_selection_menu,
+        send_product_selection_menu,
+        edit_message_text,
+        edit_message_caption,
+        edit_message_reply_markup,
+        send_root_choice_menu,
+        send_outreach_platform_menu,
+        send_outreach_location_menu,
+        send_outreach_count_menu,
+        send_antigravity_menu,
+        send_antigravity_running_windows_menu,
+        send_task_completion_message,
+    )
+except (ImportError, ModuleNotFoundError):
+    from telegram.bot import (
+        get_telegram_credentials,
+        make_telegram_request,
+        answer_callback_query,
+        send_platform_selection_menu,
+        send_password_request_prompt,
+        delete_telegram_message,
+        send_text_message,
+        send_start_dashboard,
+        send_start_flow_menu,
+        send_llm_selection_menu,
+        send_product_selection_menu,
+        edit_message_text,
+        edit_message_caption,
+        edit_message_reply_markup,
+        send_root_choice_menu,
+        send_outreach_platform_menu,
+        send_outreach_location_menu,
+        send_outreach_count_menu,
+        send_antigravity_menu,
+        send_antigravity_running_windows_menu,
+        send_task_completion_message,
+    )
 from social.facebook import is_facebook_login_needed, submit_facebook_login, post_to_facebook
+from social.instagram import post_to_instagram
+from social.linkedin import post_to_linkedin
+from social.growth_orchestrator import run_growth_campaign, stop_growth_campaign
+from remote.antigravity_controller import (
+    allocate_new_task,
+    update_task_status,
+    inject_prompt_to_antigravity,
+)
 from browser.driver import browser
 
 logger = logging.getLogger("automation.telegram.poller")
@@ -45,8 +93,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 chat_sessions = {}
 
 
+LOAN_SOLUTIONS_PATH = str(BASE_DIR / "Loan Solutions.png")
+
+
 def get_all_products() -> list:
-    """Finds all registered products from PostgreSQL or SQLite."""
+    """Finds all registered products from PostgreSQL or SQLite, automatically resolving logo paths."""
+    products = []
     # 1. Try PostgreSQL
     try:
         import psycopg2
@@ -57,12 +109,26 @@ def get_all_products() -> list:
         pg_db = os.environ.get("DB_NAME", "Social_Media")
         conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
         cur = conn.cursor()
-        cur.execute("SELECT id, name, category, description FROM products ORDER BY name ASC")
+        cur.execute("SELECT id, name, category, description, logo_path FROM products ORDER BY name ASC")
         rows = cur.fetchall()
         cur.close()
         conn.close()
         if rows:
-            return [{"id": str(r[0]), "name": r[1], "category": r[2], "description": r[3]} for r in rows]
+            for r in rows:
+                p_name = r[1] or ""
+                p_logo = r[4]
+                if "loan" in p_name.lower():
+                    if not p_logo or not os.path.exists(str(p_logo)):
+                        if os.path.exists(LOAN_SOLUTIONS_PATH):
+                            p_logo = LOAN_SOLUTIONS_PATH
+                products.append({
+                    "id": str(r[0]),
+                    "name": p_name,
+                    "category": r[2],
+                    "description": r[3],
+                    "logo_path": p_logo
+                })
+            return products
     except Exception as e:
         logger.debug(f"PG products lookup note: {e}")
 
@@ -73,15 +139,63 @@ def get_all_products() -> list:
             import sqlite3
             conn = sqlite3.connect(db_path)
             cur = conn.cursor()
-            cur.execute("SELECT id, name, category, description FROM products ORDER BY name ASC")
+            cur.execute("SELECT id, name, category, description, logo_path FROM products ORDER BY name ASC")
             rows = cur.fetchall()
             conn.close()
             if rows:
-                return [{"id": str(r[0]), "name": r[1], "category": r[2], "description": r[3]} for r in rows]
+                for r in rows:
+                    p_name = r[1] or ""
+                    p_logo = r[4]
+                    if "loan" in p_name.lower():
+                        if not p_logo or not os.path.exists(str(p_logo)):
+                            if os.path.exists(LOAN_SOLUTIONS_PATH):
+                                p_logo = LOAN_SOLUTIONS_PATH
+                    products.append({
+                        "id": str(r[0]),
+                        "name": p_name,
+                        "category": r[2],
+                        "description": r[3],
+                        "logo_path": p_logo
+                    })
+                return products
         except Exception as e:
             logger.debug(f"SQLite products lookup note: {e}")
 
-    return []
+    return products
+
+
+def update_loan_solution_logo_db(logo_path: str):
+    """Updates logo_path for Loan Solutions in PostgreSQL and SQLite."""
+    try:
+        import psycopg2
+        pg_user = os.environ.get("DB_USER", "postgres")
+        pg_pass = os.environ.get("DB_PASSWORD", "Shivam@123")
+        pg_host = os.environ.get("DB_HOST", "localhost")
+        pg_port = int(os.environ.get("DB_PORT", "5432"))
+        pg_db = os.environ.get("DB_NAME", "Social_Media")
+        conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
+        cur = conn.cursor()
+        cur.execute("UPDATE products SET logo_path = %s WHERE name ILIKE '%loan%'", (logo_path,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info(f"Updated PostgreSQL logo_path for Loan Solutions to: {logo_path}")
+    except Exception as e:
+        logger.debug(f"PG logo update note: {e}")
+
+    db_path = BASE_DIR / "data" / "database.sqlite"
+    if db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute("UPDATE products SET logo_path = ? WHERE name LIKE '%Loan%'", (logo_path,))
+            conn.commit()
+            conn.close()
+            logger.info(f"Updated SQLite logo_path for Loan Solutions to: {logo_path}")
+        except Exception as e:
+            logger.debug(f"SQLite logo update note: {e}")
+
 
 
 
@@ -97,19 +211,33 @@ def get_campaign_data(campaign_id: str) -> dict:
         pg_db = os.environ.get("DB_NAME", "Social_Media")
         conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
         cur = conn.cursor()
-        cur.execute("SELECT generated_caption, generated_hashtags, media_paths FROM campaigns WHERE id = %s", (campaign_id,))
+        cur.execute("""
+            SELECT c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
+            FROM campaigns c
+            LEFT JOIN products p ON c.product_id = p.id
+            WHERE c.id = %s
+        """, (campaign_id,))
         row = cur.fetchone()
         cur.close()
         conn.close()
         if row:
-            caption, hashtags, media_paths = row
+            caption, hashtags, media_paths, p_name, p_cat, p_web = row
             media_list = json.loads(media_paths) if isinstance(media_paths, str) else (media_paths or [])
             tag_list = json.loads(hashtags) if isinstance(hashtags, str) else (hashtags or [])
             tag_str = " ".join([t if t.startswith("#") else f"#{t}" for t in tag_list]) if tag_list else ""
-            full_caption = f"{caption or ''}\n\n{tag_str}".strip()
+            
+            is_loan = ("loan" in str(p_name).lower()) or ("finance" in str(p_cat).lower()) or ("loan" in str(caption).lower())
+            apply_url = "https://loansolutions.everythingrental.in/application"
+            if is_loan and apply_url not in str(caption):
+                full_caption = f"{caption or ''}\n\n👉 Apply Now: {apply_url}\n\n{tag_str}".strip()
+            else:
+                full_caption = f"{caption or ''}\n\n{tag_str}".strip()
             return {
                 "media_path": media_list[0] if media_list else "",
                 "caption": full_caption or "Discover our latest solution!",
+                "product_name": p_name or "",
+                "product_category": p_cat or "",
+                "apply_url": apply_url if is_loan else None
             }
     except Exception as e:
         logger.debug(f"PG campaign lookup note: {e}")
@@ -121,18 +249,32 @@ def get_campaign_data(campaign_id: str) -> dict:
             import sqlite3
             conn = sqlite3.connect(db_path)
             cur = conn.cursor()
-            cur.execute("SELECT generated_caption, generated_hashtags, media_paths FROM campaigns WHERE id = ?", (campaign_id,))
+            cur.execute("""
+                SELECT c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
+                FROM campaigns c
+                LEFT JOIN products p ON c.product_id = p.id
+                WHERE c.id = ?
+            """, (campaign_id,))
             row = cur.fetchone()
             conn.close()
             if row:
-                caption, hashtags, media_paths = row
+                caption, hashtags, media_paths, p_name, p_cat, p_web = row
                 media_list = json.loads(media_paths) if isinstance(media_paths, str) else (media_paths or [])
                 tag_list = json.loads(hashtags) if isinstance(hashtags, str) else (hashtags or [])
                 tag_str = " ".join([t if t.startswith("#") else f"#{t}" for t in tag_list]) if tag_list else ""
-                full_caption = f"{caption or ''}\n\n{tag_str}".strip()
+                
+                is_loan = ("loan" in str(p_name).lower()) or ("finance" in str(p_cat).lower()) or ("loan" in str(caption).lower())
+                apply_url = "https://loansolutions.everythingrental.in/application"
+                if is_loan and apply_url not in str(caption):
+                    full_caption = f"{caption or ''}\n\n👉 Apply Now: {apply_url}\n\n{tag_str}".strip()
+                else:
+                    full_caption = f"{caption or ''}\n\n{tag_str}".strip()
                 return {
                     "media_path": media_list[0] if media_list else "",
                     "caption": full_caption or "Discover our latest solution!",
+                    "product_name": p_name or "",
+                    "product_category": p_cat or "",
+                    "apply_url": apply_url if is_loan else None
                 }
         except Exception as e:
             logger.debug(f"SQLite campaign lookup note: {e}")
@@ -151,95 +293,403 @@ def get_campaign_data(campaign_id: str) -> dict:
     }
 
 
+def update_campaign_status_db(
+    campaign_id: str,
+    status: str = "posted",
+    platform: str = None,
+    media_path: str = None,
+    caption: str = None
+):
+    """
+    Updates or inserts campaign record in PostgreSQL and SQLite.
+    Guarantees that posts published via Telegram are saved in campaigns with all details.
+    """
+    if not campaign_id:
+        return False
+    try:
+        from db_campaigns import save_or_update_campaign
+        return save_or_update_campaign(
+            campaign_id=campaign_id,
+            status=status,
+            platforms=[platform] if platform else None,
+            media_path=media_path,
+            caption=caption,
+            posted_at_now=(status == "posted")
+        )
+    except Exception as e:
+        logger.error(f"Error updating campaign status DB: {e}")
+        return False
+
+
+def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_count: int, message_id: int = None):
+    """Executes outreach campaign and manages live progress display in Telegram."""
+    campaign_id = str(uuid.uuid4())[:8]
+
+    plat_title = {
+        "both": "⚡ Facebook + Instagram Simultaneously",
+        "facebook": "📘 Facebook Friend Requests",
+        "instagram": "📸 Instagram Follow Requests"
+    }.get(platform, platform.capitalize())
+
+    init_text = (
+        f"👥 <b>Growth Outreach Initiated!</b>\n\n"
+        f"🎯 <b>Target:</b> {plat_title}\n"
+        f"📍 <b>Location Filter:</b> <code>{location}</code>\n"
+        f"🔢 <b>Count:</b> {target_count} requests\n"
+        f"🆔 <b>Campaign ID:</b> <code>{campaign_id}</code>\n\n"
+        f"⏳ <b>Status:</b> Initializing browser sessions & preparing search filters..."
+    )
+
+    stop_keyboard = {
+        "inline_keyboard": [
+            [{"text": "🛑 Emergency Stop", "callback_data": f"outreach:stop:{campaign_id}"}]
+        ]
+    }
+
+    sent_msg_id = None
+    if message_id:
+        try:
+            res = edit_message_text(chat_id, message_id, init_text, keyboard=stop_keyboard)
+            if res.get("ok"):
+                sent_msg_id = message_id
+        except Exception:
+            pass
+
+    if not sent_msg_id:
+        res_msg = send_text_message(chat_id, init_text, reply_markup=stop_keyboard)
+        if res_msg.get("response", {}).get("result"):
+            sent_msg_id = res_msg["response"]["result"].get("message_id")
+
+    import threading
+    def _exec_growth():
+        try:
+            run_growth_campaign(
+                campaign_id=campaign_id,
+                platform=platform,
+                location=location,
+                target_count=target_count,
+                safety_delay=15,
+                telegram_chat_id=chat_id,
+                telegram_message_id=sent_msg_id
+            )
+        except Exception as e_growth:
+            logger.error(f"Error in growth campaign thread: {e_growth}")
+            send_text_message(chat_id, f"⚠️ Outreach error notice: {e_growth}")
+
+    threading.Thread(target=_exec_growth, daemon=True).start()
+
+
 def handle_callback_query(callback: dict):
     """Processes inline button clicks."""
     callback_id = callback.get("id")
     callback_data = callback.get("data", "")
-    message = callback.get("message", {})
-    chat_id = str(message.get("chat", {}).get("id"))
+    message = callback.get("message") or {}
+    chat = message.get("chat") or {}
+    user = callback.get("from") or {}
+    chat_id = str(chat.get("id") or user.get("id") or "")
+    message_id = message.get("message_id")
 
     logger.info(f"Received callback query: {callback_data} from chat {chat_id}")
 
+    # No-op callback (for informative buttons)
+    if callback_data == "noop":
+        if callback_id:
+            answer_callback_query(callback_id)
+        return
+
     # 1. User clicked [✅ Approve & Post]
     if callback_data.startswith("approve:"):
-        campaign_id = callback_data.split(":", 1)[1]
-        answer_callback_query(callback_id, text="Approved! Please choose a platform.")
-        # Send platform selection menu with action buttons
+        campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="✅ Campaign Approved! Choose platform below.")
+
+        # Update buttons on the preview message so user sees approved state
+        if message_id and chat_id:
+            try:
+                edit_message_reply_markup(
+                    chat_id,
+                    message_id,
+                    keyboard={"inline_keyboard": [[{"text": "✅ Approved (Selecting platform ⬇️)", "callback_data": "noop"}]]}
+                )
+            except Exception as e_ed:
+                logger.debug(f"Edit preview markup note: {e_ed}")
+
+        # Send platform selection menu with action buttons and Cancel button
         send_platform_selection_menu(campaign_id, chat_id=chat_id)
 
     # 2. User selected a platform (e.g. post_to:facebook:<campaign_id>)
     elif callback_data.startswith("post_to:"):
         parts = callback_data.split(":")
-        platform = parts[1].lower()
+        platform = parts[1].lower() if len(parts) > 1 else "facebook"
         campaign_id = parts[2] if len(parts) > 2 else ""
 
-        answer_callback_query(callback_id, text=f"Selected {platform.capitalize()}!")
-        send_text_message(chat_id, f"🚀 <b>Selected {platform.capitalize()}</b>. Connecting to browser and preparing post...")
+        if callback_id:
+            answer_callback_query(callback_id, text=f"🚀 Selected {platform.capitalize()}!")
+
+        # Update the platform menu message to show publication in progress
+        if message_id and chat_id:
+            try:
+                edit_message_text(
+                    chat_id,
+                    message_id,
+                    f"🚀 <b>Selected {platform.capitalize()}!</b> Connecting to browser and publishing post..."
+                )
+            except Exception as e_ed:
+                logger.debug(f"Edit platform menu note: {e_ed}")
 
         campaign_data = get_campaign_data(campaign_id)
         media_path = campaign_data.get("media_path")
         caption = campaign_data.get("caption")
 
+        import threading
+
         if platform == "facebook":
-            # Check Facebook login
-            from config import PLATFORM_URLS
-            driver = browser.navigate("facebook", PLATFORM_URLS["facebook"])
-            time.sleep(3)
+            def _run_fb_post():
+                try:
+                    from config import PLATFORM_URLS
+                    driver = browser.navigate("facebook", PLATFORM_URLS["facebook"])
+                    time.sleep(3)
 
-            if is_facebook_login_needed(driver):
-                # Save session state: waiting for user's password
-                chat_sessions[chat_id] = {
-                    "action": "AWAITING_PASSWORD",
-                    "platform": "facebook",
-                    "campaign_id": campaign_id,
-                    "media_path": media_path,
-                    "caption": caption,
-                }
-                send_password_request_prompt(chat_id, "facebook", campaign_id)
-            else:
-                # Already logged in! Post immediately
-                send_text_message(chat_id, "✅ Facebook session verified. Publishing post now...")
-                res = post_to_facebook(media_path=media_path, caption=caption)
-                if res.get("status") == "success":
-                    send_text_message(
-                        chat_id,
-                        f"🎉 <b>Success!</b> Post successfully published to Facebook!\n\n"
-                        f"🖼️ Media: <code>{os.path.basename(media_path) if media_path else 'Graphic'}</code>\n"
-                        f"📝 Caption preview: {caption[:120]}..."
-                    )
-                else:
-                    send_text_message(chat_id, f"⚠️ Facebook post status: {res.get('message')}")
+                    if is_facebook_login_needed(driver):
+                        chat_sessions[chat_id] = {
+                            "action": "AWAITING_PASSWORD",
+                            "platform": "facebook",
+                            "campaign_id": campaign_id,
+                            "media_path": media_path,
+                            "caption": caption,
+                        }
+                        send_password_request_prompt(chat_id, "facebook", campaign_id)
+                    else:
+                        send_text_message(chat_id, "✅ Facebook session verified. Publishing post now...")
+                        res = post_to_facebook(media_path=media_path, caption=caption)
+                        if res.get("status") == "success":
+                            update_campaign_status_db(campaign_id, "posted", platform="facebook", media_path=media_path, caption=caption)
+                            send_text_message(
+                                chat_id,
+                                f"🎉 <b>Success!</b> Post successfully published to Facebook!\n\n"
+                                f"🖼️ Media: <code>{os.path.basename(media_path) if media_path else 'Graphic'}</code>\n"
+                                f"📝 Caption preview: {caption[:120]}..."
+                            )
+                        else:
+                            send_text_message(chat_id, f"⚠️ Facebook post status: {res.get('message')}")
+                except Exception as e_fb:
+                    logger.error(f"Error posting to Facebook: {e_fb}")
+                    send_text_message(chat_id, f"⚠️ Facebook error: {e_fb}")
 
-        else:
-            send_text_message(chat_id, f"ℹ️ Automation for {platform.capitalize()} initialized.")
+            threading.Thread(target=_run_fb_post, daemon=True).start()
 
-    # 3. User clicked [❌ Cancel]
+        elif platform == "instagram":
+            def _run_ig_post():
+                try:
+                    send_text_message(chat_id, "📸 Connecting to Instagram and preparing post...")
+                    res = post_to_instagram(media_path=media_path, caption=caption)
+                    if res.get("status") == "success":
+                        update_campaign_status_db(campaign_id, "posted", platform="instagram", media_path=media_path, caption=caption)
+                        send_text_message(chat_id, f"🎉 <b>Success!</b> Post successfully published to Instagram!\n\n📝 Caption: {caption[:120]}...")
+                    else:
+                        send_text_message(chat_id, f"⚠️ Instagram status: {res.get('message')}")
+                except Exception as e_ig:
+                    logger.error(f"Error posting to Instagram: {e_ig}")
+                    send_text_message(chat_id, f"⚠️ Instagram error: {e_ig}")
+
+            threading.Thread(target=_run_ig_post, daemon=True).start()
+
+        elif platform == "linkedin":
+            def _run_li_post():
+                try:
+                    send_text_message(chat_id, "💼 Connecting to LinkedIn and preparing post...")
+                    res = post_to_linkedin(media_path=media_path, caption=caption)
+                    if res.get("status") == "success":
+                        update_campaign_status_db(campaign_id, "posted", platform="linkedin", media_path=media_path, caption=caption)
+                        send_text_message(chat_id, f"🎉 <b>Success!</b> Post successfully published to LinkedIn!\n\n📝 Caption: {caption[:120]}...")
+                    else:
+                        send_text_message(chat_id, f"⚠️ LinkedIn status: {res.get('message')}")
+                except Exception as e_li:
+                    logger.error(f"Error posting to LinkedIn: {e_li}")
+                    send_text_message(chat_id, f"⚠️ LinkedIn error: {e_li}")
+
+            threading.Thread(target=_run_li_post, daemon=True).start()
+
+        elif platform == "whatsapp":
+            def _run_wa_post():
+                try:
+                    from social.whatsapp import post_to_whatsapp
+                    send_text_message(chat_id, "💬 Connecting to WhatsApp Web and preparing post...")
+                    res = post_to_whatsapp(media_path=media_path, caption=caption)
+                    if res.get("status") == "success":
+                        update_campaign_status_db(campaign_id, "posted", platform="whatsapp", media_path=media_path, caption=caption)
+                        send_text_message(chat_id, f"🎉 <b>Success!</b> Post successfully published to WhatsApp!\n\n📝 Caption: {caption[:120]}...")
+                    else:
+                        send_text_message(chat_id, f"⚠️ WhatsApp status: {res.get('message')}")
+                except Exception as e_wa:
+                    logger.error(f"Error posting to WhatsApp: {e_wa}")
+                    send_text_message(chat_id, f"⚠️ WhatsApp error: {e_wa}")
+
+            threading.Thread(target=_run_wa_post, daemon=True).start()
+
+    # 3. User clicked [❌ Cancel] on Platform selection menu
     elif callback_data.startswith("cancel_post:"):
-        answer_callback_query(callback_id, text="Posting cancelled.")
-        send_text_message(chat_id, "❌ Post publication was cancelled.")
+        if callback_id:
+            answer_callback_query(callback_id, text="❌ Post publication cancelled.")
+        if message_id and chat_id:
+            try:
+                edit_message_text(chat_id, message_id, "❌ <b>Post publication was cancelled.</b> No post will be made.")
+            except Exception:
+                send_text_message(chat_id, "❌ <b>Post publication was cancelled.</b> No post will be made.")
+        else:
+            send_text_message(chat_id, "❌ <b>Post publication was cancelled.</b> No post will be made.")
 
     # 4. User clicked [✏️ Suggest Revision]
     elif callback_data.startswith("revise:"):
-        campaign_id = callback_data.split(":", 1)[1]
-        answer_callback_query(callback_id)
+        campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="✏️ Revision requested.")
         chat_sessions[chat_id] = {
             "action": "AWAITING_REVISION",
             "campaign_id": campaign_id,
+            "message_id": message_id,
         }
         send_text_message(
             chat_id,
-            f"✏️ <b>Revision Requested</b>\n\nPlease reply with your feedback or instructions (e.g. <i>'Change tone to exciting, use cyan colors'</i>)."
+            f"✏️ <b>Revision Requested</b>\n\n"
+            f"Please reply directly to this message with your requested changes (e.g. <i>'Change tone to exciting, use cyan and gold colors, highlight 20% discount'</i>).\n\n"
+            f"🤖 <i>The AI will automatically regenerate the post copy & visual graphic and send you a new preview!</i>"
         )
 
-    # 5. User clicked [❌ Reject / Cancel]
+    # 5. User clicked [❌ Reject / Cancel] on Preview message
     elif callback_data.startswith("reject:"):
-        answer_callback_query(callback_id, text="Rejected.")
-        send_text_message(chat_id, "❌ Campaign rejected. No post will be made.")
+        campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="❌ Campaign rejected & cancelled.")
+        if campaign_id:
+            update_campaign_status_db(campaign_id, "rejected")
+        if message_id and chat_id:
+            try:
+                edit_message_reply_markup(
+                    chat_id,
+                    message_id,
+                    keyboard={"inline_keyboard": [[{"text": "❌ Rejected / Cancelled", "callback_data": "noop"}]]}
+                )
+            except Exception as e_ed:
+                logger.debug(f"Edit reject markup note: {e_ed}")
+        send_text_message(chat_id, "❌ <b>Campaign rejected & cancelled.</b> No post will be made.")
 
-    # 6. User clicked [🚀 Generate: <Product>] from /start dashboard
+    # 6. Flow Step 1: Return to Start Menu (Image vs Video)
+    elif callback_data == "flow:start":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_start_flow_menu(chat_id, message_id=message_id)
+
+    # 7. Flow Step 2: Content Type Selected (Image or Video)
+    elif callback_data.startswith("flow:type:"):
+        content_type = callback_data.split(":", 2)[2].lower()
+        if callback_id:
+            answer_callback_query(callback_id)
+
+        if content_type == "video":
+            # NOTE: For video it automatically selects the Gemini LLM
+            products = get_all_products()
+            send_product_selection_menu(
+                chat_id=chat_id,
+                content_type="video",
+                llm_provider="gemini",
+                products=products,
+                message_id=message_id
+            )
+        else:
+            # For image: asks which LLM model to use (Gemini, ChatGPT, Claude)
+            send_llm_selection_menu(chat_id=chat_id, content_type="image", message_id=message_id)
+
+    # 8. Flow Step 3: LLM Model Selected for Image (Gemini, ChatGPT, Claude)
+    elif callback_data.startswith("flow:llm:"):
+        parts = callback_data.split(":")
+        llm_provider = parts[2].lower() if len(parts) > 2 else "chatgpt"
+        content_type = parts[3].lower() if len(parts) > 3 else "image"
+        if callback_id:
+            answer_callback_query(callback_id)
+
+        products = get_all_products()
+        send_product_selection_menu(
+            chat_id=chat_id,
+            content_type=content_type,
+            llm_provider=llm_provider,
+            products=products,
+            message_id=message_id
+        )
+
+    # 9. Flow Step 4: Product Selected -> Run Generation with selected format & LLM
+    elif callback_data.startswith("flow:run:"):
+        parts = callback_data.split(":")
+        content_type = parts[2].lower() if len(parts) > 2 else "image"
+        llm_provider = parts[3].lower() if len(parts) > 3 else "gemini"
+        prod_id = parts[4] if len(parts) > 4 else ""
+
+        provider_title = {
+            "gemini": "Gemini (Google AI)",
+            "chatgpt": "ChatGPT (OpenAI)",
+            "claude": "Claude (Anthropic)"
+        }.get(llm_provider, llm_provider.capitalize())
+
+        format_title = "Video Reel (9:16)" if content_type == "video" else "Image Post"
+
+        if callback_id:
+            answer_callback_query(callback_id, text=f"🚀 Generating {format_title} with {llm_provider.capitalize()}...")
+
+        products = get_all_products()
+        selected_prod = None
+        for p in products:
+            if str(p.get("id")) == prod_id:
+                selected_prod = p
+                break
+        if not selected_prod and products:
+            selected_prod = products[0]
+
+        prod_name = selected_prod.get("name", "Featured Product") if selected_prod else "Featured Product"
+
+        status_text = (
+            f"🚀 <b>Generation Initiated!</b>\n\n"
+            f"📦 <b>Product:</b> {prod_name}\n"
+            f"🎨 <b>Format:</b> {format_title}\n"
+            f"🤖 <b>AI Engine:</b> {provider_title}\n\n"
+            f"🤖 <b>Step 1 & 2:</b> Opening Chrome and prompting {llm_provider.capitalize()} like a human...\n"
+            f"🎨 <b>Step 3:</b> Generating custom {'promo video reel' if content_type == 'video' else 'visual graphic'} & viral copy...\n"
+            f"⏳ <i>Please wait ~35-50 seconds. The complete preview with approval buttons will arrive here!</i>"
+        )
+
+        if message_id and chat_id:
+            try:
+                edit_message_text(chat_id, message_id, status_text)
+            except Exception:
+                send_text_message(chat_id, status_text)
+        else:
+            send_text_message(chat_id, status_text)
+
+        import threading
+        def _run_flow():
+            try:
+                from browser.human_operator import execute_human_generation_and_telegram_flow
+                logo_to_use = selected_prod.get("logo_path") if selected_prod else None
+                if not logo_to_use and os.path.exists(LOAN_SOLUTIONS_PATH):
+                    logo_to_use = LOAN_SOLUTIONS_PATH
+
+                execute_human_generation_and_telegram_flow(
+                    platform=llm_provider,
+                    product=selected_prod or {"name": prod_name, "logo_path": logo_to_use},
+                    content_type=content_type,
+                    skill_image_path=logo_to_use,
+                    platforms=["facebook", "instagram"],
+                )
+            except Exception as e_run:
+                logger.error(f"Error during flow generation: {e_run}")
+                send_text_message(chat_id, f"⚠️ Generation notice: {e_run}")
+
+        threading.Thread(target=_run_flow, daemon=True).start()
+
+    # Legacy fallback: User clicked [🚀 Generate: <Product>] from old message
     elif callback_data.startswith("gen_prod:"):
-        prod_id = callback_data.split(":", 1)[1]
-        answer_callback_query(callback_id, text="Initiating AI generation...")
+        prod_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="Initiating AI generation...")
 
         products = get_all_products()
         selected_prod = None
@@ -264,9 +714,14 @@ def handle_callback_query(callback: dict):
         def _run_human_flow():
             try:
                 from browser.human_operator import execute_human_generation_and_telegram_flow
+                logo_to_use = selected_prod.get("logo_path") if selected_prod else None
+                if not logo_to_use and os.path.exists(LOAN_SOLUTIONS_PATH):
+                    logo_to_use = LOAN_SOLUTIONS_PATH
+
                 execute_human_generation_and_telegram_flow(
                     platform="chatgpt",
-                    product=selected_prod or {"name": prod_name},
+                    product=selected_prod or {"name": prod_name, "logo_path": logo_to_use},
+                    skill_image_path=logo_to_use,
                     platforms=["facebook", "instagram"],
                 )
             except Exception as e_run:
@@ -275,28 +730,157 @@ def handle_callback_query(callback: dict):
 
         threading.Thread(target=_run_human_flow, daemon=True).start()
 
-    # 7. User clicked [ℹ️ How It Works]
+    # 10. User clicked [ℹ️ How It Works]
     elif callback_data == "info:how_it_works":
-        answer_callback_query(callback_id)
+        if callback_id:
+            answer_callback_query(callback_id)
         send_text_message(
             chat_id,
             "💡 <b>How The Automation Works:</b>\n\n"
-            "1️⃣ <b>Select Product</b>: Tap any product button or configure on http://localhost:3000.\n"
-            "2️⃣ <b>Human Browser Flow</b>: Chrome opens ChatGPT with your profile and inputs the prompt all at once.\n"
-            "3️⃣ <b>DALL-E & Copy</b>: Generates high-res visual artwork, headline, marketing copy & hashtags.\n"
-            "4️⃣ <b>Telegram Review</b>: The bot delivers the preview with interactive Approve/Reject buttons.\n"
-            "5️⃣ <b>Auto-Posting</b>: Upon approval, the bot navigates to Facebook and publishes your post!"
+            "1️⃣ <b>Select Format & AI</b>: Choose Image or Video, then choose Gemini, ChatGPT, or Claude (Video auto-selects Gemini).\n"
+            "2️⃣ <b>Select Product</b>: Choose any of your registered products.\n"
+            "3️⃣ <b>Human Browser Flow</b>: Chrome opens the selected AI with your profile and inputs the prompt like a human.\n"
+            "4️⃣ <b>Creative Media & Copy</b>: Generates high-res visual artwork / video reel, marketing copy & hashtags.\n"
+            "5️⃣ <b>Telegram Review</b>: The bot delivers the preview with interactive Approve/Reject buttons.\n"
+            "6️⃣ <b>Auto-Publishing</b>: Upon approval, select Facebook, Instagram, LinkedIn, or WhatsApp to publish!"
         )
 
-    # 8. User clicked [📋 Active Products]
+    # 11. User clicked [📋 Active Products]
     elif callback_data == "info:products":
-        answer_callback_query(callback_id)
+        if callback_id:
+            answer_callback_query(callback_id)
         prods = get_all_products()
         if prods:
             p_lines = [f"• <b>{p.get('name')}</b> ({p.get('category', 'Product')}): <i>{p.get('description', '')[:70]}...</i>" for p in prods]
             send_text_message(chat_id, "📋 <b>Active Registered Products:</b>\n\n" + "\n".join(p_lines))
         else:
             send_text_message(chat_id, "📋 <i>No registered products found in database.</i>")
+
+    # 12. Root Menu: Return to main root menu
+    elif callback_data == "root:main":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_root_choice_menu(chat_id, message_id=message_id)
+
+    # 13. Root Choice 1: Content Generation Flow
+    elif callback_data == "root:content":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_start_flow_menu(chat_id, message_id=message_id)
+
+    # 14. Root Choice 2: Growth & Outreach Flow -> Step 1: Select Platform
+    elif callback_data == "root:outreach":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_outreach_platform_menu(chat_id, message_id=message_id)
+
+    # 15. Outreach Step 2: Platform Selected -> Select Location
+    elif callback_data.startswith("outreach:plat:"):
+        platform = callback_data.split(":", 2)[2].lower()
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_outreach_location_menu(chat_id, platform=platform, message_id=message_id)
+
+    # 16. Outreach Custom Location: Prompt user to type location text
+    elif callback_data.startswith("outreach:loc_custom:"):
+        platform = callback_data.split(":", 2)[2].lower()
+        if callback_id:
+            answer_callback_query(callback_id)
+        chat_sessions[chat_id] = {
+            "action": "AWAITING_OUTREACH_LOCATION",
+            "platform": platform,
+            "message_id": message_id
+        }
+        send_text_message(
+            chat_id,
+            f"📍 <b>Custom Location for {platform.capitalize()} Outreach</b>\n\n"
+            "Please type the name of the target city or location (e.g. <code>New York</code>, <code>Mumbai</code>, <code>San Francisco</code>):\n\n"
+            "<i>(Type /cancel anytime to return to the menu)</i>"
+        )
+
+    # 17. Outreach Step 3: Location Selected -> Select Count
+    elif callback_data.startswith("outreach:loc:"):
+        parts = callback_data.split(":")
+        platform = parts[2].lower() if len(parts) > 2 else "both"
+        location = parts[3] if len(parts) > 3 else "Global"
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_outreach_count_menu(chat_id, platform=platform, location=location, message_id=message_id)
+
+    # 18. Outreach Custom Count Selection
+    elif callback_data.startswith("outreach:count_custom:"):
+        parts = callback_data.split(":")
+        platform = parts[2].lower() if len(parts) > 2 else "both"
+        location = parts[3] if len(parts) > 3 else "Global"
+        if callback_id:
+            answer_callback_query(callback_id)
+        chat_sessions[chat_id] = {
+            "action": "AWAITING_OUTREACH_COUNT",
+            "platform": platform,
+            "location": location,
+            "message_id": message_id
+        }
+        plat_label = {
+            "both": "⚡ Dual (Facebook + Instagram)",
+            "facebook": "📘 Facebook Friends",
+            "instagram": "📸 Instagram Follows"
+        }.get(platform, platform.capitalize())
+        send_text_message(
+            chat_id,
+            f"🎯 <b>Custom Outreach Request Count</b>\n\n"
+            f"👥 <b>Platform:</b> {plat_label}\n"
+            f"📍 <b>Location:</b> <code>{location}</code>\n\n"
+            "Please type the number of requests you would like to send (e.g. <code>15</code>, <code>35</code>, <code>75</code>, <code>100</code>):\n\n"
+            "<i>(Type /cancel anytime to return to the menu)</i>"
+        )
+
+    # 19. Outreach Execution: Run outreach with preset (platform, location, count)
+    elif callback_data.startswith("outreach:run:"):
+        parts = callback_data.split(":")
+        platform = parts[2].lower() if len(parts) > 2 else "both"
+        location = parts[3] if len(parts) > 3 else "Global"
+        try:
+            target_count = int(parts[4]) if len(parts) > 4 else 10
+        except ValueError:
+            target_count = 10
+
+        if callback_id:
+            answer_callback_query(callback_id, text=f"🚀 Launching outreach for {location}...")
+
+        launch_outreach_campaign(chat_id, platform=platform, location=location, target_count=target_count, message_id=message_id)
+
+    # 19. Outreach Stop Signal
+    elif callback_data.startswith("outreach:stop:"):
+        campaign_id = callback_data.split(":", 2)[2] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="🛑 Halting outreach campaign safely...")
+        stop_growth_campaign(campaign_id)
+        send_text_message(
+            chat_id,
+            f"🛑 <b>Campaign Stop Signal Sent</b> for ID <code>{campaign_id}</code>.\n\n"
+            "Automation is finishing the current browser action and will cleanly park the session."
+        )
+
+    # 20. Antigravity & Laptop Remote Prompt Control: Open menu
+    elif callback_data == "root:antigravity":
+        if callback_id:
+            answer_callback_query(callback_id)
+        chat_sessions[chat_id] = {"action": "AWAITING_ANTIGRAVITY_PROMPT", "mode": "antigravity_chat"}
+        send_antigravity_menu(chat_id, message_id=message_id, selected_mode="antigravity_chat")
+
+    # 21. Antigravity Mode Selection
+    elif callback_data.startswith("agy:setmode:"):
+        mode = callback_data.split(":", 2)[2]
+        if callback_id:
+            answer_callback_query(callback_id, text=f"🎯 Target set to: {mode}")
+        chat_sessions[chat_id] = {"action": "AWAITING_ANTIGRAVITY_PROMPT", "mode": mode}
+        send_antigravity_menu(chat_id, message_id=message_id, selected_mode=mode)
+
+    # 22. Antigravity List Running Windows on Laptop
+    elif callback_data == "agy:windows":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_antigravity_running_windows_menu(chat_id, message_id=message_id)
 
 
 def handle_text_message(message: dict):
@@ -305,22 +889,109 @@ def handle_text_message(message: dict):
     text = message.get("text", "").strip()
     msg_id = message.get("message_id")
 
+    logger.info(f"Received text message: '{text}' from chat {chat_id}")
+
     clean_text = text.lower().strip()
     if clean_text in ["/start", "start", "/help", "help", "hi", "hello", "menu", "/menu"]:
-        products = get_all_products()
-        send_start_dashboard(chat_id, products)
+        send_root_choice_menu(chat_id)
+        return
+
+    if clean_text in ["/cancel", "cancel"]:
+        if chat_id in chat_sessions:
+            del chat_sessions[chat_id]
+        send_root_choice_menu(chat_id)
         return
 
     session = chat_sessions.get(chat_id)
     if not session:
         if text.startswith("/"):
-            products = get_all_products()
-            send_start_dashboard(chat_id, products)
+            send_root_choice_menu(chat_id)
+        return
+
+    # User sent prompt for Antigravity / Laptop Remote Control
+    if session.get("action") == "AWAITING_ANTIGRAVITY_PROMPT":
+        target_mode = session.get("mode", "antigravity_chat")
+
+        # Allocate sequential Task Number (#TASK-101)
+        task = allocate_new_task(prompt=text, target_mode=target_mode)
+        task_id = task["task_id"]
+
+        mode_label = {
+            "antigravity_chat": "Antigravity IDE (Chat Prompt)",
+            "antigravity_inline": "Antigravity IDE (Inline Ctrl+I)",
+            "active_window": "Active Laptop Window",
+            "notepad": "Notepad (Testing)",
+        }.get(target_mode, target_mode)
+
+        prompt_preview = (text[:120] + "...") if len(text) > 120 else text
+
+        ack_text = (
+            f"🚀 <b>Task #{task_id} Started!</b>\n\n"
+            f"🖥️ <b>Target:</b> <code>{mode_label}</code>\n"
+            f"📝 <b>Prompt:</b>\n<i>\"{prompt_preview}\"</i>\n\n"
+            f"⏳ <b>Status:</b> Pasting into running software on laptop and submitting..."
+        )
+        send_text_message(chat_id, ack_text)
+
+        import threading
+        def _exec_injection():
+            try:
+                res = inject_prompt_to_antigravity(prompt=text, target_mode=target_mode)
+                if res.get("success"):
+                    win_title = res.get("window_title", "Antigravity IDE")
+                    update_task_status(task_id, "completed", res.get("message"))
+                    send_task_completion_message(chat_id, task_id, text, win_title, success=True)
+                else:
+                    update_task_status(task_id, "failed", res.get("message"))
+                    send_task_completion_message(chat_id, task_id, text, "Antigravity IDE", success=False, details=res.get("message"))
+            except Exception as e_inj:
+                logger.error(f"Error during remote prompt injection: {e_inj}")
+                update_task_status(task_id, "error", str(e_inj))
+                send_task_completion_message(chat_id, task_id, text, "Antigravity IDE", success=False, details=str(e_inj))
+
+        threading.Thread(target=_exec_injection, daemon=True).start()
+        return
+
+    # User provided custom location for outreach
+    if session.get("action") == "AWAITING_OUTREACH_LOCATION":
+        platform = session.get("platform", "both")
+        location = text.strip()
+        del chat_sessions[chat_id]
+        send_outreach_count_menu(chat_id, platform=platform, location=location)
+        return
+
+    # User provided custom request count for outreach
+    if session.get("action") == "AWAITING_OUTREACH_COUNT":
+        platform = session.get("platform", "both")
+        location = session.get("location", "Global")
+        target_msg_id = session.get("message_id")
+
+        try:
+            val = int(text.strip())
+            if val <= 0:
+                raise ValueError("Count must be positive")
+        except ValueError:
+            send_text_message(
+                chat_id,
+                "⚠️ <b>Invalid number.</b> Please type a positive number (e.g. <code>15</code>, <code>35</code>, <code>80</code>) or type /cancel to abort."
+            )
+            return
+
+        del chat_sessions[chat_id]
+        target_count = min(val, 250)
+        if val > 250:
+            send_text_message(
+                chat_id,
+                f"ℹ️ <i>Notice: Request count capped at platform safety maximum of 250 (entered: {val}) to protect your account.</i>"
+            )
+
+        launch_outreach_campaign(chat_id, platform=platform, location=location, target_count=target_count, message_id=target_msg_id)
         return
 
     # User provided password for a platform
     if session.get("action") == "AWAITING_PASSWORD":
         platform = session.get("platform", "facebook")
+        campaign_id = session.get("campaign_id", "")
         media_path = session.get("media_path")
         caption = session.get("caption")
 
@@ -353,6 +1024,7 @@ def handle_text_message(message: dict):
         post_res = post_to_facebook(media_path=media_path, caption=caption)
 
         if post_res.get("status") == "success":
+            update_campaign_status_db(campaign_id, "posted", platform=platform, media_path=media_path, caption=caption)
             send_text_message(
                 chat_id,
                 f"🎉 <b>Success!</b> Authenticated & post published to {platform.capitalize()}!\n\n"
@@ -364,9 +1036,108 @@ def handle_text_message(message: dict):
 
     # User provided revision instructions
     elif session.get("action") == "AWAITING_REVISION":
-        campaign_id = session.get("campaign_id")
+        campaign_id = session.get("campaign_id", "")
         del chat_sessions[chat_id]
-        send_text_message(chat_id, f"🔄 <b>Revision note recorded:</b> <i>\"{text}\"</i>\nRegenerating content now...")
+        send_text_message(
+            chat_id,
+            f"🔄 <b>Revision note recorded:</b> <i>\"{text}\"</i>\n\n"
+            f"🤖 <b>Regenerating Content:</b> Opening Chrome and prompting ChatGPT with your feedback...\n"
+            f"🎨 Crafting new custom graphic & viral copy...\n"
+            f"⏳ <i>Please wait ~35-50 seconds. A new preview with approval buttons will be sent here!</i>"
+        )
+
+        import threading
+        def _run_revision():
+            try:
+                from browser.human_operator import execute_human_generation_and_telegram_flow
+                execute_human_generation_and_telegram_flow(
+                    platform="chatgpt",
+                    custom_instructions=f"User revision request: {text}",
+                    campaign_id=campaign_id,
+                    platforms=["facebook", "instagram"]
+                )
+            except Exception as e_rev:
+                logger.error(f"Error during Telegram revision generation: {e_rev}")
+                send_text_message(chat_id, f"⚠️ Revision generation notice: {e_rev}")
+
+        threading.Thread(target=_run_revision, daemon=True).start()
+
+
+def handle_incoming_message(message: dict):
+    """Processes incoming Telegram messages, including uploaded photos and documents."""
+    chat_id = str(message.get("chat", {}).get("id"))
+    bot_token, _ = get_telegram_credentials()
+
+    # Check if user sent a photo or document file
+    photo_list = message.get("photo")
+    doc = message.get("document")
+
+    if (photo_list or doc) and bot_token:
+        file_id = None
+        orig_name = "Loan Solutions.png"
+        if photo_list:
+            file_id = photo_list[-1].get("file_id")
+        elif doc:
+            file_id = doc.get("file_id")
+            orig_name = doc.get("file_name", "Loan Solutions.png")
+
+        if file_id:
+            from telegram.bot import download_telegram_file
+            target_path = LOAN_SOLUTIONS_PATH
+            logger.info(f"Downloading uploaded Telegram media ({file_id}) for Loan Solutions...")
+            download_success = download_telegram_file(bot_token, file_id, target_path)
+
+            if download_success:
+                # Mirror to public/uploads and data/media/images
+                try:
+                    import shutil
+                    pub_target = BASE_DIR / "public" / "uploads" / "Loan_Solutions.png"
+                    media_target = BASE_DIR / "data" / "media" / "images" / "Loan_Solutions.png"
+                    pub_target.parent.mkdir(parents=True, exist_ok=True)
+                    media_target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(target_path, pub_target)
+                    shutil.copyfile(target_path, media_target)
+                except Exception as e_cp:
+                    logger.warning(f"Mirror file copy notice: {e_cp}")
+
+                # Permanently update product logo in DB
+                update_loan_solution_logo_db(target_path)
+
+                prods = get_all_products()
+                loan_id = "default"
+                for p in prods:
+                    if "loan" in (p.get("name") or "").lower():
+                        loan_id = str(p.get("id"))
+                        break
+
+                quick_keyboard = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "♊ Generate with Gemini", "callback_data": f"flow:run:image:gemini:{loan_id}"},
+                            {"text": "🤖 Generate with ChatGPT", "callback_data": f"flow:run:image:chatgpt:{loan_id}"}
+                        ],
+                        [
+                            {"text": "🎥 Generate Video Reel (Gemini)", "callback_data": f"flow:run:video:gemini:{loan_id}"}
+                        ],
+                        [
+                            {"text": "🔙 Main Menu", "callback_data": "flow:start"}
+                        ]
+                    ]
+                }
+
+                send_text_message(
+                    chat_id,
+                    "📸 <b>File Upload Received from Telegram!</b>\n\n"
+                    "✅ <b>Automatically considered & saved for:</b> <i>Loan Solutions</i>\n"
+                    f"📁 <b>File Path:</b> <code>Loan Solutions.png</code>\n\n"
+                    "This image is now automatically uploaded and used as the reference branding visual when generating Loan Solutions campaigns in Gemini and ChatGPT.\n\n"
+                    "👇 <b>Choose an AI to generate right now:</b>",
+                    reply_markup=quick_keyboard
+                )
+                return
+
+    # Fall back to text message handler
+    handle_text_message(message)
 
 
 def start_polling():
@@ -380,6 +1151,7 @@ def start_polling():
     print("🤖 TELEGRAM BOT POLLER DAEMON ACTIVE & LISTENING", flush=True)
     print(f"Target Chat ID: {chat_id or 'Any authorized user'}", flush=True)
     print("Supports: [Approve & Post] -> Platform Selection -> Facebook Posting & Password Ingestion", flush=True)
+    print("Supports: Telegram Photo/Document Upload -> Auto-Assigned to Loan Solutions", flush=True)
     print("=" * 70, flush=True)
 
     offset = None
@@ -401,7 +1173,7 @@ def start_polling():
                         handle_callback_query(update["callback_query"])
 
                     elif "message" in update:
-                        handle_text_message(update["message"])
+                        handle_incoming_message(update["message"])
 
             time.sleep(1)
 

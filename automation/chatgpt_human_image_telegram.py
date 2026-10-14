@@ -84,7 +84,8 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
     else:
         print(f"Switched to active ChatGPT tab ({driver.title})")
 
-    human_sleep(2.0, 3.5)
+    from browser.driver import refresh_and_ensure_fresh
+    refresh_and_ensure_fresh(driver, platform_name="ChatGPT")
 
     # Dismiss any dialogs/banners
     for sel in ["button[aria-label='Close']", "button[data-testid='close-button']", "div[role='dialog'] button"]:
@@ -123,14 +124,36 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
         ActionChains(driver).move_to_element(input_box).pause(0.2).click().perform()
     human_sleep(0.5, 1.0)
 
-    # Construct prompt
-    product_name = (custom_product or {}).get("name", "AI Social Media Automation")
+    # Construct prompt divided into Task 1 and Task 2 given all at once
+    product_name = (custom_product or {}).get("name", "Loan Solutions")
+    loan_solutions_file = str(BASE_DIR / "Loan Solutions.png")
+
+    # If reference image exists (Loan Solutions), attach it to ChatGPT composer like human
+    if os.path.exists(loan_solutions_file):
+        try:
+            file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+            if file_inputs:
+                file_inputs[0].send_keys(os.path.abspath(loan_solutions_file))
+                human_sleep(1.5, 2.5)
+                print(f"📎 Uploaded reference image to ChatGPT composer: {os.path.basename(loan_solutions_file)}", flush=True)
+        except Exception as e_up:
+            print(f"Notice on file attachment: {e_up}", flush=True)
+
     prompt_text = (
-        f"Generate a clean, high-converting commercial marketing image for '{product_name}'. "
-        "A stunning modern tech workspace with holographic dashboards, vibrant purple and cyan neon lighting, "
-        "sleek glassmorphism UI cards, 1:1 square aspect ratio, 8k commercial resolution. "
-        "CRITICAL: Do NOT paint hashtags (#...), paragraphs, or long descriptions inside the image itself. Keep the artwork clean. "
-        "Below the image in your chat text only, write an engaging promotional social media post caption with a strong call-to-action and 5 viral hashtags."
+        f"--- TASK 1: CLEAN VISUAL ARTWORK (IMAGE GENERATION) ---\n"
+        f"Generate a clean, high-converting commercial marketing image for '{product_name}'.\n"
+        "A warm, authentic, happy Indian middle-class family (smiling parents and child) sitting together joyfully on a comfortable sofa in their modern, tasteful Indian apartment living room, celebrating their new home loan approval with genuine relief and pride. "
+        "Subtle glowing Indian Rupee symbol (₹) and trusted digital verification checkmark in the background, warm sunlit daylight, 1:1 square aspect ratio, 8k commercial photography resolution.\n"
+        "CRITICAL RULES:\n"
+        "1. Strictly use Indian Rupee (₹) standards for any currency representation. NEVER use dollar signs ($) or foreign currency.\n"
+        "2. Authentic Indian demographic and relatable Indian middle-class family setting.\n"
+        "3. Do NOT paint hashtags (#...), paragraphs, or long text inside the image. Keep artwork 100% clean visual art.\n\n"
+        "--- TASK 2: SOCIAL MEDIA POST (IN CHAT TEXT BELOW THE IMAGE ONLY) ---\n"
+        "In your chat text reply below the image only, write the complete social media post tailored for an Indian middle-class audience:\n"
+        f"• Headline: A compelling, emotional hook for {product_name} celebrating family dreams, financial security, and easy approvals\n"
+        "• Caption: An engaging 2-3 paragraph marketing copy highlighting trust, transparent process, low monthly EMIs in Indian Rupees (₹), quick disbursal, and a clear call-to-action.\n"
+        "• Mandatory Link: End the caption with this exact application link: 👉 Apply Now: https://loansolutions.everythingrental.in/application\n"
+        "• Hashtags: 5-6 viral India-relevant hashtags (e.g. #LoanSolutions #HomeLoanIndia #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom - written ONLY here in chat text, NEVER painted inside the image)."
     )
 
     print(f"⚡ Inserting full prompt at once ({len(prompt_text)} chars)...", flush=True)
@@ -319,9 +342,10 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
 
     # Build clean caption
     caption_body = generated_text if len(generated_text) > 40 else (
-        f"Transform your social media strategy with {product_name}! 🚀\n\n"
-        "Generate viral marketing campaigns, realistic product visuals, and multi-platform automation with human-like precision. Connect your accounts and watch your reach skyrocket effortlessly.\n\n"
-        "#AISocialMedia #MarketingAutomation #ContentCreation #GrowthHacking #DigitalMarketing"
+        f"🏡 Ab har sapna hoga poora with {product_name}! 🚀\n\n"
+        "Get instant loan approvals with minimal paperwork, transparent terms, and lowest monthly EMIs in Indian Rupees (₹). Whether it's your dream home, personal finance, or education, your trusted financial partner is here for your family.\n\n"
+        "👉 Apply Now: https://loansolutions.everythingrental.in/application\n\n"
+        "#LoanSolutions #HomeLoanIndia #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom"
     )
 
     # ── Step 7: Share image and captions for post in Telegram for approval ──
@@ -336,7 +360,9 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
         caption=caption_body,
         media_path=str(downloaded_path) if downloaded_path else "",
         platforms=["Facebook", "Instagram", "LinkedIn"],
-        revision_count=0
+        revision_count=0,
+        product_name=product_name,
+        apply_url="https://loansolutions.everythingrental.in/application"
     )
 
     print("\n" + "=" * 70)
@@ -345,7 +371,8 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
         print(f"Campaign ID: {campaign_id}")
         print(f"Media Path: {downloaded_path}")
         print(f"Check Telegram chat ID {chat_id} for the approval message with buttons:")
-        print("  [✅ Approve & Post]  [✏️ Suggest Revision]  [❌ Reject / Cancel]")
+        print("  [✅ Approve & Post]  [✏️ Suggest Revision]  [📝 Apply Now 🔗]  [❌ Reject / Cancel]")
+        print("  🔗 Direct Link: https://loansolutions.everythingrental.in/application")
     else:
         print(f"⚠️ Telegram notice: {tg_res}")
     print("=" * 70)

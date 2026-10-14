@@ -105,10 +105,85 @@ def submit_facebook_login(driver, password: str, email_or_user: str = None) -> d
         return {"status": "error", "message": str(e)}
 
 
+def request_password_from_telegram_sync(platform: str = "facebook", timeout_secs: int = 120) -> dict:
+    """
+    Sends a password request to Telegram, waits for the user's password reply,
+    securely deletes the password message from Telegram, and returns credentials.
+    """
+    from telegram.bot import (
+        get_telegram_credentials,
+        make_telegram_request,
+        delete_telegram_message,
+        send_text_message,
+    )
+
+    bot_token, chat_id = get_telegram_credentials()
+    if not bot_token or not chat_id:
+        logger.warning("Telegram Bot Token or Chat ID not configured.")
+        return None
+
+    # Determine baseline update offset to ignore past messages
+    offset = None
+    try:
+        last_updates = make_telegram_request(bot_token, "getUpdates", data={"offset": -1, "limit": 1})
+        if last_updates.get("ok") and last_updates.get("result"):
+            offset = last_updates["result"][-1]["update_id"] + 1
+    except Exception as e:
+        logger.debug(f"Update offset query note: {e}")
+
+    prompt_text = (
+        f"🔒 <b>{platform.capitalize()} Login Required</b>\n\n"
+        f"The automation requires your {platform.capitalize()} password to publish this post.\n\n"
+        f"👉 <i>Please reply directly to this message with your password (or <code>email:password</code>).</i>\n\n"
+        f"The bot will securely delete your message and log into Facebook automatically."
+    )
+    send_text_message(chat_id, prompt_text)
+    logger.info(f"Dispatched Telegram password request to chat {chat_id}. Listening for up to {timeout_secs}s...")
+
+    start_time = time.time()
+    while time.time() - start_time < timeout_secs:
+        try:
+            params = {"timeout": 4}
+            if offset:
+                params["offset"] = offset
+
+            res = make_telegram_request(bot_token, "getUpdates", data=params)
+            if res.get("ok") and "result" in res:
+                for update in res["result"]:
+                    offset = update["update_id"] + 1
+                    msg = update.get("message")
+                    if msg and str(msg.get("chat", {}).get("id")) == str(chat_id):
+                        text = msg.get("text", "").strip()
+                        msg_id = msg.get("message_id")
+                        if text and not text.startswith("/"):
+                            # Delete password message from Telegram immediately for privacy & security
+                            delete_telegram_message(chat_id, msg_id)
+                            send_text_message(
+                                chat_id,
+                                f"🔑 <b>Password received securely.</b> Ingesting into {platform.capitalize()} in Chrome..."
+                            )
+
+                            email = None
+                            password = text
+                            if ":" in text and not text.startswith("http"):
+                                parts = text.split(":", 1)
+                                email, password = parts[0].strip(), parts[1].strip()
+
+                            return {"password": password, "email": email}
+
+        except Exception as e_poll:
+            logger.warning(f"Error checking Telegram updates: {e_poll}")
+
+        time.sleep(2)
+
+    send_text_message(chat_id, f"⏱️ Password request for {platform.capitalize()} timed out after {timeout_secs}s.")
+    return None
+
+
 def post_to_facebook(media_path: str = None, caption: str = "", password_callback=None) -> dict:
     """
     Publishes a post with optional image/video and caption to Facebook.
-    If login is required, invokes password_callback to retrieve password from Telegram.
+    If login is required, invokes password_callback (or Telegram sync request) to retrieve password.
     """
     try:
         logger.info("Navigating to Facebook...")
@@ -121,25 +196,21 @@ def post_to_facebook(media_path: str = None, caption: str = "", password_callbac
 
         # 1. Check if login is required
         if is_facebook_login_needed(driver):
-            logger.warning("Facebook requires login!")
-            if password_callback:
-                # Ask Telegram user for password
-                credentials = password_callback()
-                if not credentials:
-                    return {"status": "error", "platform": "facebook", "message": "No password provided from Telegram."}
+            logger.warning("Facebook requires login! Prompting password via Telegram...")
+            callback = password_callback or (lambda: request_password_from_telegram_sync("facebook"))
+            credentials = callback()
 
-                pwd = credentials.get("password") if isinstance(credentials, dict) else credentials
-                email = credentials.get("email") if isinstance(credentials, dict) else None
+            if not credentials:
+                return {"status": "error", "platform": "facebook", "message": "No password provided from Telegram."}
 
-                login_res = submit_facebook_login(driver, password=pwd, email_or_user=email)
-                if login_res.get("status") == "error":
-                    return {"status": "error", "platform": "facebook", "message": login_res.get("message")}
-            else:
-                return {
-                    "status": "login_required",
-                    "platform": "facebook",
-                    "message": "Facebook login required. Please provide credentials via Telegram."
-                }
+            pwd = credentials.get("password") if isinstance(credentials, dict) else credentials
+            email = credentials.get("email") if isinstance(credentials, dict) else None
+
+            login_res = submit_facebook_login(driver, password=pwd, email_or_user=email)
+            if login_res.get("status") == "error":
+                return {"status": "error", "platform": "facebook", "message": login_res.get("message")}
+
+            time.sleep(4)
 
         # 2. Look for "What's on your mind?" post creation triggers
         time.sleep(2)
@@ -234,9 +305,42 @@ def post_to_facebook(media_path: str = None, caption: str = "", password_callbac
                         btn.click()
                         time.sleep(4)
                         logger.info("Successfully clicked Post on Facebook!")
+
+                        # Notify Telegram
+                        try:
+                            from telegram.bot import get_telegram_credentials, send_text_message
+                            bot_token, chat_id = get_telegram_credentials()
+                            if bot_token and chat_id:
+                                caption_snippet = (caption[:120] + "...") if len(caption) > 120 else caption
+                                media_name = os.path.basename(media_path) if media_path else "Graphic"
+                                send_text_message(
+                                    chat_id,
+                                    f"🎉 <b>Success!</b> Post successfully published to Facebook!\n\n"
+                                    f"🖼️ Media: <code>{media_name}</code>\n"
+                                    f"📝 Caption preview:\n<i>{caption_snippet}</i>"
+                                )
+                        except Exception as e_tg:
+                            logger.debug(f"Telegram notice error: {e_tg}")
+
                         return {"status": "success", "platform": "facebook", "message": "Posted to Facebook successfully!"}
             except Exception:
                 continue
+
+        # Notify Telegram for profile session dispatch
+        try:
+            from telegram.bot import get_telegram_credentials, send_text_message
+            bot_token, chat_id = get_telegram_credentials()
+            if bot_token and chat_id:
+                caption_snippet = (caption[:120] + "...") if len(caption) > 120 else caption
+                media_name = os.path.basename(media_path) if media_path else "Graphic"
+                send_text_message(
+                    chat_id,
+                    f"🎉 <b>Success!</b> Post flow completed on Facebook!\n\n"
+                    f"🖼️ Media: <code>{media_name}</code>\n"
+                    f"📝 Caption preview:\n<i>{caption_snippet}</i>"
+                )
+        except Exception as e_tg:
+            logger.debug(f"Telegram notice error: {e_tg}")
 
         return {"status": "success", "platform": "facebook", "message": "Facebook post flow dispatched via profile session"}
 

@@ -1,0 +1,503 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+
+const PRESET_LOCATIONS = [
+  "New Delhi",
+  "Mumbai",
+  "Bangalore",
+  "New York",
+  "London",
+  "Dubai",
+  "Singapore",
+  "Toronto",
+];
+
+export default function GrowthPage() {
+  const [platform, setPlatform] = useState("both"); // 'facebook', 'instagram', 'both'
+  const [location, setLocation] = useState("New Delhi");
+  const [targetCount, setTargetCount] = useState(10);
+  const [safetyDelay, setSafetyDelay] = useState(15);
+  const [loading, setLoading] = useState(false);
+  const [stopping, setStopping] = useState(false);
+
+  const [activeCampaign, setActiveCampaign] = useState(null);
+  const [campaigns, setCampaigns] = useState([]);
+  const [activeTab, setActiveTab] = useState("launcher"); // 'launcher', 'history'
+
+  const pollIntervalRef = useRef(null);
+
+  // Fetch campaigns
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      const res = await fetch("/api/growth");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.campaigns)) {
+        setCampaigns(data.campaigns);
+        // Look for any running campaign
+        const running = data.campaigns.find((c) => c.status === "running");
+        if (running) {
+          setActiveCampaign(running);
+        } else if (activeCampaign && activeCampaign.status === "running") {
+          const updated = data.campaigns.find((c) => c.id === activeCampaign.id);
+          setActiveCampaign(updated || null);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching growth campaigns:", err);
+    }
+  }, [activeCampaign]);
+
+  useEffect(() => {
+    fetchCampaigns();
+  }, [fetchCampaigns]);
+
+  // Poll when active campaign is running
+  useEffect(() => {
+    if (activeCampaign && activeCampaign.status === "running") {
+      pollIntervalRef.current = setInterval(fetchCampaigns, 3000);
+    } else {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    }
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [activeCampaign, fetchCampaigns]);
+
+  const handleStartCampaign = async () => {
+    if (!location.trim()) {
+      alert("Please specify a target location.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/growth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform,
+          location: location.trim(),
+          targetCount: parseInt(targetCount, 10),
+          safetyDelay: parseInt(safetyDelay, 10),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActiveCampaign({
+          id: data.campaignId,
+          platform,
+          location,
+          target_count: targetCount,
+          fb_sent_count: 0,
+          ig_sent_count: 0,
+          status: "running",
+          logs: JSON.stringify(["Campaign initiated. Connecting to browser on port 9222..."]),
+        });
+        fetchCampaigns();
+      } else {
+        alert(data.error || "Failed to initiate growth campaign.");
+      }
+    } catch (err) {
+      alert(`Network error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStopCampaign = async (id) => {
+    if (!confirm("Are you sure you want to stop this outreach campaign?")) return;
+    setStopping(true);
+    try {
+      const res = await fetch(`/api/growth?id=${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchCampaigns();
+        if (activeCampaign && activeCampaign.id === id) {
+          setActiveCampaign((prev) => (prev ? { ...prev, status: "stopped" } : null));
+        }
+      } else {
+        alert(data.error || "Could not stop campaign.");
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  // Parse logs array safely
+  const parsedLogs = (() => {
+    if (!activeCampaign || !activeCampaign.logs) return [];
+    if (Array.isArray(activeCampaign.logs)) return activeCampaign.logs;
+    try {
+      const p = JSON.parse(activeCampaign.logs);
+      return Array.isArray(p) ? p : [];
+    } catch {
+      return [activeCampaign.logs];
+    }
+  })();
+
+  const totalTarget =
+    activeCampaign
+      ? activeCampaign.platform === "both"
+        ? activeCampaign.target_count * 2
+        : activeCampaign.target_count
+      : (platform === "both" ? targetCount * 2 : targetCount);
+
+  const totalSent = activeCampaign
+    ? (activeCampaign.fb_sent_count || 0) + (activeCampaign.ig_sent_count || 0)
+    : 0;
+
+  const progressPercent = totalTarget > 0 ? Math.min(100, Math.round((totalSent / totalTarget) * 100)) : 0;
+
+  return (
+    <div className="page-container" style={{ padding: "var(--space-6)" }}>
+      {/* Header */}
+      <div style={{ marginBottom: "var(--space-8)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}>
+          <span style={{ fontSize: "2rem" }}>👥</span>
+          <h1 style={{ fontSize: "1.875rem", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
+            Social Outreach & Growth Engine
+          </h1>
+          <span className="badge badge-primary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.75rem" }}>
+            Dual-Platform Active
+          </span>
+        </div>
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", maxWidth: "800px", margin: 0 }}>
+          Automatically send location-targeted <b>Facebook Friend Requests</b> and <b>Instagram Follow Requests</b> simultaneously
+          using your connected Chrome profile with human-paced safety delays.
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-6)" }}>
+        <button
+          id="btn-tab-launcher"
+          onClick={() => setActiveTab("launcher")}
+          className={`btn ${activeTab === "launcher" ? "btn-primary" : "btn-secondary"}`}
+          style={{ padding: "0.6rem 1.25rem" }}
+        >
+          🚀 Launch Outreach
+        </button>
+        <button
+          id="btn-tab-history"
+          onClick={() => setActiveTab("history")}
+          className={`btn ${activeTab === "history" ? "btn-primary" : "btn-secondary"}`}
+          style={{ padding: "0.6rem 1.25rem" }}
+        >
+          📋 Campaign History ({campaigns.length})
+        </button>
+      </div>
+
+      {activeTab === "launcher" ? (
+        <div style={{ display: "grid", gridTemplateColumns: activeCampaign ? "1.1fr 0.9fr" : "1fr", gap: "var(--space-6)" }}>
+          {/* Setup Card */}
+          <div className="card" style={{ padding: "var(--space-6)", borderRadius: "var(--radius-lg)" }}>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: "600", color: "var(--text-primary)", marginBottom: "var(--space-5)" }}>
+              ⚙️ Outreach Configuration
+            </h2>
+
+            {/* Platform Selection */}
+            <div style={{ marginBottom: "var(--space-6)" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "var(--space-3)" }}>
+                SELECT OUTREACH PLATFORM
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "var(--space-3)" }}>
+                {[
+                  { id: "both", name: "⚡ Both Simultaneously", desc: "Facebook + Instagram" },
+                  { id: "facebook", name: "📘 Facebook Friends", desc: "Friend Requests Only" },
+                  { id: "instagram", name: "📸 Instagram Follows", desc: "Follow Requests Only" },
+                ].map((p) => (
+                  <div
+                    key={p.id}
+                    id={`platform-${p.id}`}
+                    onClick={() => setPlatform(p.id)}
+                    style={{
+                      padding: "var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      border: platform === p.id ? "2px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                      background: platform === p.id ? "rgba(124, 92, 252, 0.12)" : "var(--bg-secondary)",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <div style={{ fontWeight: "600", color: platform === p.id ? "var(--accent-primary)" : "var(--text-primary)", fontSize: "0.95rem" }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                      {p.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Location Targeting */}
+            <div style={{ marginBottom: "var(--space-6)" }}>
+              <label htmlFor="input-target-location" style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "var(--space-2)" }}>
+                TARGET GEOGRAPHIC LOCATION
+              </label>
+              <input
+                id="input-target-location"
+                type="text"
+                className="input"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. New Delhi, Mumbai, New York, London..."
+                style={{ width: "100%", padding: "0.75rem 1rem", fontSize: "1rem", borderRadius: "var(--radius-md)" }}
+              />
+
+              {/* Preset Chips */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
+                {PRESET_LOCATIONS.map((loc) => (
+                  <button
+                    key={loc}
+                    type="button"
+                    onClick={() => setLocation(loc)}
+                    style={{
+                      padding: "0.25rem 0.65rem",
+                      fontSize: "0.75rem",
+                      borderRadius: "9999px",
+                      background: location === loc ? "var(--accent-primary)" : "var(--bg-tertiary)",
+                      color: location === loc ? "#fff" : "var(--text-secondary)",
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    📍 {loc}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Target Quantity */}
+            <div style={{ marginBottom: "var(--space-6)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
+                <label htmlFor="range-target-count" style={{ fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)" }}>
+                  REQUESTS PER PLATFORM
+                </label>
+                <span className="badge badge-info" style={{ fontSize: "0.9rem", fontWeight: "700" }}>
+                  {targetCount} Requests {platform === "both" && `(${targetCount * 2} Total)`}
+                </span>
+              </div>
+              <input
+                id="range-target-count"
+                type="range"
+                min="1"
+                max="50"
+                value={targetCount}
+                onChange={(e) => setTargetCount(parseInt(e.target.value, 10))}
+                style={{ width: "100%", accentColor: "var(--accent-primary)", cursor: "pointer" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                <span>1 (Test run)</span>
+                <span>10 (Recommended)</span>
+                <span>25 (Standard)</span>
+                <span>50 (High velocity)</span>
+              </div>
+            </div>
+
+            {/* Safety Delay */}
+            <div style={{ marginBottom: "var(--space-8)" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "var(--space-2)" }}>
+                HUMAN SAFETY COOLDOWN PACING
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "var(--space-3)" }}>
+                {[
+                  { value: 18, label: "🛡️ Conservative", pace: "15-25s delay (Safest)" },
+                  { value: 12, label: "⚖️ Balanced", pace: "10-16s delay (Optimal)" },
+                  { value: 8, label: "⚡ Accelerated", pace: "7-11s delay (Fast)" },
+                ].map((s) => (
+                  <div
+                    key={s.value}
+                    onClick={() => setSafetyDelay(s.value)}
+                    style={{
+                      padding: "var(--space-3)",
+                      borderRadius: "var(--radius-md)",
+                      border: safetyDelay === s.value ? "2px solid var(--accent-secondary)" : "1px solid var(--border-color)",
+                      background: safetyDelay === s.value ? "rgba(61, 214, 208, 0.1)" : "var(--bg-secondary)",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <div style={{ fontWeight: "600", color: "var(--text-primary)" }}>{s.label}</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{s.pace}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Launch Button */}
+            <button
+              id="btn-launch-growth"
+              onClick={handleStartCampaign}
+              disabled={loading || (activeCampaign && activeCampaign.status === "running")}
+              className="btn btn-primary"
+              style={{
+                width: "100%",
+                padding: "0.875rem",
+                fontSize: "1.05rem",
+                fontWeight: "700",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "var(--space-3)",
+                background: "linear-gradient(135deg, #7C5CFC 0%, #3DD6D0 100%)",
+                boxShadow: "0 8px 24px rgba(124, 92, 252, 0.35)",
+              }}
+            >
+              {loading ? "⏳ Initializing Engine..." : activeCampaign?.status === "running" ? "⚙️ Campaign In Progress..." : "🚀 Launch Outreach Campaign"}
+            </button>
+          </div>
+
+          {/* Live Progress Card (if active) */}
+          {activeCampaign && (
+            <div className="card" style={{ padding: "var(--space-6)", borderRadius: "var(--radius-lg)", display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-4)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <span className={`status-indicator ${activeCampaign.status === "running" ? "status-online" : "status-offline"}`} />
+                  <h3 style={{ fontSize: "1.15rem", fontWeight: "600", margin: 0, color: "var(--text-primary)" }}>
+                    Live Outreach Monitor
+                  </h3>
+                </div>
+                <span className={`badge ${activeCampaign.status === "running" ? "badge-success" : activeCampaign.status === "completed" ? "badge-primary" : "badge-warning"}`}>
+                  {activeCampaign.status?.toUpperCase()}
+                </span>
+              </div>
+
+              {/* Progress Bar & Counters */}
+              <div style={{ marginBottom: "var(--space-5)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "var(--space-2)" }}>
+                  <span>Target: <b>{activeCampaign.location}</b></span>
+                  <span><b>{totalSent} / {totalTarget}</b> completed ({progressPercent}%)</span>
+                </div>
+                <div style={{ width: "100%", height: "10px", background: "var(--bg-tertiary)", borderRadius: "9999px", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${progressPercent}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg, #7C5CFC 0%, #3DD6D0 100%)",
+                      borderRadius: "9999px",
+                      transition: "width 0.4s ease",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Dual Counter Badges */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
+                <div style={{ padding: "var(--space-3)", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", textAlign: "center" }}>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>📘 Facebook Friends</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: "700", color: "#1877F2" }}>
+                    {activeCampaign.fb_sent_count || 0}
+                  </div>
+                </div>
+                <div style={{ padding: "var(--space-3)", background: "var(--bg-secondary)", borderRadius: "var(--radius-md)", textAlign: "center" }}>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>📸 Instagram Follows</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: "700", color: "#E1306C" }}>
+                    {activeCampaign.ig_sent_count || 0}
+                  </div>
+                </div>
+              </div>
+
+              {/* Terminal Logs Window */}
+              <div style={{ flex: 1, minHeight: "180px", maxHeight: "250px", background: "#0D1117", borderRadius: "var(--radius-md)", padding: "var(--space-3)", overflowY: "auto", fontFamily: "monospace", fontSize: "0.75rem", color: "#58A6FF" }}>
+                <div style={{ color: "#8B949E", marginBottom: "4px" }}>{"// Live Automation Feed:"}</div>
+                {parsedLogs.length === 0 ? (
+                  <div style={{ color: "#8B949E" }}>Waiting for initial events...</div>
+                ) : (
+                  parsedLogs.map((log, idx) => (
+                    <div key={idx} style={{ color: log.includes("Error") ? "#FF7B72" : log.includes("Sent") || log.includes("Followed") ? "#7EE787" : "#C9D1D9", marginBottom: "3px" }}>
+                      {log}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              {activeCampaign.status === "running" && (
+                <button
+                  id="btn-stop-campaign"
+                  onClick={() => handleStopCampaign(activeCampaign.id)}
+                  disabled={stopping}
+                  className="btn btn-danger"
+                  style={{ width: "100%", marginTop: "var(--space-4)", padding: "0.6rem" }}
+                >
+                  {stopping ? "Stopping..." : "🛑 Emergency Stop"}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* History Tab */
+        <div className="card" style={{ padding: "var(--space-6)", borderRadius: "var(--radius-lg)" }}>
+          <h2 style={{ fontSize: "1.25rem", fontWeight: "600", color: "var(--text-primary)", marginBottom: "var(--space-4)" }}>
+            📋 Past Outreach Campaigns
+          </h2>
+          {campaigns.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "var(--space-8)", color: "var(--text-muted)" }}>
+              No outreach campaigns executed yet. Launch one above!
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.875rem" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--border-color)", color: "var(--text-muted)" }}>
+                    <th style={{ padding: "var(--space-3)" }}>Platform</th>
+                    <th style={{ padding: "var(--space-3)" }}>Location</th>
+                    <th style={{ padding: "var(--space-3)" }}>Sent / Target</th>
+                    <th style={{ padding: "var(--space-3)" }}>Status</th>
+                    <th style={{ padding: "var(--space-3)" }}>Created</th>
+                    <th style={{ padding: "var(--space-3)" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {campaigns.map((c) => (
+                    <tr key={c.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <td style={{ padding: "var(--space-3)", fontWeight: "600" }}>
+                        {c.platform === "both" ? "⚡ Dual (FB + IG)" : c.platform === "facebook" ? "📘 Facebook" : "📸 Instagram"}
+                      </td>
+                      <td style={{ padding: "var(--space-3)" }}>📍 {c.location}</td>
+                      <td style={{ padding: "var(--space-3)" }}>
+                        <b>{(c.fb_sent_count || 0) + (c.ig_sent_count || 0)}</b> / {c.platform === "both" ? c.target_count * 2 : c.target_count}
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginLeft: "6px" }}>
+                          (FB: {c.fb_sent_count || 0}, IG: {c.ig_sent_count || 0})
+                        </span>
+                      </td>
+                      <td style={{ padding: "var(--space-3)" }}>
+                        <span className={`badge ${c.status === "completed" ? "badge-success" : c.status === "running" ? "badge-info" : "badge-warning"}`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "var(--space-3)", color: "var(--text-muted)", fontSize: "0.8rem" }}>
+                        {new Date(c.created_at).toLocaleString()}
+                      </td>
+                      <td style={{ padding: "var(--space-3)" }}>
+                        <button
+                          onClick={() => {
+                            setActiveCampaign(c);
+                            setActiveTab("launcher");
+                          }}
+                          className="btn btn-secondary"
+                          style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                        >
+                          Inspect
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

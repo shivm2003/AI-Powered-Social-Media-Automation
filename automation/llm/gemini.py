@@ -161,7 +161,9 @@ def generate_image_with_gemini_browser(
         scale_desc = ar_descriptions.get(aspect_ratio, f"Aspect ratio {aspect_ratio}")
 
         prompt_parts = [
-            f"Generate an image: A stunning, professional commercial social media marketing visual for '{product_name}'.",
+            f"Generate an image: A stunning, professional commercial marketing visual for '{product_name}'.",
+            "Target Demographic: Authentic Indian middle-class family / individuals in a warm contemporary Indian home setting with natural, happy smiling expressions.",
+            "Currency Standard: Strictly Indian Rupee (₹). Any currency symbols or digital screens must display '₹' (NEVER use dollar '$' or foreign currency).",
             f"Headline text: '{headline}'.",
         ]
         if subheadline:
@@ -171,13 +173,24 @@ def generate_image_with_gemini_browser(
         prompt_parts.append(f"Scale: {scale_desc}.")
         if cta_text:
             prompt_parts.append(f"Call to action: '{cta_text}'.")
-        if skill_image_path:
-            prompt_parts.append("Incorporate the visual elements, color scheme, and branding inspired by the skill reference.")
+        # Auto-resolve fixed branding / reference image if not specified
+        loan_solutions_file = str(Path(__file__).parent.parent.parent / "Loan Solutions.png")
+        if not skill_image_path or not os.path.exists(str(skill_image_path)):
+            if os.path.exists(loan_solutions_file):
+                skill_image_path = loan_solutions_file
+
+        if skill_image_path and os.path.exists(str(skill_image_path)):
+            prompt_parts.append("Incorporate the visual elements, color scheme, and branding inspired by the uploaded reference branding.")
         if custom_instructions:
             prompt_parts.append(f"Details: {custom_instructions}.")
         prompt_parts.append("Photorealistic commercial advertising quality, 8k resolution, crisp lighting, high quality graphic design.")
 
         image_prompt = " ".join(prompt_parts)
+
+        # If reference image exists, upload it to Gemini composer
+        if skill_image_path and os.path.exists(str(skill_image_path)):
+            from browser.human_operator import upload_image_to_gemini
+            upload_image_to_gemini(driver, skill_image_path, logger=logger)
 
         # Locate prompt editor
         editor = None

@@ -104,6 +104,32 @@ async function initializeDatabase(client) {
       value TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS growth_campaigns (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL DEFAULT 'both',
+      location TEXT NOT NULL,
+      target_count INTEGER NOT NULL DEFAULT 10,
+      fb_sent_count INTEGER DEFAULT 0,
+      ig_sent_count INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
+      safety_delay_seconds INTEGER DEFAULT 15,
+      logs TEXT DEFAULT '[]',
+      telegram_message_id TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS growth_logs (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT REFERENCES growth_campaigns(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      target_user_name TEXT,
+      target_user_url TEXT,
+      location TEXT,
+      status TEXT,
+      timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
     INSERT INTO settings (key, value) VALUES ('llm_provider', 'gemini') ON CONFLICT (key) DO NOTHING;
     INSERT INTO settings (key, value) VALUES ('telegram_bot_token', '') ON CONFLICT (key) DO NOTHING;
     INSERT INTO settings (key, value) VALUES ('telegram_chat_id', '') ON CONFLICT (key) DO NOTHING;
@@ -310,9 +336,13 @@ export async function updateCampaignStatus(id, status, extra = {}) {
     setClauses.push(`media_paths = $${paramIdx++}`);
     params.push(typeof extra.media_paths === "string" ? extra.media_paths : JSON.stringify(extra.media_paths));
   }
-  if (extra.telegram_message_id) {
-    setClauses.push(`telegram_message_id = $${paramIdx++}`);
-    params.push(extra.telegram_message_id);
+  if (extra.platforms) {
+    setClauses.push(`platforms = $${paramIdx++}`);
+    params.push(typeof extra.platforms === "string" ? extra.platforms : JSON.stringify(extra.platforms));
+  }
+  if (extra.content_type) {
+    setClauses.push(`content_type = $${paramIdx++}`);
+    params.push(extra.content_type);
   }
   if (extra.revision_notes) {
     setClauses.push(`revision_notes = $${paramIdx++}`);
@@ -385,3 +415,57 @@ export async function getDashboardStats() {
     recentCampaigns: recent.rows,
   };
 }
+
+// ── Growth & Outreach Queries ──
+
+export async function createGrowthCampaign(c) {
+  const sql = `
+    INSERT INTO growth_campaigns (
+      id, platform, location, target_count, safety_delay_seconds, status, logs
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `;
+  return query(sql, [
+    c.id,
+    c.platform || "both",
+    c.location,
+    c.target_count || 10,
+    c.safety_delay_seconds || 15,
+    c.status || "pending",
+    typeof c.logs === "string" ? c.logs : JSON.stringify(c.logs || []),
+  ]);
+}
+
+export async function getGrowthCampaignById(id) {
+  const { rows } = await query("SELECT * FROM growth_campaigns WHERE id = $1", [id]);
+  return rows[0] || null;
+}
+
+export async function getAllGrowthCampaigns(limit = 30) {
+  const { rows } = await query("SELECT * FROM growth_campaigns ORDER BY created_at DESC LIMIT $1", [limit]);
+  return rows;
+}
+
+export async function updateGrowthCampaignStatus(id, status, updates = {}) {
+  const { fbSent, igSent, logs } = updates;
+  const sets = ["status = $1", "updated_at = NOW()"];
+  const params = [status];
+
+  if (fbSent !== undefined) {
+    params.push(fbSent);
+    sets.push(`fb_sent_count = $${params.length}`);
+  }
+  if (igSent !== undefined) {
+    params.push(igSent);
+    sets.push(`ig_sent_count = $${params.length}`);
+  }
+  if (logs !== undefined) {
+    params.push(typeof logs === "string" ? logs : JSON.stringify(logs));
+    sets.push(`logs = $${params.length}`);
+  }
+
+  params.push(id);
+  const sql = `UPDATE growth_campaigns SET ${sets.join(", ")} WHERE id = $${params.length}`;
+  return query(sql, params);
+}
+
