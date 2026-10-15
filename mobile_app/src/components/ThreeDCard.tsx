@@ -8,6 +8,7 @@ interface ThreeDCardProps {
   style?: StyleProp<ViewStyle>;
   glowColor?: string;
   borderColor?: string;
+  gradientColors?: readonly [string, string, ...string[]];
   depth?: number;
 }
 
@@ -15,7 +16,8 @@ export const ThreeDCard: React.FC<ThreeDCardProps> = ({
   children,
   style,
   glowColor = Colors.cyanGlow,
-  borderColor = 'rgba(255, 255, 255, 0.12)',
+  borderColor = 'rgba(255, 255, 255, 0.1)',
+  gradientColors = Colors.gradientCard,
   depth = 4,
 }) => {
   return (
@@ -25,13 +27,13 @@ export const ThreeDCard: React.FC<ThreeDCardProps> = ({
         {
           shadowColor: glowColor,
           borderBottomWidth: depth,
-          borderBottomColor: 'rgba(0, 0, 0, 0.65)',
+          borderBottomColor: 'rgba(0, 0, 0, 0.7)',
         },
         style,
       ]}
     >
       <LinearGradient
-        colors={['#172238', '#0D1424', '#080C16']}
+        colors={gradientColors}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[
@@ -41,7 +43,7 @@ export const ThreeDCard: React.FC<ThreeDCardProps> = ({
           },
         ]}
       >
-        {/* Subtle 3D Top Specular Highlight */}
+        {/* Subtle Top Specular Glass Reflection */}
         <View style={styles.specularHighlight} />
         {children}
       </LinearGradient>
@@ -51,16 +53,17 @@ export const ThreeDCard: React.FC<ThreeDCardProps> = ({
 
 const styles = StyleSheet.create({
   outerContainer: {
-    borderRadius: 20,
-    backgroundColor: '#070A12',
+    borderRadius: 22,
+    backgroundColor: '#050811',
     marginVertical: 8,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 8,
+    position: 'relative',
   },
   innerCard: {
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 16,
     borderWidth: 1.5,
     overflow: 'hidden',
@@ -69,8 +72,8 @@ const styles = StyleSheet.create({
   specularHighlight: {
     position: 'absolute',
     top: 0,
-    left: 20,
-    right: 20,
+    left: 24,
+    right: 24,
     height: 1.5,
     backgroundColor: 'rgba(255, 255, 255, 0.35)',
     borderRadius: 1,

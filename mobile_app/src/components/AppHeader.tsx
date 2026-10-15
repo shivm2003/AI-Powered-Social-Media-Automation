@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, Platform, StatusBar as RNStatusBar } from 'react-native';
 import { Colors } from '../styles/theme';
 
 interface AppHeaderProps {
@@ -33,55 +33,53 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </View>
           <Text style={styles.tagline}>Your Social Media, Supercharged by AI</Text>
         </View>
-      </View>
 
-      {/* Internal Device Storage Status Capsule */}
-      <View style={styles.memoryCapsule}>
-        <View style={styles.memoryIndicatorDot} />
-        <View style={styles.memoryTextRow}>
-          <Text style={styles.memoryLabel}>LOCAL HARDWARE VAULT:</Text>
-          <Text style={styles.memoryValue}>
-            💾 {memoryUsage} ({totalCampaigns} Saved)
-          </Text>
+        {/* Compact On-Device Vault Pill */}
+        <View style={styles.vaultCapsule}>
+          <View style={styles.vaultDot} />
+          <Text style={styles.vaultText}>100% OFFLINE</Text>
         </View>
       </View>
     </View>
   );
 };
 
+const topInset = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) + 8 : 48;
+
 const styles = StyleSheet.create({
   headerContainer: {
     paddingHorizontal: 16,
-    paddingTop: 48,
-    paddingBottom: 14,
-    backgroundColor: '#070A12',
+    paddingTop: topInset,
+    paddingBottom: 12,
+    backgroundColor: '#040711',
     borderBottomWidth: 1.5,
     borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   brandingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   logoFrame3D: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: Colors.cyan,
     shadowColor: Colors.cyanGlow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.7,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
     elevation: 8,
-    backgroundColor: '#0D1424',
+    backgroundColor: '#0A0F1D',
   },
   logoImage: {
     width: '100%',
     height: '100%',
   },
   titleColumn: {
-    marginLeft: 12,
+    marginLeft: 10,
     flex: 1,
   },
   nameRow: {
@@ -89,70 +87,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brandTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
   badge3D: {
-    marginLeft: 8,
-    backgroundColor: 'rgba(124, 92, 252, 0.25)',
+    marginLeft: 6,
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
     borderWidth: 1,
     borderColor: Colors.primary,
     borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
   badgeText: {
     color: Colors.cyan,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   tagline: {
-    color: Colors.textSecondary,
-    fontSize: 11,
+    color: Colors.textMuted,
+    fontSize: 10,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
   },
-  memoryCapsule: {
-    marginTop: 10,
+  vaultCapsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 8,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 6,
   },
-  memoryIndicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  vaultDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: Colors.emerald,
     shadowColor: Colors.emeraldGlow,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 4,
   },
-  memoryTextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  memoryLabel: {
+  vaultText: {
     color: Colors.emerald,
     fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  memoryValue: {
-    color: '#E2E8F0',
-    fontSize: 11,
-    fontWeight: '600',
+    letterSpacing: 0.5,
   },
 });

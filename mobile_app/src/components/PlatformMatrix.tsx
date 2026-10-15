@@ -12,7 +12,7 @@ export const PlatformMatrix: React.FC<PlatformMatrixProps> = ({
   selectedPlatforms,
   onChange,
 }) => {
-  const allPlatforms: SupportedPlatform[] = ['facebook', 'instagram', 'whatsapp', 'linkedin'];
+  const allPlatforms: SupportedPlatform[] = ['instagram', 'facebook', 'whatsapp', 'linkedin'];
 
   const togglePlatform = (plat: SupportedPlatform) => {
     if (selectedPlatforms.includes(plat)) {
@@ -34,13 +34,18 @@ export const PlatformMatrix: React.FC<PlatformMatrixProps> = ({
     <View style={styles.container}>
       {/* Quick Select Bar */}
       <View style={styles.quickBar}>
-        <Text style={styles.sectionTitle}>Target Installed Apps</Text>
+        <View>
+          <Text style={styles.sectionTitle}>TARGET SOCIAL NETWORKS</Text>
+          <Text style={styles.sectionSubtitle}>
+            {selectedPlatforms.length} of {allPlatforms.length} apps selected for instant broadcast
+          </Text>
+        </View>
         <View style={styles.quickButtons}>
           <Pressable onPress={selectAll} style={styles.pillAction}>
-            <Text style={styles.pillText}>Select All</Text>
+            <Text style={styles.pillText}>All</Text>
           </Pressable>
           <Pressable onPress={clearAll} style={[styles.pillAction, styles.pillClear]}>
-            <Text style={styles.pillTextMuted}>Clear</Text>
+            <Text style={styles.pillTextMuted}>None</Text>
           </Pressable>
         </View>
       </View>
@@ -58,7 +63,8 @@ export const PlatformMatrix: React.FC<PlatformMatrixProps> = ({
               style={({ pressed }) => [
                 styles.platformCard,
                 {
-                  borderColor: isSelected ? config.color : 'rgba(255, 255, 255, 0.1)',
+                  borderColor: isSelected ? config.color : 'rgba(255, 255, 255, 0.08)',
+                  backgroundColor: isSelected ? 'rgba(14, 21, 38, 0.95)' : '#070C18',
                   shadowColor: isSelected ? config.glowColor : 'transparent',
                   transform: [{ translateY: pressed ? 2 : 0 }],
                 },
@@ -69,8 +75,8 @@ export const PlatformMatrix: React.FC<PlatformMatrixProps> = ({
                 style={[
                   styles.cardBevel,
                   {
-                    backgroundColor: isSelected ? config.color : '#0A0E17',
-                    opacity: isSelected ? 0.35 : 0.8,
+                    backgroundColor: isSelected ? config.color : '#050811',
+                    opacity: isSelected ? 0.4 : 0.8,
                   },
                 ]}
               />
@@ -81,7 +87,7 @@ export const PlatformMatrix: React.FC<PlatformMatrixProps> = ({
                   style={[
                     styles.checkbox,
                     {
-                      borderColor: isSelected ? config.color : 'rgba(255, 255, 255, 0.25)',
+                      borderColor: isSelected ? config.color : 'rgba(255, 255, 255, 0.2)',
                       backgroundColor: isSelected ? config.color : 'transparent',
                     },
                   ]}
@@ -95,13 +101,18 @@ export const PlatformMatrix: React.FC<PlatformMatrixProps> = ({
                   styles.platformName,
                   {
                     color: isSelected ? '#FFFFFF' : Colors.textSecondary,
-                    fontWeight: isSelected ? '700' : '500',
+                    fontWeight: isSelected ? '800' : '600',
                   },
                 ]}
               >
                 {config.name}
               </Text>
-              <Text style={styles.appStateBadge}>
+              <Text
+                style={[
+                  styles.appStateBadge,
+                  isSelected && { color: config.color, fontWeight: '700' },
+                ]}
+              >
                 {isSelected ? 'Ready to post' : 'Tap to enable'}
               </Text>
             </Pressable>
@@ -114,7 +125,7 @@ export const PlatformMatrix: React.FC<PlatformMatrixProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 10,
+    marginVertical: 4,
   },
   quickBar: {
     flexDirection: 'row',
@@ -123,22 +134,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    color: Colors.cyan,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  sectionSubtitle: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
   },
   quickButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   pillAction: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(124, 92, 252, 0.15)',
+    paddingVertical: 5,
+    backgroundColor: 'rgba(0, 242, 254, 0.12)',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(124, 92, 252, 0.3)',
+    borderColor: 'rgba(0, 242, 254, 0.3)',
   },
   pillClear: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -147,23 +163,23 @@ const styles = StyleSheet.create({
   pillText: {
     color: Colors.cyan,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   pillTextMuted: {
     color: Colors.textMuted,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
+    rowGap: 10,
   },
   platformCard: {
     width: '48%',
-    backgroundColor: '#0D1424',
     borderRadius: 16,
-    padding: 14,
+    padding: 12,
     borderWidth: 1.5,
     position: 'relative',
     shadowOffset: { width: 0, height: 6 },
@@ -187,12 +203,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   platformIcon: {
-    fontSize: 22,
+    fontSize: 20,
   },
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 6,
+    borderRadius: 7,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -203,11 +219,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   platformName: {
-    fontSize: 15,
+    fontSize: 14,
     marginBottom: 2,
   },
   appStateBadge: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
 });

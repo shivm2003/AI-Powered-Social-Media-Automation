@@ -29,8 +29,8 @@ interface ThreeDButtonProps {
 export const ThreeDButton: React.FC<ThreeDButtonProps> = ({
   title,
   onPress,
-  gradient = Colors.gradientPrimary,
-  bevelColor = '#4B28C2',
+  gradient = Colors.gradientCosmic,
+  bevelColor = '#3A1E8A',
   glowColor = Colors.primaryGlow,
   icon,
   loading = false,
@@ -58,7 +58,7 @@ export const ThreeDButton: React.FC<ThreeDButtonProps> = ({
         style,
       ]}
     >
-      {/* 3D Bevel Underside */}
+      {/* 3D Bevel Underside Lip */}
       <View
         style={[
           styles.bevelUnderside,
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     position: 'relative',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.5,
     shadowRadius: 14,
     elevation: 8,
   },
@@ -120,17 +120,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.28)',
     overflow: 'hidden',
     paddingHorizontal: 20,
   },
   topGloss: {
     position: 'absolute',
     top: 0,
-    left: 10,
-    right: 10,
+    left: 12,
+    right: 12,
     height: 1.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
     borderRadius: 2,
   },
   contentRow: {
@@ -143,9 +143,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
 });

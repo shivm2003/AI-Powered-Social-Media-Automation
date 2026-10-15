@@ -7,6 +7,7 @@ import {
   Pressable,
   RefreshControl,
   Alert,
+  TextInput,
 } from 'react-native';
 import { Colors } from '../styles/theme';
 import { ThreeDCard } from '../components/ThreeDCard';
@@ -24,6 +25,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
   onNavigate,
 }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'approved' | 'posted'>('all');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -47,8 +49,15 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
   };
 
   const filteredList = campaigns.filter((c) => {
-    if (filter === 'all') return true;
-    return c.status === filter;
+    if (filter !== 'all' && c.status !== filter) return false;
+    if (searchQuery.trim().length > 0) {
+      const q = searchQuery.toLowerCase();
+      const inName = (c.product_name || '').toLowerCase().includes(q);
+      const inHead = (c.headline || '').toLowerCase().includes(q);
+      const inCap = (c.caption || '').toLowerCase().includes(q);
+      return inName || inHead || inCap;
+    }
+    return true;
   });
 
   const handleCopyCaption = async (c: Campaign) => {
@@ -78,6 +87,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.cyan} />}
     >
       {/* Vault Info Header */}
@@ -90,14 +100,32 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
         </View>
         <Text style={styles.vaultTitle}>On-Device Campaign Vault</Text>
         <Text style={styles.vaultDesc}>
-          All campaigns, custom angles, and published history for your products are stored in SQLite internal memory on your Android phone. Zero cloud servers.
+          All campaigns, custom angles, and published history are encrypted in SQLite internal memory on your Android phone. Zero cloud servers.
         </Text>
       </ThreeDCard>
+
+      {/* Search Bar */}
+      <View style={styles.searchBarContainer}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search campaigns, brands, or copy..."
+          placeholderTextColor={Colors.textMuted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')}>
+            <Text style={styles.clearSearch}>✕</Text>
+          </Pressable>
+        )}
+      </View>
 
       {/* Filter Tabs */}
       <View style={styles.filterRow}>
         {(['all', 'approved', 'posted'] as const).map((tab) => {
           const isSelected = filter === tab;
+          const count = campaigns.filter((c) => (tab === 'all' ? true : c.status === tab)).length;
           return (
             <Pressable
               key={tab}
@@ -105,8 +133,8 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
               style={[
                 styles.filterTab,
                 {
-                  backgroundColor: isSelected ? 'rgba(0, 242, 254, 0.15)' : '#0D1424',
-                  borderColor: isSelected ? Colors.cyan : 'rgba(255, 255, 255, 0.1)',
+                  backgroundColor: isSelected ? 'rgba(0, 242, 254, 0.12)' : '#0A0F1D',
+                  borderColor: isSelected ? Colors.cyan : 'rgba(255, 255, 255, 0.08)',
                 },
               ]}
             >
@@ -116,7 +144,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                   { color: isSelected ? Colors.cyan : Colors.textSecondary },
                 ]}
               >
-                {tab.toUpperCase()} ({campaigns.filter((c) => (tab === 'all' ? true : c.status === tab)).length})
+                {tab.toUpperCase()} ({count})
               </Text>
             </Pressable>
           );
@@ -126,7 +154,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
       {/* List of Stored Campaigns */}
       {filteredList.length === 0 ? (
         <ThreeDCard>
-          <Text style={styles.emptyText}>No campaigns found in this filter.</Text>
+          <Text style={styles.emptyText}>No campaigns match your search or filter.</Text>
         </ThreeDCard>
       ) : (
         filteredList.map((c) => (
@@ -141,6 +169,10 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                         c.status === 'posted'
                           ? Colors.emerald
                           : Colors.primary,
+                      backgroundColor:
+                        c.status === 'posted'
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : 'rgba(139, 92, 246, 0.15)',
                     },
                   ]}
                 >
@@ -196,7 +228,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
 
               <ThreeDButton
                 title="Broadcast 🚀"
-                height={40}
+                height={38}
                 onPress={() => {
                   onSelectCampaignForBroadcast(c);
                   onNavigate('approval');
@@ -220,7 +252,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 36,
+    paddingBottom: 40,
   },
   vaultHeaderRow: {
     flexDirection: 'row',
@@ -240,7 +272,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   lockText: {
     color: Colors.emerald,
@@ -258,14 +290,39 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 4,
   },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0A0F1D',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+  },
+  clearSearch: {
+    color: Colors.textMuted,
+    fontSize: 14,
+    paddingHorizontal: 6,
+  },
   filterRow: {
     flexDirection: 'row',
     gap: 8,
-    marginVertical: 14,
+    marginVertical: 12,
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
@@ -309,18 +366,18 @@ const styles = StyleSheet.create({
   },
   dateStamp: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   deleteBtn: {
     padding: 4,
   },
   deleteBtnText: {
-    fontSize: 14,
+    fontSize: 13,
   },
   campaignHeadline: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     marginBottom: 4,
   },
   campaignCaption: {
@@ -349,7 +406,7 @@ const styles = StyleSheet.create({
   },
   secondaryAction: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 10,
     borderWidth: 1,
@@ -357,7 +414,7 @@ const styles = StyleSheet.create({
   },
   secondaryActionText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   emptyText: {

@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from './src/styles/theme';
@@ -295,11 +296,12 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    height: 70,
-    backgroundColor: '#0A0F1D',
+    height: Platform.OS === 'ios' ? 84 : 70,
+    paddingBottom: Platform.OS === 'ios' ? 18 : 6,
+    backgroundColor: '#070C1A',
     borderTopWidth: 1.5,
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'space-around',
     shadowColor: Colors.cyanGlow,
@@ -312,14 +314,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     position: 'relative',
   },
   activeTabItem: {
-    backgroundColor: 'rgba(0, 242, 254, 0.08)',
+    backgroundColor: 'rgba(0, 242, 254, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 242, 254, 0.25)',
+    borderColor: 'rgba(0, 242, 254, 0.3)',
   },
   tabIcon: {
     fontSize: 18,

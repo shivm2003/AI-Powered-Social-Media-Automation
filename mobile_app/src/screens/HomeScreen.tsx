@@ -77,7 +77,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const handleDeleteProduct = (p: Product) => {
     Alert.alert(
       'Delete Product',
-      `Are you sure you want to delete "${p.name}" and its local campaigns from this device?`,
+      `Delete "${p.name}" and all its campaigns from your device storage?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -96,52 +96,61 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.cyan} />}
     >
-      {/* 3D Hardware Storage Meter */}
+      {/* 3D Hardware Vault Meter */}
       <ThreeDCard glowColor={Colors.emeraldGlow} borderColor="rgba(16, 185, 129, 0.35)">
         <View style={styles.hardwareBadgeRow}>
-          <Text style={styles.hardwareBadgeText}>100% DEVICE HARDWARE MEMORY</Text>
+          <View style={styles.statusDotRow}>
+            <View style={styles.liveGreenDot} />
+            <Text style={styles.hardwareBadgeText}>100% ON-DEVICE HARDWARE MEMORY</Text>
+          </View>
           <View style={styles.securityPill}>
             <Text style={styles.securityPillText}>🔒 ZERO CLOUD LEAK</Text>
           </View>
         </View>
 
         <Text style={styles.metricBig}>
-          {diskUsage.readableSize} <Text style={styles.metricSub}>used in sandbox</Text>
+          {diskUsage.readableSize} <Text style={styles.metricSub}>encrypted storage used</Text>
         </Text>
-        <Text style={styles.storageDetail}>
-          Local SQLite Database: <Text style={{ color: Colors.cyan, fontWeight: '700' }}>manvix_ai_local.db</Text>
-        </Text>
-        <Text style={styles.storageSubdetail}>
-          Add any product, brand, or e-commerce shop. All data, custom assets, and copy are saved 100% inside your Android storage.
-        </Text>
-      </ThreeDCard>
 
-      {/* 3D Stat Tiles Grid */}
-      <View style={styles.statsRow}>
-        <View style={styles.halfCol}>
-          <ThreeDCard glowColor={Colors.primaryGlow} borderColor="rgba(124, 92, 252, 0.4)">
-            <Text style={styles.statLabel}>MY PRODUCTS</Text>
-            <Text style={styles.statNumber}>{stats.totalProducts}</Text>
-            <Text style={styles.statCaption}>Added to vault</Text>
-          </ThreeDCard>
+        {/* Storage Visual Gauge Bar */}
+        <View style={styles.storageGaugeBg}>
+          <View style={styles.storageGaugeFill} />
         </View>
 
-        <View style={styles.halfCol}>
-          <ThreeDCard glowColor={Colors.cyanGlow} borderColor="rgba(0, 242, 254, 0.4)">
-            <Text style={styles.statLabel}>BROADCASTS</Text>
-            <Text style={styles.statNumber}>{stats.totalPublished}</Text>
-            <Text style={styles.statCaption}>Multi-app posts</Text>
-          </ThreeDCard>
+        <View style={styles.storageFooterRow}>
+          <Text style={styles.storageDbLabel}>
+            Database: <Text style={{ color: Colors.cyan, fontWeight: '700' }}>manvix_ai_local.db</Text>
+          </Text>
+          <Text style={styles.storageDbSub}>SQLite v3 (WAL)</Text>
+        </View>
+      </ThreeDCard>
+
+      {/* Quick Metrics Bar */}
+      <View style={styles.statsRow}>
+        <View style={styles.statTile}>
+          <Text style={styles.statNumber}>{stats.totalProducts}</Text>
+          <Text style={styles.statLabel}>Products</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statTile}>
+          <Text style={[styles.statNumber, { color: Colors.cyan }]}>{stats.totalCampaigns}</Text>
+          <Text style={styles.statLabel}>Campaigns</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statTile}>
+          <Text style={[styles.statNumber, { color: Colors.emerald }]}>{stats.totalPublished}</Text>
+          <Text style={styles.statLabel}>Broadcasts</Text>
         </View>
       </View>
 
-      {/* Products Carousel / Selector */}
+      {/* Product Selection Carousel */}
       <View style={styles.sectionHeaderRow}>
         <View>
           <Text style={styles.sectionHeader}>Your Products & Brands</Text>
-          <Text style={styles.sectionSubtitle}>Select or add any business/service to promote</Text>
+          <Text style={styles.sectionSubtitle}>Select active product or tap + to add your own</Text>
         </View>
         <Pressable onPress={() => setIsModalVisible(true)} style={styles.addBrandBtn}>
           <Text style={styles.addBrandBtnText}>+ Add Product</Text>
@@ -156,12 +165,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               key={p.id}
               onPress={() => setActiveProductIndex(idx)}
               style={[
-                styles.productChip,
-                isSelected && styles.selectedProductChip,
+                styles.productCardPill,
+                isSelected && styles.selectedProductCardPill,
               ]}
             >
-              <Text style={styles.chipIcon}>{p.logo_icon || '🚀'}</Text>
-              <View>
+              <View style={styles.chipAvatarBox}>
+                <Text style={styles.chipIcon}>{p.logo_icon || '🚀'}</Text>
+              </View>
+              <View style={styles.chipTextWrap}>
                 <Text
                   style={[
                     styles.chipName,
@@ -175,18 +186,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   {p.category}
                 </Text>
               </View>
+              {isSelected && <View style={styles.activeCheckDot} />}
             </Pressable>
           );
         })}
+
+        {/* Plus card inside slider */}
+        <Pressable
+          onPress={() => setIsModalVisible(true)}
+          style={styles.addMoreCard}
+        >
+          <Text style={styles.addMoreIcon}>+</Text>
+          <Text style={styles.addMoreText}>New Brand</Text>
+        </Pressable>
       </ScrollView>
 
-      {/* Active Product Showcase */}
+      {/* Active Product Hero Showcase */}
       {currentProduct && (
         <ThreeDCard glowColor={Colors.cyanGlow} borderColor="rgba(0, 242, 254, 0.35)">
           <View style={styles.brandHeader}>
             <View style={styles.brandTitleWrap}>
               <View style={styles.activeTagRow}>
-                <Text style={styles.brandBadge}>ACTIVE PRODUCT</Text>
+                <Text style={styles.brandBadge}>ACTIVE PROFILE</Text>
                 <Pressable onPress={() => handleDeleteProduct(currentProduct)}>
                   <Text style={styles.deleteLink}>Delete</Text>
                 </Pressable>
@@ -201,8 +222,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <Text style={styles.brandDesc}>{currentProduct.description}</Text>
 
+          {/* Benefits checklist */}
           <View style={styles.benefitList}>
-            {(currentProduct.key_benefits || []).map((b, i) => (
+            {(currentProduct.key_benefits || []).slice(0, 3).map((b, i) => (
               <View key={i} style={styles.benefitItem}>
                 <Text style={styles.bulletCheck}>✓</Text>
                 <Text style={styles.benefitText}>{b}</Text>
@@ -210,20 +232,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             ))}
           </View>
 
+          {/* CTA Preview */}
           <View style={styles.ctaPreviewBar}>
-            <Text style={styles.ctaLabel}>CALL TO ACTION:</Text>
-            <Text style={styles.ctaVal}>{currentProduct.cta_text} → {currentProduct.cta_url}</Text>
+            <Text style={styles.ctaLabel}>STORE / CTA LINK:</Text>
+            <Text style={styles.ctaVal} numberOfLines={1}>
+              {currentProduct.cta_text} → {currentProduct.cta_url}
+            </Text>
           </View>
 
           <ThreeDButton
-            title={`✨ Generate AI Post for ${currentProduct.name}`}
+            title={`✨ Launch AI Studio for ${currentProduct.name}`}
             onPress={() => {
               if (onSelectProductForStudio) {
                 onSelectProductForStudio(currentProduct);
               }
               onNavigate('studio');
             }}
-            gradient={['#7C5CFC', '#00F2FE']}
+            gradient={Colors.gradientCosmic}
             glowColor={Colors.cyanGlow}
             bevelColor="#381D9E"
             style={{ marginTop: 14 }}
@@ -231,9 +256,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </ThreeDCard>
       )}
 
-      {/* Stored Campaigns Header */}
+      {/* Saved Campaigns Stream */}
       <View style={styles.campaignsHeaderRow}>
-        <Text style={styles.sectionHeader}>Saved In Device Memory</Text>
+        <View>
+          <Text style={styles.sectionHeader}>Saved In Device Memory</Text>
+          <Text style={styles.sectionSubtitle}>Recent campaigns ready for multi-app broadcast</Text>
+        </View>
         <Text style={styles.viewAllText} onPress={() => onNavigate('vault')}>
           Open Vault →
         </Text>
@@ -241,16 +269,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {campaigns.length === 0 ? (
         <ThreeDCard>
-          <Text style={styles.emptyNotice}>No campaigns created yet. Tap below to generate one!</Text>
+          <Text style={styles.emptyNotice}>No campaigns created yet. Tap above to synthesize one!</Text>
         </ThreeDCard>
       ) : (
         campaigns.slice(0, 3).map((camp) => (
-          <ThreeDCard key={camp.id} glowColor="rgba(255, 255, 255, 0.15)">
+          <ThreeDCard key={camp.id} glowColor="rgba(255, 255, 255, 0.12)">
             <View style={styles.campTopRow}>
               <View style={styles.statusBadge}>
                 <Text style={styles.statusText}>{camp.status.toUpperCase()}</Text>
               </View>
-              <Text style={styles.campDate}>{new Date(camp.created_at).toLocaleDateString()}</Text>
+              <Text style={styles.campDate}>
+                {new Date(camp.created_at).toLocaleDateString()}
+              </Text>
             </View>
 
             <Text style={styles.campProductBadge}>{camp.product_name}</Text>
@@ -266,8 +296,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 Target Apps: {camp.platforms.join(', ') || 'instagram, facebook'}
               </Text>
               <ThreeDButton
-                title="Post Now 🚀"
-                height={40}
+                title="Broadcast 🚀"
+                height={38}
                 onPress={() => {
                   if (onSelectCampaignForBroadcast) {
                     onSelectCampaignForBroadcast(camp);
@@ -285,7 +315,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <ProductModal
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
-        onProductSaved={(newProd) => {
+        onProductSaved={() => {
           loadData();
           setActiveProductIndex(0);
         }}
@@ -303,13 +333,24 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 36,
+    paddingBottom: 40,
   },
   hardwareBadgeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  statusDotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveGreenDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: Colors.emerald,
   },
   hardwareBadgeText: {
     color: Colors.emerald,
@@ -331,63 +372,88 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   metricBig: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -0.5,
   },
   metricSub: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     fontWeight: '500',
   },
-  storageDetail: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    marginTop: 6,
+  storageGaugeBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginVertical: 10,
+    overflow: 'hidden',
   },
-  storageSubdetail: {
+  storageGaugeFill: {
+    width: '18%',
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: Colors.cyan,
+  },
+  storageFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  storageDbLabel: {
     color: Colors.textMuted,
     fontSize: 11,
-    marginTop: 4,
-    lineHeight: 16,
+  },
+  storageDbSub: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
+    backgroundColor: '#090E1D',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 12,
+    marginVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'space-around',
   },
-  halfCol: {
+  statTile: {
+    alignItems: 'center',
     flex: 1,
   },
-  statLabel: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
   statNumber: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '900',
     color: '#FFFFFF',
-    marginVertical: 4,
   },
-  statCaption: {
-    color: Colors.textSecondary,
-    fontSize: 11,
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 16,
     marginBottom: 8,
   },
   sectionHeader: {
     fontSize: 16,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   sectionSubtitle: {
     fontSize: 11,
@@ -395,7 +461,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addBrandBtn: {
-    backgroundColor: 'rgba(0, 242, 254, 0.15)',
+    backgroundColor: 'rgba(0, 242, 254, 0.12)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
@@ -404,31 +470,44 @@ const styles = StyleSheet.create({
   },
   addBrandBtnText: {
     color: Colors.cyan,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   productSlider: {
     flexDirection: 'row',
     marginVertical: 8,
   },
-  productChip: {
+  productCardPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0D1424',
+    backgroundColor: '#0A0F1F',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
     marginRight: 10,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    gap: 8,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 10,
+    minWidth: 160,
+    position: 'relative',
   },
-  selectedProductChip: {
+  selectedProductCardPill: {
     borderColor: Colors.cyan,
-    backgroundColor: 'rgba(0, 242, 254, 0.12)',
+    backgroundColor: 'rgba(0, 242, 254, 0.1)',
+  },
+  chipAvatarBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#121A2E',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipIcon: {
-    fontSize: 20,
+    fontSize: 18,
+  },
+  chipTextWrap: {
+    flex: 1,
   },
   chipName: {
     color: Colors.textSecondary,
@@ -438,6 +517,38 @@ const styles = StyleSheet.create({
   chipCategory: {
     color: Colors.textMuted,
     fontSize: 10,
+  },
+  activeCheckDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.cyan,
+    position: 'absolute',
+    top: 6,
+    right: 8,
+  },
+  addMoreCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderStyle: 'dashed',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 90,
+  },
+  addMoreIcon: {
+    color: Colors.cyan,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  addMoreText: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
   },
   brandHeader: {
     flexDirection: 'row',
@@ -474,17 +585,17 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   avatarCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#172238',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#16223D',
     borderWidth: 1.5,
     borderColor: Colors.cyan,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarEmoji: {
-    fontSize: 24,
+    fontSize: 22,
   },
   brandDesc: {
     color: Colors.textSecondary,
@@ -518,7 +629,7 @@ const styles = StyleSheet.create({
   },
   ctaLabel: {
     color: Colors.gold,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
   },
   ctaVal: {
@@ -535,8 +646,8 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     color: Colors.cyan,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
   },
   campTopRow: {
     flexDirection: 'row',
@@ -551,7 +662,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   statusBadge: {
-    backgroundColor: 'rgba(124, 92, 252, 0.25)',
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -560,16 +671,16 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: Colors.cyan,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
   },
   campDate: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   campHeadline: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: 4,
   },

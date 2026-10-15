@@ -4,17 +4,16 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TextInput,
   Alert,
   Linking,
-  ActivityIndicator,
   Pressable,
 } from 'react-native';
 import { Colors } from '../styles/theme';
 import { ThreeDCard } from '../components/ThreeDCard';
 import { ThreeDButton } from '../components/ThreeDButton';
 import { PlatformMatrix } from '../components/PlatformMatrix';
+import { SocialPreviewMockup } from '../components/SocialPreviewMockup';
 import {
   SupportedPlatform,
   broadcastToMultiplePlatforms,
@@ -41,25 +40,23 @@ export const ApprovalScreen: React.FC<ApprovalScreenProps> = ({
   const [caption, setCaption] = useState(campaign.caption);
   const [applyUrl, setApplyUrl] = useState(campaign.apply_url || 'https://mybrand.com');
   const [broadcasting, setBroadcasting] = useState(false);
-  const [savingGallery, setSavingGallery] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const handleCopyCaption = async () => {
     await copyCaptionToClipboard(caption, applyUrl);
-    Alert.alert('📋 Copied to Clipboard', 'The full caption and CTA link have been copied to your clipboard!');
+    Alert.alert('📋 Copied!', 'The full caption and CTA link have been copied to your clipboard!');
   };
 
-  const handleSaveToGallery = async () => {
-    setSavingGallery(true);
-    Alert.alert(
-      '🖼️ Media Saved',
-      'The creative has been exported to your internal device media storage.'
-    );
-    setSavingGallery(false);
+  const handleExportMedia = async () => {
+    const success = await exportToDeviceGallery(campaign.local_image_uri);
+    if (success) {
+      Alert.alert('🖼️ Media Exported', 'The creative has been shared/saved.');
+    }
   };
 
   const handleBroadcast = async () => {
     if (selectedPlatforms.length === 0) {
-      Alert.alert('Select Platforms', 'Please select at least one installed platform (e.g., Instagram, Facebook, WhatsApp, or LinkedIn) to proceed.');
+      Alert.alert('Select Target Apps', 'Please select at least one social app (Instagram, Facebook, WhatsApp, or LinkedIn) to proceed.');
       return;
     }
 
@@ -97,8 +94,8 @@ export const ApprovalScreen: React.FC<ApprovalScreenProps> = ({
       }
 
       Alert.alert(
-        '🚀 Multi-App Broadcast Triggered!',
-        `1. Caption & Link copied to clipboard.\n2. Dispatched to selected apps: ${selectedPlatforms.join(', ')}.\n3. Updated in local device database.`,
+        '🚀 Multi-App Broadcast Launched!',
+        `1. Caption & CTA link copied to clipboard.\n2. Dispatched to selected apps: ${selectedPlatforms.join(', ')}.\n3. Updated in local device database.`,
         [
           { text: 'View Vault History', onPress: onNavigateToVault },
           { text: 'Done', style: 'default' },
@@ -112,13 +109,13 @@ export const ApprovalScreen: React.FC<ApprovalScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {/* Top Banner */}
-      <ThreeDCard glowColor={Colors.primaryGlow} borderColor="rgba(124, 92, 252, 0.4)">
+      <ThreeDCard glowColor={Colors.primaryGlow} borderColor="rgba(139, 92, 246, 0.4)">
         <View style={styles.topStatusRow}>
-          <Text style={styles.bannerBadge}>MANVIX NATIVE BROADCAST HUB</Text>
+          <Text style={styles.bannerBadge}>DIRECT NATIVE DISPATCH HUB</Text>
           <View style={styles.memoryPill}>
-            <Text style={styles.memoryPillText}>💾 ON-DEVICE ONLY</Text>
+            <Text style={styles.memoryPillText}>💾 100% OFFLINE</Text>
           </View>
         </View>
         <Text style={styles.bannerTitle}>Review & Multi-App Publish</Text>
@@ -127,60 +124,66 @@ export const ApprovalScreen: React.FC<ApprovalScreenProps> = ({
         </Text>
       </ThreeDCard>
 
-      {/* Creative 3D Visual Preview */}
-      <ThreeDCard glowColor={Colors.cyanGlow} borderColor="rgba(0, 242, 254, 0.35)">
-        <Text style={styles.cardHeaderSmall}>PROMOTIONAL CREATIVE (ON-DEVICE)</Text>
-        <View style={styles.imageFrame3D}>
-          <Image
-            source={require('../../assets/icon.png')}
-            style={styles.creativeImage}
-            resizeMode="cover"
+      {/* Realistic Social Feed Mockup Card */}
+      <SocialPreviewMockup
+        productName={campaign.product_name}
+        headline={headline}
+        caption={caption}
+        hashtags={campaign.hashtags}
+        applyUrl={applyUrl}
+        ctaText="Shop Now"
+      />
+
+      {/* Quick Action Toolbar */}
+      <View style={styles.quickActionRow}>
+        <Pressable onPress={handleCopyCaption} style={styles.actionPill}>
+          <Text style={styles.actionPillIcon}>📋</Text>
+          <Text style={styles.actionPillText}>Copy Text</Text>
+        </Pressable>
+
+        <Pressable onPress={() => setEditMode(!editMode)} style={styles.actionPill}>
+          <Text style={styles.actionPillIcon}>✏️</Text>
+          <Text style={styles.actionPillText}>{editMode ? 'Close Edit' : 'Edit Copy'}</Text>
+        </Pressable>
+
+        <Pressable onPress={handleExportMedia} style={styles.actionPill}>
+          <Text style={styles.actionPillIcon}>💾</Text>
+          <Text style={styles.actionPillText}>Save Image</Text>
+        </Pressable>
+      </View>
+
+      {/* Inline Editor Drawer (if enabled) */}
+      {editMode && (
+        <ThreeDCard glowColor="rgba(255, 255, 255, 0.15)">
+          <Text style={styles.cardHeaderSmall}>HEADLINE (CLICK TO EDIT)</Text>
+          <TextInput
+            style={styles.headlineInput}
+            value={headline}
+            onChangeText={setHeadline}
+            multiline
           />
-        </View>
 
-        <View style={styles.mediaActionBar}>
-          <Pressable onPress={handleSaveToGallery} style={styles.pillButton}>
-            <Text style={styles.pillButtonText}>💾 Export to Device Gallery</Text>
-          </Pressable>
-          <Pressable onPress={handleCopyCaption} style={styles.pillButton}>
-            <Text style={styles.pillButtonText}>📋 Copy Text & Link</Text>
-          </Pressable>
-        </View>
-      </ThreeDCard>
+          <Text style={[styles.cardHeaderSmall, { marginTop: 14 }]}>MARKETING CAPTION (CLICK TO EDIT)</Text>
+          <TextInput
+            style={styles.captionInput}
+            value={caption}
+            onChangeText={setCaption}
+            multiline
+            numberOfLines={5}
+          />
 
-      {/* Editable Caption Section */}
-      <ThreeDCard glowColor="rgba(255, 255, 255, 0.15)">
-        <Text style={styles.cardHeaderSmall}>HEADLINE (CLICK TO EDIT)</Text>
-        <TextInput
-          style={styles.headlineInput}
-          value={headline}
-          onChangeText={setHeadline}
-          multiline
-        />
-
-        <Text style={[styles.cardHeaderSmall, { marginTop: 14 }]}>MARKETING CAPTION (CLICK TO EDIT)</Text>
-        <TextInput
-          style={styles.captionInput}
-          value={caption}
-          onChangeText={setCaption}
-          multiline
-          numberOfLines={6}
-        />
-
-        <View style={styles.urlCard}>
-          <Text style={styles.urlLabel}>TARGET CTA LINK:</Text>
-          <Text
-            style={styles.urlValue}
-            numberOfLines={1}
-            onPress={() => Linking.openURL(applyUrl)}
-          >
-            {applyUrl}
-          </Text>
-        </View>
-      </ThreeDCard>
+          <Text style={[styles.cardHeaderSmall, { marginTop: 14 }]}>CTA / STORE URL</Text>
+          <TextInput
+            style={styles.headlineInput}
+            value={applyUrl}
+            onChangeText={setApplyUrl}
+            autoCapitalize="none"
+          />
+        </ThreeDCard>
+      )}
 
       {/* 3D Platform Selector Matrix */}
-      <ThreeDCard glowColor={Colors.primaryGlow} borderColor="rgba(124, 92, 252, 0.3)">
+      <ThreeDCard glowColor={Colors.primaryGlow} borderColor="rgba(139, 92, 246, 0.3)">
         <PlatformMatrix
           selectedPlatforms={selectedPlatforms}
           onChange={setSelectedPlatforms}
@@ -191,15 +194,15 @@ export const ApprovalScreen: React.FC<ApprovalScreenProps> = ({
       <ThreeDButton
         title={
           broadcasting
-            ? 'Dispatching Intents...'
+            ? 'Dispatching Android Intents...'
             : `🚀 Broadcast to ${selectedPlatforms.length} Selected Apps`
         }
         onPress={handleBroadcast}
         loading={broadcasting}
-        gradient={['#7C5CFC', '#00F2FE']}
+        gradient={Colors.gradientCosmic}
         glowColor={Colors.cyanGlow}
         bevelColor="#381D9E"
-        style={{ marginTop: 12 }}
+        style={{ marginTop: 14 }}
       />
 
       <View style={{ height: 40 }} />
@@ -234,7 +237,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   memoryPillText: {
     color: Colors.emerald,
@@ -252,50 +255,43 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 4,
   },
+  quickActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 4,
+  },
+  actionPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0A0F1D',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  actionPillIcon: {
+    fontSize: 14,
+  },
+  actionPillText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   cardHeaderSmall: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: 8,
-  },
-  imageFrame3D: {
-    width: '100%',
-    height: 240,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: '#05070D',
-  },
-  creativeImage: {
-    width: '100%',
-    height: '100%',
-  },
-  mediaActionBar: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  pillButton: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  pillButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
   },
   headlineInput: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    backgroundColor: '#0D1424',
+    backgroundColor: '#070A12',
     padding: 10,
     borderRadius: 10,
     borderWidth: 1,
@@ -304,34 +300,13 @@ const styles = StyleSheet.create({
   captionInput: {
     color: Colors.textSecondary,
     fontSize: 13,
-    backgroundColor: '#0D1424',
+    backgroundColor: '#070A12',
     padding: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     textAlignVertical: 'top',
-    minHeight: 110,
+    minHeight: 100,
     lineHeight: 19,
-  },
-  urlCard: {
-    marginTop: 12,
-    backgroundColor: 'rgba(0, 242, 254, 0.06)',
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 242, 254, 0.25)',
-  },
-  urlLabel: {
-    color: Colors.cyan,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  urlValue: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
 });
