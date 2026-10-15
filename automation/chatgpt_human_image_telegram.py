@@ -32,6 +32,7 @@ import config
 from browser.human_operator import (
     step1_click_and_launch_chrome,
     step2_select_shivam_account,
+    upload_image_to_chatgpt,
     human_type,
     human_sleep,
     TARGET_NAME,
@@ -128,17 +129,6 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
     product_name = (custom_product or {}).get("name", "Loan Solutions")
     loan_solutions_file = str(BASE_DIR / "Loan Solutions.png")
 
-    # If reference image exists (Loan Solutions), attach it to ChatGPT composer like human
-    if os.path.exists(loan_solutions_file):
-        try:
-            file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-            if file_inputs:
-                file_inputs[0].send_keys(os.path.abspath(loan_solutions_file))
-                human_sleep(1.5, 2.5)
-                print(f"📎 Uploaded reference image to ChatGPT composer: {os.path.basename(loan_solutions_file)}", flush=True)
-        except Exception as e_up:
-            print(f"Notice on file attachment: {e_up}", flush=True)
-
     prompt_text = (
         f"--- TASK 1: CLEAN VISUAL ARTWORK (IMAGE GENERATION) ---\n"
         f"Generate a clean, high-converting commercial marketing image for '{product_name}'.\n"
@@ -156,7 +146,7 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
         "• Hashtags: 5-6 viral India-relevant hashtags (e.g. #LoanSolutions #HomeLoanIndia #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom - written ONLY here in chat text, NEVER painted inside the image)."
     )
 
-    # ── Step 4: Verify and ensure prompt is properly pasted via PromptPasteVerifierAgent ──
+    # ── Step 4A: Verify and ensure prompt is properly pasted FIRST via PromptPasteVerifierAgent ──
     from llm.prompt_paste_verifier_agent import PromptPasteVerifierAgent
     verifier_agent = PromptPasteVerifierAgent(driver)
 
@@ -173,11 +163,25 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
             "https://loansolutions.everythingrental.in/application"
         ]
     )
-    print(f"✅ Step 4 Complete: Prompt paste status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}% match, {paste_res.actual_length} chars, Send ready: {paste_res.send_button_ready}). Method: {paste_res.method_used}", flush=True)
+    print(f"✅ Step 4A Complete: Prompt paste status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}% match, {paste_res.actual_length} chars). Method: {paste_res.method_used}", flush=True)
     human_sleep(0.5, 1.0)
 
-    # Click send button via PromptPasteVerifierAgent
-    verifier_agent.click_send(driver=driver, platform="chatgpt")
+    # ── Step 4B: Attach reference image to ChatGPT composer safely AFTER prompt is verified in place ──
+    if os.path.exists(loan_solutions_file):
+        print(f"📎 Attaching reference image to ChatGPT composer: {os.path.basename(loan_solutions_file)}...", flush=True)
+        upload_image_to_chatgpt(driver, loan_solutions_file)
+        human_sleep(1.0, 1.8)
+
+    # ── Step 4C: Wait for Send button to become ready and click Send ──
+    for _ in range(12):
+        send_ready, send_details = verifier_agent.inspect_send_button(driver, "chatgpt")
+        if send_ready:
+            break
+        time.sleep(0.5)
+
+    send_success = verifier_agent.click_send(driver=driver, platform="chatgpt")
+    if not send_success:
+        input_box.send_keys(Keys.ENTER)
     human_sleep(1.0, 1.5)
 
     # ── Step 5: Wait for image generation like human ──

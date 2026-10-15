@@ -32,6 +32,7 @@ try:
         get_telegram_credentials,
         make_telegram_request,
         answer_callback_query,
+        build_platform_keyboard,
         send_platform_selection_menu,
         send_password_request_prompt,
         delete_telegram_message,
@@ -56,6 +57,7 @@ except (ImportError, ModuleNotFoundError):
         get_telegram_credentials,
         make_telegram_request,
         answer_callback_query,
+        build_platform_keyboard,
         send_platform_selection_menu,
         send_password_request_prompt,
         delete_telegram_message,
@@ -379,6 +381,142 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
     threading.Thread(target=_exec_growth, daemon=True).start()
 
 
+def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms: list, message_id: int = None):
+    """
+    Publishes post to multiple social platforms (Facebook, Instagram, LinkedIn, WhatsApp)
+    in coordinated sequence with live Telegram progress reporting!
+    """
+    import threading
+
+    def _exec():
+        try:
+            campaign_data = get_campaign_data(campaign_id)
+            media_path = campaign_data.get("media_path")
+            caption = campaign_data.get("caption")
+
+            plat_names = [p.capitalize() for p in platforms]
+            init_text = (
+                f"🚀 <b>Multi-Platform Broadcast Started!</b>\n\n"
+                f"🎯 <b>Target Platforms ({len(platforms)}):</b> {', '.join(plat_names)}\n"
+                f"🖼️ <b>Media:</b> <code>{os.path.basename(media_path) if media_path else 'Branded Graphic'}</code>\n"
+                f"⏳ <b>Status:</b> Initializing browser sessions & preparing posts..."
+            )
+            if message_id:
+                try:
+                    edit_message_text(chat_id, message_id, init_text)
+                except Exception:
+                    pass
+
+            successful_platforms = []
+            failed_platforms = []
+
+            for idx, plat in enumerate(platforms):
+                plat_clean = plat.lower().strip()
+                p_label = {
+                    "facebook": "📘 Facebook",
+                    "instagram": "📸 Instagram",
+                    "linkedin": "💼 LinkedIn",
+                    "whatsapp": "💬 WhatsApp"
+                }.get(plat_clean, plat_clean.capitalize())
+
+                send_text_message(
+                    chat_id,
+                    f"⏳ <b>Step {idx+1}/{len(platforms)}: Publishing to {p_label}...</b>"
+                )
+
+                try:
+                    if plat_clean == "facebook":
+                        from config import PLATFORM_URLS
+                        driver = browser.navigate("facebook", PLATFORM_URLS["facebook"])
+                        time.sleep(2)
+                        if is_facebook_login_needed(driver):
+                            chat_sessions[chat_id] = {
+                                "action": "AWAITING_PASSWORD",
+                                "platform": "facebook",
+                                "campaign_id": campaign_id,
+                                "media_path": media_path,
+                                "caption": caption,
+                                "remaining_platforms": platforms[idx+1:]
+                            }
+                            send_password_request_prompt(chat_id, "facebook", campaign_id)
+                            # Pause execution to await password
+                            return
+                        else:
+                            res = post_to_facebook(media_path=media_path, caption=caption)
+                            if res.get("status") == "success":
+                                successful_platforms.append("Facebook")
+                                send_text_message(chat_id, "✅ <b>Facebook:</b> Successfully published!")
+                            else:
+                                failed_platforms.append(f"Facebook ({res.get('message', 'error')})")
+                                send_text_message(chat_id, f"⚠️ Facebook notice: {res.get('message')}")
+
+                    elif plat_clean == "instagram":
+                        res = post_to_instagram(media_path=media_path, caption=caption)
+                        if res.get("status") == "success":
+                            successful_platforms.append("Instagram")
+                            send_text_message(chat_id, "✅ <b>Instagram:</b> Successfully published!")
+                        else:
+                            failed_platforms.append(f"Instagram ({res.get('message', 'error')})")
+                            send_text_message(chat_id, f"⚠️ Instagram notice: {res.get('message')}")
+
+                    elif plat_clean == "linkedin":
+                        res = post_to_linkedin(media_path=media_path, caption=caption)
+                        if res.get("status") == "success":
+                            successful_platforms.append("LinkedIn")
+                            send_text_message(chat_id, "✅ <b>LinkedIn:</b> Successfully published!")
+                        else:
+                            failed_platforms.append(f"LinkedIn ({res.get('message', 'error')})")
+                            send_text_message(chat_id, f"⚠️ LinkedIn notice: {res.get('message')}")
+
+                    elif plat_clean == "whatsapp":
+                        from social.whatsapp import post_to_whatsapp
+                        res = post_to_whatsapp(media_path=media_path, caption=caption)
+                        if res.get("status") == "success":
+                            successful_platforms.append("WhatsApp")
+                            send_text_message(chat_id, "✅ <b>WhatsApp:</b> Successfully published!")
+                        else:
+                            failed_platforms.append(f"WhatsApp ({res.get('message', 'error')})")
+                            send_text_message(chat_id, f"⚠️ WhatsApp notice: {res.get('message')}")
+
+                except Exception as e_p:
+                    logger.error(f"Error publishing to {plat_clean}: {e_p}")
+                    failed_platforms.append(f"{plat_clean.capitalize()} ({e_p})")
+                    send_text_message(chat_id, f"⚠️ Error publishing to {plat_clean}: {e_p}")
+
+                # Human-like delay between multiple platform posts
+                if idx < len(platforms) - 1:
+                    time.sleep(2.5)
+
+            # Record in database
+            if successful_platforms:
+                update_campaign_status_db(
+                    campaign_id,
+                    status="posted",
+                    platform=",".join([p.lower() for p in successful_platforms]),
+                    media_path=media_path,
+                    caption=caption
+                )
+
+            # Send final celebratory summary card
+            succ_str = "\n".join([f"• ✅ <b>{p}</b>" for p in successful_platforms]) if successful_platforms else "None"
+            fail_str = f"\n\n⚠️ <b>Issues:</b>\n" + "\n".join([f"• ❌ {p}" for p in failed_platforms]) if failed_platforms else ""
+
+            summary_text = (
+                f"🎉 <b>Multi-Platform Broadcast Summary</b>\n\n"
+                f"<b>Successfully Published To:</b>\n{succ_str}{fail_str}\n\n"
+                f"🖼️ <b>Media:</b> <code>{os.path.basename(media_path) if media_path else 'Graphic'}</code>\n"
+                f"📝 <b>Caption:</b>\n{caption[:160]}...\n\n"
+                f"<i>Campaign {campaign_id[:8]} marked as posted in database.</i>"
+            )
+            send_text_message(chat_id, summary_text)
+
+        except Exception as e_main:
+            logger.error(f"Error in multi-platform execution: {e_main}")
+            send_text_message(chat_id, f"⚠️ Multi-platform broadcast error: {e_main}")
+
+    threading.Thread(target=_exec, daemon=True).start()
+
+
 def handle_callback_query(callback: dict):
     """Processes inline button clicks."""
     callback_id = callback.get("id")
@@ -401,7 +539,14 @@ def handle_callback_query(callback: dict):
     if callback_data.startswith("approve:"):
         campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
         if callback_id:
-            answer_callback_query(callback_id, text="✅ Campaign Approved! Choose platform below.")
+            answer_callback_query(callback_id, text="✅ Campaign Approved! Choose platform(s) below.")
+
+        # Default multi-selection is Facebook + Instagram
+        default_plats = ["facebook", "instagram"]
+        chat_sessions[chat_id] = {
+            "selected_platforms": default_plats,
+            "campaign_id": campaign_id
+        }
 
         # Update buttons on the preview message so user sees approved state
         if message_id and chat_id:
@@ -409,15 +554,96 @@ def handle_callback_query(callback: dict):
                 edit_message_reply_markup(
                     chat_id,
                     message_id,
-                    keyboard={"inline_keyboard": [[{"text": "✅ Approved (Selecting platform ⬇️)", "callback_data": "noop"}]]}
+                    keyboard={"inline_keyboard": [[{"text": "✅ Approved (Selecting platforms ⬇️)", "callback_data": "noop"}]]}
                 )
             except Exception as e_ed:
                 logger.debug(f"Edit preview markup note: {e_ed}")
 
-        # Send platform selection menu with action buttons and Cancel button
-        send_platform_selection_menu(campaign_id, chat_id=chat_id)
+        # Send multi-platform selection menu with action buttons and live checkboxes
+        send_platform_selection_menu(campaign_id, chat_id=chat_id, selected_platforms=default_plats)
 
-    # 2. User selected a platform (e.g. post_to:facebook:<campaign_id>)
+    # 2. User toggles a platform (checkbox toggle)
+    elif callback_data.startswith("toggle_plat:"):
+        parts = callback_data.split(":")
+        platform = parts[1].lower() if len(parts) > 1 else "facebook"
+        campaign_id = parts[2] if len(parts) > 2 else ""
+
+        session = chat_sessions.setdefault(chat_id, {})
+        current = session.get("selected_platforms", ["facebook", "instagram"])
+        if platform in current:
+            current = [p for p in current if p != platform]
+            status_text = f"Removed {platform.capitalize()} ⬜"
+        else:
+            current.append(platform)
+            status_text = f"Selected {platform.capitalize()} ✅"
+        session["selected_platforms"] = current
+        session["campaign_id"] = campaign_id
+
+        if callback_id:
+            answer_callback_query(callback_id, text=status_text)
+
+        if message_id and chat_id:
+            try:
+                edit_message_reply_markup(
+                    chat_id,
+                    message_id,
+                    keyboard=build_platform_keyboard(campaign_id, current)
+                )
+            except Exception as e_tg:
+                logger.debug(f"Toggle platform markup note: {e_tg}")
+
+    # 3. User clicked [✨ Select All]
+    elif callback_data.startswith("plat_select_all:"):
+        campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
+        all_plats = ["facebook", "instagram", "linkedin", "whatsapp"]
+        chat_sessions.setdefault(chat_id, {})["selected_platforms"] = all_plats
+        chat_sessions[chat_id]["campaign_id"] = campaign_id
+        if callback_id:
+            answer_callback_query(callback_id, text="Selected all 4 platforms! ✅")
+        if message_id and chat_id:
+            try:
+                edit_message_reply_markup(
+                    chat_id,
+                    message_id,
+                    keyboard=build_platform_keyboard(campaign_id, all_plats)
+                )
+            except Exception as e_sa:
+                logger.debug(f"Select all markup note: {e_sa}")
+
+    # 4. User clicked [🔄 Clear All]
+    elif callback_data.startswith("plat_clear_all:"):
+        campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
+        chat_sessions.setdefault(chat_id, {})["selected_platforms"] = []
+        chat_sessions[chat_id]["campaign_id"] = campaign_id
+        if callback_id:
+            answer_callback_query(callback_id, text="Cleared all selections 🔄")
+        if message_id and chat_id:
+            try:
+                edit_message_reply_markup(
+                    chat_id,
+                    message_id,
+                    keyboard=build_platform_keyboard(campaign_id, [])
+                )
+            except Exception as e_ca:
+                logger.debug(f"Clear all markup note: {e_ca}")
+
+    # 5. User clicked [🚀 Publish to X Selected Platforms]
+    elif callback_data.startswith("publish_multi:"):
+        campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
+        session = chat_sessions.get(chat_id, {})
+        selected = session.get("selected_platforms", ["facebook", "instagram"])
+        if not selected:
+            if callback_id:
+                answer_callback_query(callback_id, text="⚠️ Please select at least one platform before publishing!")
+            return
+
+        plat_str = " + ".join([p.capitalize() for p in selected])
+        if callback_id:
+            answer_callback_query(callback_id, text=f"🚀 Broadcasting to {plat_str}!")
+
+        launch_multi_platform_publication(chat_id, campaign_id, selected, message_id=message_id)
+
+    # 6. Legacy single-platform button fallback (e.g. post_to:facebook:<campaign_id>)
     elif callback_data.startswith("post_to:"):
         parts = callback_data.split(":")
         platform = parts[1].lower() if len(parts) > 1 else "facebook"
@@ -426,106 +652,7 @@ def handle_callback_query(callback: dict):
         if callback_id:
             answer_callback_query(callback_id, text=f"🚀 Selected {platform.capitalize()}!")
 
-        # Update the platform menu message to show publication in progress
-        if message_id and chat_id:
-            try:
-                edit_message_text(
-                    chat_id,
-                    message_id,
-                    f"🚀 <b>Selected {platform.capitalize()}!</b> Connecting to browser and publishing post..."
-                )
-            except Exception as e_ed:
-                logger.debug(f"Edit platform menu note: {e_ed}")
-
-        campaign_data = get_campaign_data(campaign_id)
-        media_path = campaign_data.get("media_path")
-        caption = campaign_data.get("caption")
-
-        import threading
-
-        if platform == "facebook":
-            def _run_fb_post():
-                try:
-                    from config import PLATFORM_URLS
-                    driver = browser.navigate("facebook", PLATFORM_URLS["facebook"])
-                    time.sleep(3)
-
-                    if is_facebook_login_needed(driver):
-                        chat_sessions[chat_id] = {
-                            "action": "AWAITING_PASSWORD",
-                            "platform": "facebook",
-                            "campaign_id": campaign_id,
-                            "media_path": media_path,
-                            "caption": caption,
-                        }
-                        send_password_request_prompt(chat_id, "facebook", campaign_id)
-                    else:
-                        send_text_message(chat_id, "✅ Facebook session verified. Publishing post now...")
-                        res = post_to_facebook(media_path=media_path, caption=caption)
-                        if res.get("status") == "success":
-                            update_campaign_status_db(campaign_id, "posted", platform="facebook", media_path=media_path, caption=caption)
-                            send_text_message(
-                                chat_id,
-                                f"🎉 <b>Success!</b> Post successfully published to Facebook!\n\n"
-                                f"🖼️ Media: <code>{os.path.basename(media_path) if media_path else 'Graphic'}</code>\n"
-                                f"📝 Caption preview: {caption[:120]}..."
-                            )
-                        else:
-                            send_text_message(chat_id, f"⚠️ Facebook post status: {res.get('message')}")
-                except Exception as e_fb:
-                    logger.error(f"Error posting to Facebook: {e_fb}")
-                    send_text_message(chat_id, f"⚠️ Facebook error: {e_fb}")
-
-            threading.Thread(target=_run_fb_post, daemon=True).start()
-
-        elif platform == "instagram":
-            def _run_ig_post():
-                try:
-                    send_text_message(chat_id, "📸 Connecting to Instagram and preparing post...")
-                    res = post_to_instagram(media_path=media_path, caption=caption)
-                    if res.get("status") == "success":
-                        update_campaign_status_db(campaign_id, "posted", platform="instagram", media_path=media_path, caption=caption)
-                        send_text_message(chat_id, f"🎉 <b>Success!</b> Post successfully published to Instagram!\n\n📝 Caption: {caption[:120]}...")
-                    else:
-                        send_text_message(chat_id, f"⚠️ Instagram status: {res.get('message')}")
-                except Exception as e_ig:
-                    logger.error(f"Error posting to Instagram: {e_ig}")
-                    send_text_message(chat_id, f"⚠️ Instagram error: {e_ig}")
-
-            threading.Thread(target=_run_ig_post, daemon=True).start()
-
-        elif platform == "linkedin":
-            def _run_li_post():
-                try:
-                    send_text_message(chat_id, "💼 Connecting to LinkedIn and preparing post...")
-                    res = post_to_linkedin(media_path=media_path, caption=caption)
-                    if res.get("status") == "success":
-                        update_campaign_status_db(campaign_id, "posted", platform="linkedin", media_path=media_path, caption=caption)
-                        send_text_message(chat_id, f"🎉 <b>Success!</b> Post successfully published to LinkedIn!\n\n📝 Caption: {caption[:120]}...")
-                    else:
-                        send_text_message(chat_id, f"⚠️ LinkedIn status: {res.get('message')}")
-                except Exception as e_li:
-                    logger.error(f"Error posting to LinkedIn: {e_li}")
-                    send_text_message(chat_id, f"⚠️ LinkedIn error: {e_li}")
-
-            threading.Thread(target=_run_li_post, daemon=True).start()
-
-        elif platform == "whatsapp":
-            def _run_wa_post():
-                try:
-                    from social.whatsapp import post_to_whatsapp
-                    send_text_message(chat_id, "💬 Connecting to WhatsApp Web and preparing post...")
-                    res = post_to_whatsapp(media_path=media_path, caption=caption)
-                    if res.get("status") == "success":
-                        update_campaign_status_db(campaign_id, "posted", platform="whatsapp", media_path=media_path, caption=caption)
-                        send_text_message(chat_id, f"🎉 <b>Success!</b> Post successfully published to WhatsApp!\n\n📝 Caption: {caption[:120]}...")
-                    else:
-                        send_text_message(chat_id, f"⚠️ WhatsApp status: {res.get('message')}")
-                except Exception as e_wa:
-                    logger.error(f"Error posting to WhatsApp: {e_wa}")
-                    send_text_message(chat_id, f"⚠️ WhatsApp error: {e_wa}")
-
-            threading.Thread(target=_run_wa_post, daemon=True).start()
+        launch_multi_platform_publication(chat_id, campaign_id, [platform], message_id=message_id)
 
     # 3. User clicked [❌ Cancel] on Platform selection menu
     elif callback_data.startswith("cancel_post:"):
@@ -1015,6 +1142,9 @@ def handle_text_message(message: dict):
         login_res = submit_facebook_login(driver, password=password, email_or_user=email)
         send_text_message(chat_id, f"🔐 {login_res.get('message', 'Login processed.')}")
 
+        # Check for remaining platforms in multi-platform queue
+        remaining = session.get("remaining_platforms", [])
+
         # Clear session
         del chat_sessions[chat_id]
 
@@ -1031,8 +1161,13 @@ def handle_text_message(message: dict):
                 f"🖼️ Media: <code>{os.path.basename(media_path) if media_path else 'Graphic'}</code>\n"
                 f"📝 Caption preview: {caption[:120]}..."
             )
+            if remaining:
+                send_text_message(chat_id, f"🔄 Continuing multi-platform broadcast with: {', '.join([r.capitalize() for r in remaining])}...")
+                launch_multi_platform_publication(chat_id, campaign_id, remaining)
         else:
             send_text_message(chat_id, f"⚠️ Post result: {post_res.get('message')}")
+            if remaining:
+                launch_multi_platform_publication(chat_id, campaign_id, remaining)
 
     # User provided revision instructions
     elif session.get("action") == "AWAITING_REVISION":

@@ -76,16 +76,6 @@ export const LLM_PROVIDERS = {
     colorMuted: "hsla(160, 60%, 45%, 0.15)",
     url: "https://chatgpt.com",
     capabilities: ["text", "image", "code"],
-    description: "Advanced language model with DALL-E image generation",
-  },
-  claude: {
-    name: "Anthropic Claude",
-    icon: "🧠",
-    color: "hsl(25, 85%, 55%)",
-    colorMuted: "hsla(25, 85%, 55%, 0.15)",
-    url: "https://claude.ai",
-    capabilities: ["text", "code"],
-    description: "Thoughtful AI assistant with strong reasoning capabilities",
   },
 };
 

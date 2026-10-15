@@ -305,35 +305,88 @@ def answer_callback_query(callback_id: str, text: str = None) -> dict:
     return make_telegram_request(bot_token, "answerCallbackQuery", data=data)
 
 
-def send_platform_selection_menu(campaign_id: str, chat_id: str = None) -> dict:
-    """
-    Sends an action keyboard asking the user which social media platform to publish to.
-    """
-    bot_token, default_chat_id = get_telegram_credentials()
-    target_chat_id = chat_id or default_chat_id
-    if not bot_token or not target_chat_id:
-        return {"status": "error", "message": "Missing Telegram credentials."}
+def build_platform_keyboard(campaign_id: str, selected_platforms: list = None) -> dict:
+    """Builds interactive inline keyboard with checkboxes for multi-platform selection."""
+    if selected_platforms is None:
+        selected_platforms = ["facebook", "instagram"]
+    selected = set(str(p).lower().strip() for p in selected_platforms)
 
-    text = (
-        "🚀 <b>Campaign Approved!</b>\n\n"
-        "Which social media platform would you like to publish this post to?"
-    )
+    fb_icon = "✅ 📘 Facebook" if "facebook" in selected else "⬜ 📘 Facebook"
+    ig_icon = "✅ 📸 Instagram" if "instagram" in selected else "⬜ 📸 Instagram"
+    li_icon = "✅ 💼 LinkedIn" if "linkedin" in selected else "⬜ 💼 LinkedIn"
+    wa_icon = "✅ 💬 WhatsApp" if "whatsapp" in selected else "⬜ 💬 WhatsApp"
 
-    keyboard = {
+    count = len(selected)
+    if count > 0:
+        names = []
+        if "facebook" in selected:
+            names.append("Facebook")
+        if "instagram" in selected:
+            names.append("Instagram")
+        if "linkedin" in selected:
+            names.append("LinkedIn")
+        if "whatsapp" in selected:
+            names.append("WhatsApp")
+        action_text = f"🚀 Post to {' + '.join(names)} ({count}) ➜" if count <= 2 else f"🚀 Post to {count} Platforms ➜"
+    else:
+        action_text = "⚠️ Select at least 1 Platform"
+
+    return {
         "inline_keyboard": [
             [
-                {"text": "📘 Facebook", "callback_data": f"post_to:facebook:{campaign_id}"},
-                {"text": "📸 Instagram", "callback_data": f"post_to:instagram:{campaign_id}"},
+                {"text": fb_icon, "callback_data": f"toggle_plat:facebook:{campaign_id}"},
+                {"text": ig_icon, "callback_data": f"toggle_plat:instagram:{campaign_id}"},
             ],
             [
-                {"text": "💼 LinkedIn", "callback_data": f"post_to:linkedin:{campaign_id}"},
-                {"text": "💬 WhatsApp", "callback_data": f"post_to:whatsapp:{campaign_id}"},
+                {"text": li_icon, "callback_data": f"toggle_plat:linkedin:{campaign_id}"},
+                {"text": wa_icon, "callback_data": f"toggle_plat:whatsapp:{campaign_id}"},
+            ],
+            [
+                {"text": "✨ Select All", "callback_data": f"plat_select_all:{campaign_id}"},
+                {"text": "🔄 Clear All", "callback_data": f"plat_clear_all:{campaign_id}"},
+            ],
+            [
+                {"text": action_text, "callback_data": f"publish_multi:{campaign_id}"}
             ],
             [
                 {"text": "❌ Cancel", "callback_data": f"cancel_post:{campaign_id}"}
             ]
         ]
     }
+
+
+def send_platform_selection_menu(
+    campaign_id: str,
+    chat_id: str = None,
+    selected_platforms: list = None,
+    message_id: int = None
+) -> dict:
+    """
+    Sends an action keyboard asking the user which social media platform(s) to publish to.
+    Supports selecting multiple options (e.g. Facebook + Instagram together) with live checkboxes!
+    """
+    bot_token, default_chat_id = get_telegram_credentials()
+    target_chat_id = chat_id or default_chat_id
+    if not bot_token or not target_chat_id:
+        return {"status": "error", "message": "Missing Telegram credentials."}
+
+    if selected_platforms is None:
+        selected_platforms = ["facebook", "instagram"]
+
+    keyboard = build_platform_keyboard(campaign_id, selected_platforms)
+
+    text = (
+        "🚀 <b>Campaign Approved! Select Destination Platforms</b>\n\n"
+        "Tap the buttons below to toggle destination platforms (you can select multiple):\n"
+        "• 📘 <b>Facebook</b> + 📸 <b>Instagram</b> (Default)\n"
+        "• 💼 <b>LinkedIn</b> | 💬 <b>WhatsApp</b>\n\n"
+        "👉 <i>Choose platforms, then tap <b>'Post to Selected'</b> to broadcast!</i>"
+    )
+
+    if message_id:
+        res = edit_message_text(target_chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
 
     res = make_telegram_request(
         bot_token,

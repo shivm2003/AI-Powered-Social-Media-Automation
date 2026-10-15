@@ -129,60 +129,7 @@ def generate_image_with_chatgpt_browser(
                     except Exception:
                         pass
 
-        # 2. If skill/product reference image is provided, upload/select it in ChatGPT!
-        if skill_image_path and os.path.exists(skill_image_path):
-            abs_image_path = os.path.abspath(skill_image_path)
-            logger.info(f"Selecting and attaching skill image to ChatGPT: {abs_image_path}")
-            try:
-                file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-                if file_inputs:
-                    file_inputs[0].send_keys(abs_image_path)
-                    time.sleep(2)
-                    logger.info("Successfully attached skill image to ChatGPT composer!")
-            except Exception as e_upload:
-                logger.warning(f"Could not attach skill image to ChatGPT file input: {e_upload}")
-
-        # 3. Check for '+' menu (composer tools) and select image skill if available
-        try:
-            plus_btns = driver.find_elements(
-                By.CSS_SELECTOR,
-                "button[aria-label*='Attach'], button[aria-label*='Add files'], button[data-testid='composer-plus-btn']"
-            )
-            for pb in plus_btns:
-                if pb.is_displayed():
-                    pb.click()
-                    time.sleep(1)
-                    # Look for 'Create image' / DALL-E tool button
-                    create_img_items = driver.find_elements(
-                        By.XPATH,
-                        "//div[contains(text(), 'Create image') or contains(text(), 'Image')] | //button[contains(., 'Create image')]"
-                    )
-                    for item in create_img_items:
-                        label = (item.text or item.get_attribute("aria-label") or "").lower()
-                        if "log in" in label:
-                            logger.info("Create image skill requires login. Relying on prompt instruction.")
-                            try:
-                                driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
-                            except Exception:
-                                pass
-                            break
-                        else:
-                            item.click()
-                            time.sleep(1)
-                            logger.info("Selected 'Create image' skill from ChatGPT tools menu!")
-                            break
-                    break
-        except Exception as e_tool:
-            logger.debug(f"Tool menu check note: {e_tool}")
-
-        # Ensure any open popover or dropdown is closed
-        try:
-            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
-            time.sleep(0.5)
-        except Exception:
-            pass
-
-        # 4. Construct high-impact image generation prompt
+        # 2. Construct high-impact image generation prompt
         ar_descriptions = {
             "1:1": "Square aspect ratio (1:1)",
             "4:5": "Vertical portrait aspect ratio (4:5)",
@@ -210,7 +157,7 @@ def generate_image_with_chatgpt_browser(
 
         image_prompt = " ".join(prompt_parts)
 
-        # 5. Locate textarea and send prompt
+        # 3. Locate textarea and paste/verify prompt FIRST
         textarea = None
         for sel in ["#prompt-textarea", "textarea", "div[contenteditable='true']"]:
             elems = driver.find_elements(By.CSS_SELECTOR, sel)
@@ -233,9 +180,28 @@ def generate_image_with_chatgpt_browser(
         logger.info(f"ChatGPT image prompt paste status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}%)")
         time.sleep(0.5)
 
-        # Click send or press Enter via agent
-        verifier_agent.click_send(driver=driver, platform="chatgpt")
-        logger.info("Sent image generation prompt to ChatGPT! Waiting for generation to complete...")
+        # 4. If skill/product reference image is provided, upload it safely AFTER prompt is in place
+        if skill_image_path and os.path.exists(skill_image_path):
+            abs_image_path = os.path.abspath(skill_image_path)
+            logger.info(f"Selecting and attaching skill image to ChatGPT: {abs_image_path}")
+            try:
+                from browser.human_operator import upload_image_to_chatgpt
+                upload_image_to_chatgpt(driver, abs_image_path, logger=logger)
+                time.sleep(1.5)
+            except Exception as e_upload:
+                logger.warning(f"Could not attach skill image to ChatGPT file input: {e_upload}")
+
+        # 5. Wait for Send button to be ready and click Send
+        for _ in range(12):
+            send_ready, send_details = verifier_agent.inspect_send_button(driver, "chatgpt")
+            if send_ready:
+                break
+            time.sleep(0.5)
+
+        send_success = verifier_agent.click_send(driver=driver, platform="chatgpt")
+        if not send_success:
+            textarea.send_keys(Keys.ENTER)
+        logger.info("Sent image generation prompt and image to ChatGPT! Waiting for generation to complete...")
 
         # 6. Wait for ChatGPT to generate the image (polling up to 20 seconds)
         generated_img_elem = None

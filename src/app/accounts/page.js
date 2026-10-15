@@ -121,7 +121,7 @@ export default function AccountsPage() {
         setBrowserConnected(!!data.connected);
         if (data.profileEmail) setBrowserProfileEmail(data.profileEmail);
       }
-    } catch {}
+    } catch { }
   }
 
   async function handleRunHumanFlow() {
@@ -521,8 +521,8 @@ export default function AccountsPage() {
               {launchingBrowser
                 ? "⏳ Launching..."
                 : browserConnected
-                ? "🔄 Re-Sync Browser"
-                : "🚀 Launch Chrome in Same Window"}
+                  ? "🔄 Re-Sync Browser"
+                  : "🚀 Launch Chrome in Same Window"}
             </button>
           </div>
         </div>
@@ -629,8 +629,8 @@ export default function AccountsPage() {
               background: humanCurrentStep === 1
                 ? "rgba(124, 92, 252, 0.2)"
                 : humanCurrentStep > 1
-                ? "rgba(16, 185, 129, 0.12)"
-                : "var(--bg-tertiary)",
+                  ? "rgba(16, 185, 129, 0.12)"
+                  : "var(--bg-tertiary)",
               transition: "all 0.3s ease",
             }}
           >
@@ -659,8 +659,8 @@ export default function AccountsPage() {
               background: humanCurrentStep === 2
                 ? "rgba(124, 92, 252, 0.2)"
                 : humanCurrentStep > 2
-                ? "rgba(16, 185, 129, 0.12)"
-                : "var(--bg-tertiary)",
+                  ? "rgba(16, 185, 129, 0.12)"
+                  : "var(--bg-tertiary)",
               transition: "all 0.3s ease",
             }}
           >
@@ -689,8 +689,8 @@ export default function AccountsPage() {
               background: humanCurrentStep === 3
                 ? "rgba(124, 92, 252, 0.2)"
                 : humanCurrentStep > 3
-                ? "rgba(16, 185, 129, 0.12)"
-                : "var(--bg-tertiary)",
+                  ? "rgba(16, 185, 129, 0.12)"
+                  : "var(--bg-tertiary)",
               transition: "all 0.3s ease",
             }}
           >
@@ -1057,12 +1057,12 @@ export default function AccountsPage() {
                             <span>✓</span>
                             <span>
                               {login === "chatgpt" ? "ChatGPT Logged In" :
-                               login === "claude" ? "Claude Logged In" :
-                               login === "linkedin" ? "LinkedIn" :
-                               login === "instagram" ? "Instagram" :
-                               login === "facebook" ? "Facebook" :
-                               login === "whatsapp" ? "WhatsApp" :
-                               login === "gemini" ? "Gemini" : login}
+                                login === "claude" ? "Claude Logged In" :
+                                  login === "linkedin" ? "LinkedIn" :
+                                    login === "instagram" ? "Instagram" :
+                                      login === "facebook" ? "Facebook" :
+                                        login === "whatsapp" ? "WhatsApp" :
+                                          login === "gemini" ? "Gemini" : login}
                             </span>
                           </span>
                         ))}

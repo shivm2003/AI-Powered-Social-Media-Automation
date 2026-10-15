@@ -247,9 +247,6 @@ def generate_marketing_content(
             elif provider_lower == "chatgpt":
                 from .chatgpt import generate_with_chatgpt_browser
                 raw_output = generate_with_chatgpt_browser(prompt)
-            elif provider_lower == "claude":
-                from .claude import generate_with_claude_browser
-                raw_output = generate_with_claude_browser(prompt)
 
             if raw_output:
                 return extract_json_or_fallback(raw_output, fallback_data)

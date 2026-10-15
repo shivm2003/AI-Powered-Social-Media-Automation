@@ -627,6 +627,92 @@ def upload_image_to_gemini(driver, image_path: str, logger=None, logs=None) -> b
         return False
 
 
+def upload_image_to_chatgpt(driver, image_path: str, logger=None, logs=None, max_wait=10) -> bool:
+    """
+    Robustly uploads a reference/branding image into ChatGPT's composer.
+    Specifically excludes capture='environment' (mobile camera) and selects true photo/file inputs.
+    Waits dynamically for the thumbnail (.composer-attachment-surface) to appear in the DOM.
+    """
+    if not image_path or not os.path.exists(str(image_path)):
+        if logger:
+            logger.warning(f"Image path does not exist for ChatGPT upload: {image_path}")
+        return False
+
+    abs_p = os.path.abspath(str(image_path))
+    from selenium.webdriver.common.by import By
+
+    try:
+        file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+        target_input = None
+
+        # Filter out capture="environment" (camera capture)
+        for fi in file_inputs:
+            cap = fi.get_attribute("capture")
+            aria = (fi.get_attribute("aria-label") or "").lower()
+            accept = (fi.get_attribute("accept") or "").lower()
+            if not cap and ("photo" in aria or "file" in aria or "video" in aria or "image" in accept):
+                target_input = fi
+                break
+
+        if not target_input and file_inputs:
+            non_cap = [fi for fi in file_inputs if not fi.get_attribute("capture")]
+            if non_cap:
+                target_input = non_cap[-1]
+            else:
+                target_input = file_inputs[-1]
+
+        if not target_input:
+            for sel in ["button[aria-label*='Attach']", "button[data-testid='composer-plus-btn']"]:
+                btns = driver.find_elements(By.CSS_SELECTOR, sel)
+                if btns and btns[0].is_displayed():
+                    btns[0].click()
+                    time.sleep(1)
+                    break
+            file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+            for fi in file_inputs:
+                if not fi.get_attribute("capture"):
+                    target_input = fi
+                    break
+
+        if not target_input:
+            if logger:
+                logger.warning("Could not reveal file upload inputs in ChatGPT.")
+            return False
+
+        target_input.send_keys(abs_p)
+
+        # Wait dynamically for thumbnail to appear in DOM
+        fname = os.path.basename(abs_p).lower()
+        start_wait = time.time()
+        attached = False
+        while time.time() - start_wait < max_wait:
+            time.sleep(0.5)
+            found = driver.execute_script("""
+                const fname = arguments[0];
+                const thumbs = Array.from(document.querySelectorAll('.composer-attachment-surface, [data-testid*="attachment"], img'));
+                return thumbs.some(t => {
+                    const alt = (t.alt || '').toLowerCase();
+                    const aria = (t.getAttribute('aria-label') || '').toLowerCase();
+                    return alt.includes(fname) || aria.includes(fname) || t.classList.contains('composer-attachment-surface');
+                });
+            """, fname)
+            if found:
+                attached = True
+                break
+
+        time.sleep(1.0)
+        msg = f"📎 Uploaded reference image to ChatGPT: {os.path.basename(abs_p)}"
+        if logs is not None:
+            logs.append(msg)
+        if logger:
+            logger.info(msg)
+        return True
+    except Exception as e_up:
+        if logger:
+            logger.warning(f"ChatGPT file upload notice: {e_up}")
+        return False
+
+
 def execute_human_generation_and_telegram_flow(
     platform="chatgpt",
     product=None,
@@ -800,30 +886,6 @@ def execute_human_generation_and_telegram_flow(
                 ActionChains(driver).move_to_element(input_box).pause(0.2).click().perform()
             human_sleep(0.3, 0.6)
 
-            # If reference image / skill image exists (e.g. Loan Solutions), attach it like a human via file upload
-            if skill_image_path and os.path.exists(str(skill_image_path)):
-                try:
-                    file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-                    if not file_inputs:
-                        for trg in ["//button[@aria-label='Attach files']", "//button[contains(@aria-label, 'Attach')]", "button[aria-label*='Attach']"]:
-                            try:
-                                btns = driver.find_elements(By.XPATH, trg) if trg.startswith("//") else driver.find_elements(By.CSS_SELECTOR, trg)
-                                for b in btns:
-                                    if b.is_displayed():
-                                        b.click()
-                                        human_sleep(0.8, 1.2)
-                                        break
-                            except Exception:
-                                pass
-                        file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-                    if file_inputs:
-                        abs_p = os.path.abspath(str(skill_image_path))
-                        file_inputs[0].send_keys(abs_p)
-                        human_sleep(1.5, 2.5)
-                        logs.append(f"📎 Uploaded reference image to ChatGPT: {os.path.basename(abs_p)}")
-                except Exception as e_up:
-                    logger.warning(f"ChatGPT file upload notice: {e_up}")
-
             # Query existing images before submitting
             existing_imgs = driver.execute_script("""
                 return Array.from(document.querySelectorAll('img'))
@@ -847,52 +909,48 @@ def execute_human_generation_and_telegram_flow(
             unified_prompt = prompt_bundle["unified_prompt"]
             logs.append(f"🎨 Template Archetype Selected: {prompt_bundle['archetype_name']} (Variant #{prompt_bundle['seed']})")
 
-            # Insert ALL PROMPT AT ONCE
-            driver.execute_script("""
-                const ed = arguments[0];
-                const text = arguments[1];
-                ed.focus();
-                document.execCommand('selectAll', false, null);
-                document.execCommand('insertText', false, text);
-                ed.dispatchEvent(new Event('input', { bubbles: true }));
-                ed.dispatchEvent(new Event('change', { bubbles: true }));
-            """, input_box, unified_prompt)
+            # 1. First: verify and paste prompt via PromptPasteVerifierAgent so text is cleanly placed
+            from llm.prompt_paste_verifier_agent import PromptPasteVerifierAgent
+            verifier_agent = PromptPasteVerifierAgent(driver)
+            paste_res = verifier_agent.ensure_properly_pasted(
+                driver=driver,
+                prompt=unified_prompt,
+                platform="chatgpt",
+                required_substrings=[product_name]
+            )
+            logs.append(f"✍️ Prompt entered and verified ({paste_res.actual_length} chars, {paste_res.status})")
             human_sleep(0.5, 1.0)
 
-            # Fallback if text didn't insert
-            current_val = (input_box.text or input_box.get_attribute("value") or "").strip()
-            if not current_val:
-                input_box.send_keys(unified_prompt)
-                human_sleep(0.4, 0.8)
+            # 2. Second: attach reference image safely AFTER prompt is in place
+            if skill_image_path and os.path.exists(str(skill_image_path)):
+                upload_image_to_chatgpt(driver, skill_image_path, logger=logger, logs=logs)
+                human_sleep(1.0, 1.8)
 
-            # Submit prompt
-            send_btn = None
-            for sel in [
-                "button[data-testid='send-button']",
-                "button[data-testid='composer-send-button']",
-                "button[aria-label*='Send']",
-                "button[aria-label*='send']",
-                "#send-button"
-            ]:
-                try:
-                    for b in driver.find_elements(By.CSS_SELECTOR, sel):
-                        if b.is_displayed():
-                            send_btn = b
-                            break
-                except Exception:
-                    pass
-                if send_btn:
+            # 3. Third: wait for Send button to be ready and click Send
+            for _ in range(12):
+                send_ready, send_details = verifier_agent.inspect_send_button(driver, "chatgpt")
+                if send_ready:
                     break
+                time.sleep(0.5)
 
-            if send_btn:
-                try:
-                    send_btn.click()
-                except Exception:
-                    driver.execute_script("arguments[0].click();", send_btn)
-            else:
-                input_box.send_keys(Keys.ENTER)
+            send_success = verifier_agent.click_send(driver=driver, platform="chatgpt")
+            if not send_success:
+                # Direct fallback
+                for sel in ["button[data-testid='send-button']", "button[data-testid='composer-send-button']", "button[aria-label*='Send']"]:
+                    btns = driver.find_elements(By.CSS_SELECTOR, sel)
+                    if btns and btns[0].is_displayed():
+                        try:
+                            btns[0].click()
+                            send_success = True
+                            break
+                        except Exception:
+                            driver.execute_script("arguments[0].click();", btns[0])
+                            send_success = True
+                            break
+                if not send_success:
+                    input_box.send_keys(Keys.ENTER)
 
-            logs.append("✅ Step 3 Complete: Full prompt submitted all at once! Waiting for ChatGPT to generate image...")
+            logs.append("✅ Step 3 Complete: Full prompt and image submitted! Waiting for ChatGPT to generate image...")
 
             # Wait for image generation & capture response (poll up to 90s)
             poll_start = time.time()

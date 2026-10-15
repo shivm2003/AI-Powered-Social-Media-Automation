@@ -9,7 +9,7 @@ export async function POST(request) {
       query = "Search and create a high converting viral marketing post for our product.",
     } = body;
 
-    const cleanPlatform = ["gemini", "chatgpt", "claude"].includes(platform.toLowerCase())
+    const cleanPlatform = ["gemini", "chatgpt"].includes(platform.toLowerCase())
       ? platform.toLowerCase()
       : "gemini";
 

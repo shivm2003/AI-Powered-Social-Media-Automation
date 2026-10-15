@@ -12,9 +12,11 @@ import ctypes
 from ctypes import wintypes
 from pathlib import Path
 import pyperclip
-import pyautogui
-
-pyautogui.FAILSAFE = False
+try:
+    import pyautogui
+    pyautogui.FAILSAFE = False
+except ImportError:
+    pyautogui = None
 
 logger = logging.getLogger("automation.remote.antigravity_controller")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")

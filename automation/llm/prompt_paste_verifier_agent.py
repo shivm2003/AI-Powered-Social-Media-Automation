@@ -331,7 +331,7 @@ class PromptPasteVerifierAgent:
         )
 
     def clear_editor(self, driver=None, platform: str = None) -> bool:
-        """Cleans out any existing text in the editor safely."""
+        """Cleans out any existing text in the editor safely, preserving file attachment chips."""
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
 
@@ -342,6 +342,31 @@ class PromptPasteVerifierAgent:
             return False
 
         try:
+            # Check if there is an active file attachment in the composer
+            has_attachment = d.execute_script("""
+                return document.querySelector('.composer-attachment-surface, [data-testid*="attachment"], img[alt*="attachment"], img[alt*=".png"], img[alt*=".jpg"]') !== null;
+            """)
+
+            if plat == "chatgpt" and has_attachment:
+                # Do NOT use Ctrl+A or textContent = '' as it deletes attached file chips!
+                # Safely clear only paragraph and text child nodes
+                d.execute_script("""
+                    const el = arguments[0];
+                    if (!el) return;
+                    const paras = el.querySelectorAll('p');
+                    if (paras.length > 0) {
+                        paras.forEach(p => { p.innerHTML = ''; p.innerText = ''; });
+                    } else {
+                        for (let node of Array.from(el.childNodes)) {
+                            if (node.nodeType === Node.TEXT_NODE) node.textContent = '';
+                        }
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                """, editor)
+                time.sleep(0.2)
+                return True
+
             try:
                 editor.click()
             except Exception:
