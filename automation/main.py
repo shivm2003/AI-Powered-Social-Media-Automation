@@ -335,6 +335,35 @@ def handle_command(command: dict):
                 "stopped": stopped
             })
 
+        elif action == "fb_get_pending_requests":
+            from social.facebook_accept import get_pending_friend_requests
+            max_scrolls = int(command.get("max_scrolls", 3))
+            res = get_pending_friend_requests(max_scrolls=max_scrolls)
+            send_response(res)
+
+        elif action == "fb_accept_requests":
+            from social.facebook_accept import accept_facebook_friend_requests
+            target_count = command.get("target_count")
+            if target_count is not None and str(target_count).lower() != "all":
+                try:
+                    target_count = int(target_count)
+                except Exception:
+                    target_count = 0
+            else:
+                target_count = 0
+
+            like_recent = bool(command.get("like_recent", False))
+            safety_delay = int(command.get("safety_delay", 3))
+            campaign_id = command.get("campaign_id")
+
+            res = accept_facebook_friend_requests(
+                target_count=target_count,
+                like_recent=like_recent,
+                safety_delay=safety_delay,
+                campaign_id=campaign_id
+            )
+            send_response(res)
+
         else:
             send_response({
                 "status": "error",

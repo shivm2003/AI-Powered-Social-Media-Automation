@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import FacebookAcceptDeck from "@/components/growth/FacebookAcceptDeck";
 
 const PRESET_LOCATIONS = [
   "New Delhi",
@@ -23,7 +24,7 @@ export default function GrowthPage() {
 
   const [activeCampaign, setActiveCampaign] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
-  const [activeTab, setActiveTab] = useState("launcher"); // 'launcher', 'history'
+  const [activeTab, setActiveTab] = useState("accept"); // 'accept', 'launcher', 'history'
 
   const pollIntervalRef = useRef(null);
 
@@ -174,7 +175,18 @@ export default function GrowthPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-6)" }}>
+      <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-6)", flexWrap: "wrap" }}>
+        <button
+          id="btn-tab-accept"
+          onClick={() => setActiveTab("accept")}
+          className={`btn ${activeTab === "accept" ? "btn-primary" : "btn-secondary"}`}
+          style={{ padding: "0.6rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}
+        >
+          <span>🤝 Accept Friend Requests</span>
+          <span style={{ background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 700 }}>
+            Batch & Like
+          </span>
+        </button>
         <button
           id="btn-tab-launcher"
           onClick={() => setActiveTab("launcher")}
@@ -192,6 +204,10 @@ export default function GrowthPage() {
           📋 Campaign History ({campaigns.length})
         </button>
       </div>
+
+      {activeTab === "accept" && (
+        <FacebookAcceptDeck />
+      )}
 
       {activeTab === "launcher" ? (
         <div style={{ display: "grid", gridTemplateColumns: activeCampaign ? "1.1fr 0.9fr" : "1fr", gap: "var(--space-6)" }}>
