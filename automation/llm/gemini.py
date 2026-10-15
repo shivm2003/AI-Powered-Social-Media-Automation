@@ -57,31 +57,19 @@ def generate_with_gemini_browser(prompt: str) -> str:
         if not input_box:
             raise RuntimeError("Could not locate Gemini input field. User may need to sign in first.")
 
-        # Type prompt
-        input_box.click()
+        # Verify and paste prompt via PromptPasteVerifierAgent
+        from .prompt_paste_verifier_agent import PromptPasteVerifierAgent
+        verifier_agent = PromptPasteVerifierAgent(driver)
+        paste_res = verifier_agent.ensure_properly_pasted(
+            driver=driver,
+            prompt=prompt,
+            platform="gemini"
+        )
+        logger.info(f"Prompt paste verification status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}%)")
         time.sleep(0.5)
-        try:
-            input_box.send_keys(prompt)
-        except Exception:
-            driver.execute_script("arguments[0].innerText = arguments[1];", input_box, prompt)
-            input_box.send_keys(" ")
-        time.sleep(1)
 
-        # Click send or press Enter
-        send_button = None
-        for sel in ["button[aria-label*='Send']", "button.send-button", "mat-icon[fonticon='send']", "[data-test-id='send-button']"]:
-            try:
-                btns = driver.find_elements(By.CSS_SELECTOR, sel)
-                if btns and btns[0].is_displayed() and btns[0].is_enabled():
-                    send_button = btns[0]
-                    break
-            except Exception:
-                continue
-
-        if send_button:
-            send_button.click()
-        else:
-            input_box.send_keys(Keys.ENTER)
+        # Click send or press Enter via agent
+        verifier_agent.click_send(driver=driver, platform="gemini")
 
         logger.info("Waiting for Gemini response...")
         time.sleep(8)
@@ -203,39 +191,20 @@ def generate_image_with_gemini_browser(
         if not editor:
             raise RuntimeError("Gemini prompt input not found.")
 
-        # Focus and enter prompt
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", editor)
-        time.sleep(0.3)
-        try:
-            editor.click()
-        except Exception:
-            pass
+        # Focus and verify/paste prompt via PromptPasteVerifierAgent
+        from .prompt_paste_verifier_agent import PromptPasteVerifierAgent
+        verifier_agent = PromptPasteVerifierAgent(driver)
+        paste_res = verifier_agent.ensure_properly_pasted(
+            driver=driver,
+            prompt=image_prompt,
+            platform="gemini",
+            required_substrings=["Indian Rupee (₹)", product_name]
+        )
+        logger.info(f"Image prompt paste status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}%)")
+        time.sleep(0.5)
 
-        try:
-            editor.send_keys(image_prompt)
-        except Exception:
-            driver.execute_script("arguments[0].innerText = arguments[1];", editor, image_prompt)
-
-        time.sleep(0.8)
-
-        # Send
-        send_button = None
-        for sel in ["button[aria-label*='Send']", "button.send-button", "mat-icon[fonticon='send']", "[data-test-id='send-button']"]:
-            for b in driver.find_elements(By.CSS_SELECTOR, sel):
-                if b.is_displayed():
-                    send_button = b
-                    break
-            if send_button:
-                break
-
-        if send_button and send_button.is_enabled():
-            try:
-                send_button.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", send_button)
-        else:
-            editor.send_keys(Keys.ENTER)
-
+        # Send via agent
+        verifier_agent.click_send(driver=driver, platform="gemini")
         logger.info("Sent image prompt to Gemini! Waiting for generation to complete...")
 
         # Poll for generated image in Gemini (up to 20 seconds)

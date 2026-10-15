@@ -57,30 +57,19 @@ def generate_with_chatgpt_browser(prompt: str) -> str:
         if not input_box:
             raise RuntimeError("Could not locate ChatGPT prompt textarea. User may need to sign in first.")
 
-        input_box.click()
+        # Verify and paste prompt via PromptPasteVerifierAgent
+        from .prompt_paste_verifier_agent import PromptPasteVerifierAgent
+        verifier_agent = PromptPasteVerifierAgent(driver)
+        paste_res = verifier_agent.ensure_properly_pasted(
+            driver=driver,
+            prompt=prompt,
+            platform="chatgpt"
+        )
+        logger.info(f"ChatGPT prompt paste verification status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}%)")
         time.sleep(0.5)
-        if input_box.tag_name == "textarea":
-            input_box.clear()
-            input_box.send_keys(prompt)
-        else:
-            driver.execute_script("arguments[0].innerText = arguments[1];", input_box, prompt)
-            input_box.send_keys(" ")
-        time.sleep(1)
 
-        send_btn = None
-        for sel in ["button[data-testid='send-button']", "button[aria-label*='Send']", "button[aria-label*='send']"]:
-            try:
-                btns = driver.find_elements(By.CSS_SELECTOR, sel)
-                if btns and btns[0].is_displayed() and btns[0].is_enabled():
-                    send_btn = btns[0]
-                    break
-            except Exception:
-                continue
-
-        if send_btn:
-            send_btn.click()
-        else:
-            input_box.send_keys(Keys.ENTER)
+        # Click send or press Enter via agent
+        verifier_agent.click_send(driver=driver, platform="chatgpt")
 
         logger.info("Waiting for ChatGPT response...")
         time.sleep(8)
@@ -232,50 +221,20 @@ def generate_image_with_chatgpt_browser(
         if not textarea:
             raise RuntimeError("ChatGPT prompt textarea not found.")
 
-        # Focus safely and enter prompt
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", textarea)
-        time.sleep(0.3)
-        try:
-            textarea.click()
-        except Exception:
-            pass
+        # Focus and verify/paste prompt via PromptPasteVerifierAgent
+        from .prompt_paste_verifier_agent import PromptPasteVerifierAgent
+        verifier_agent = PromptPasteVerifierAgent(driver)
+        paste_res = verifier_agent.ensure_properly_pasted(
+            driver=driver,
+            prompt=image_prompt,
+            platform="chatgpt",
+            required_substrings=[product_name]
+        )
+        logger.info(f"ChatGPT image prompt paste status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}%)")
+        time.sleep(0.5)
 
-        try:
-            textarea.send_keys(image_prompt)
-        except Exception:
-            driver.execute_script("""
-                const ta = arguments[0];
-                ta.focus();
-                const setVal = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-                if (setVal) {
-                    setVal.call(ta, arguments[1]);
-                } else {
-                    ta.value = arguments[1];
-                }
-                ta.dispatchEvent(new Event('input', { bubbles: true }));
-                ta.dispatchEvent(new Event('change', { bubbles: true }));
-            """, textarea, image_prompt)
-
-        time.sleep(0.8)
-
-        # Click send
-        send_btn = None
-        for sel in ["button[data-testid='send-button']", "button[aria-label*='Send']", "button[aria-label*='send']"]:
-            for b in driver.find_elements(By.CSS_SELECTOR, sel):
-                if b.is_displayed():
-                    send_btn = b
-                    break
-            if send_btn:
-                break
-
-        if send_btn and send_btn.is_enabled():
-            try:
-                send_btn.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", send_btn)
-        else:
-            textarea.send_keys(Keys.ENTER)
-
+        # Click send or press Enter via agent
+        verifier_agent.click_send(driver=driver, platform="chatgpt")
         logger.info("Sent image generation prompt to ChatGPT! Waiting for generation to complete...")
 
         # 6. Wait for ChatGPT to generate the image (polling up to 20 seconds)

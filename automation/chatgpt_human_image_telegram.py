@@ -156,34 +156,29 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
         "• Hashtags: 5-6 viral India-relevant hashtags (e.g. #LoanSolutions #HomeLoanIndia #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom - written ONLY here in chat text, NEVER painted inside the image)."
     )
 
-    print(f"⚡ Inserting full prompt at once ({len(prompt_text)} chars)...", flush=True)
-    driver.execute_script("""
-        const ed = arguments[0];
-        const text = arguments[1];
-        ed.focus();
-        document.execCommand('insertText', false, text);
-    """, input_box, prompt_text)
+    # ── Step 4: Verify and ensure prompt is properly pasted via PromptPasteVerifierAgent ──
+    from llm.prompt_paste_verifier_agent import PromptPasteVerifierAgent
+    verifier_agent = PromptPasteVerifierAgent(driver)
+
+    print(f"🤖 Step 4: Engaging PromptPasteVerifierAgent to verify & paste prompt properly ({len(prompt_text)} chars)...", flush=True)
+    paste_res = verifier_agent.ensure_properly_pasted(
+        driver=driver,
+        prompt=prompt_text,
+        platform="chatgpt",
+        required_substrings=[
+            "TASK 1",
+            "TASK 2",
+            "Loan Solutions",
+            "₹",
+            "https://loansolutions.everythingrental.in/application"
+        ]
+    )
+    print(f"✅ Step 4 Complete: Prompt paste status: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}% match, {paste_res.actual_length} chars, Send ready: {paste_res.send_button_ready}). Method: {paste_res.method_used}", flush=True)
     human_sleep(0.5, 1.0)
 
-    # Click send button
-    send_btn = None
-    for sel in ["button[data-testid='send-button']", "button[aria-label*='Send']", "button[aria-label*='send']"]:
-        for b in driver.find_elements(By.CSS_SELECTOR, sel):
-            if b.is_displayed():
-                send_btn = b
-                break
-        if send_btn:
-            break
-
-    if send_btn:
-        try:
-            send_btn.click()
-        except Exception:
-            driver.execute_script("arguments[0].click();", send_btn)
-        print("Clicked Send button!", flush=True)
-    else:
-        input_box.send_keys(Keys.ENTER)
-        print("Submitted via Enter key!", flush=True)
+    # Click send button via PromptPasteVerifierAgent
+    verifier_agent.click_send(driver=driver, platform="chatgpt")
+    human_sleep(1.0, 1.5)
 
     # ── Step 5: Wait for image generation like human ──
     print("\n⏳ Step 5: Waiting for ChatGPT to generate image & caption (polling up to 90s)...")

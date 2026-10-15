@@ -1161,56 +1161,20 @@ def execute_human_generation_and_telegram_flow(
             unified_prompt = prompt_bundle["unified_prompt"]
             logs.append(f"🎨 Template Archetype Selected: {prompt_bundle['archetype_name']} (Variant #{prompt_bundle['seed']})")
 
-            # Insert ALL PROMPT AT ONCE into Gemini
-            driver.execute_script("""
-                const ed = arguments[0];
-                const text = arguments[1];
-                ed.focus();
-                document.execCommand('selectAll', false, null);
-                document.execCommand('insertText', false, text);
-                ed.dispatchEvent(new Event('input', { bubbles: true }));
-                ed.dispatchEvent(new Event('change', { bubbles: true }));
-            """, input_box, unified_prompt)
-            human_sleep(0.5, 1.0)
+            # Verify & paste prompt via PromptPasteVerifierAgent
+            from llm.prompt_paste_verifier_agent import PromptPasteVerifierAgent
+            verifier_agent = PromptPasteVerifierAgent(driver)
+            paste_res = verifier_agent.ensure_properly_pasted(
+                driver=driver,
+                prompt=unified_prompt,
+                platform="gemini",
+                required_substrings=["TASK 1", "TASK 2"]
+            )
+            logs.append(f"🤖 PromptPasteVerifierAgent verified prompt: {paste_res.status} ({paste_res.similarity_ratio*100:.1f}% match, {paste_res.actual_length} chars, Send ready: {paste_res.send_button_ready}) via {paste_res.method_used}")
+            human_sleep(0.4, 0.8)
 
-            # Fallback if text didn't insert via execCommand
-            current_val = (input_box.text or input_box.get_attribute("innerText") or "").strip()
-            if not current_val:
-                try:
-                    driver.execute_script("arguments[0].innerText = arguments[1];", input_box, unified_prompt)
-                    input_box.send_keys(" ")
-                except Exception:
-                    input_box.send_keys(unified_prompt)
-                human_sleep(0.4, 0.8)
-
-            # Submit prompt all at once
-            send_btn = None
-            for sel in [
-                "button[aria-label*='Send']",
-                "button.send-button",
-                "mat-icon[fonticon='send']",
-                "[data-test-id='send-button']",
-                "button[aria-label*='Submit']",
-                "button[data-testid='send-button']",
-            ]:
-                try:
-                    for b in driver.find_elements(By.CSS_SELECTOR, sel):
-                        if b.is_displayed():
-                            send_btn = b
-                            break
-                except Exception:
-                    pass
-                if send_btn:
-                    break
-
-            if send_btn:
-                try:
-                    send_btn.click()
-                except Exception:
-                    driver.execute_script("arguments[0].click();", send_btn)
-            else:
-                input_box.send_keys(Keys.ENTER)
-
+            # Submit prompt via agent
+            verifier_agent.click_send(driver=driver, platform="gemini")
             logs.append("✅ Step 3 Complete: Full prompt (Task 1 & Task 2) submitted to Gemini all at once! Waiting for generation...")
 
             # Wait for image generation & capture response (poll up to 75s)

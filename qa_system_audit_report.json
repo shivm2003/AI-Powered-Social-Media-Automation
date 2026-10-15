@@ -9,7 +9,7 @@
       "name": "Next.js Web Server Liveness (Port 3000)",
       "module": "Frontend",
       "status": "PASSED",
-      "duration": 0.0737919807434082,
+      "duration": 0.25449132919311523,
       "error": null,
       "details": {
         "http_code": 200,
@@ -21,10 +21,10 @@
       "name": "Campaigns REST API Endpoint (/api/campaigns)",
       "module": "API",
       "status": "PASSED",
-      "duration": 0.054859161376953125,
+      "duration": 0.22065043449401855,
       "error": null,
       "details": {
-        "record_count": 12
+        "record_count": 13
       }
     },
     {
@@ -32,7 +32,7 @@
       "name": "Growth Outreach API Endpoint (/api/growth)",
       "module": "API",
       "status": "PASSED",
-      "duration": 0.0181887149810791,
+      "duration": 0.11350345611572266,
       "error": null,
       "details": {
         "status": "ok"
@@ -43,7 +43,7 @@
       "name": "Accounts API Endpoint (/api/accounts)",
       "module": "API",
       "status": "PASSED",
-      "duration": 0.015555143356323242,
+      "duration": 0.10522890090942383,
       "error": null,
       "details": {
         "accounts_found": 6
@@ -54,7 +54,7 @@
       "name": "SQLite Campaigns & Accounts Table Integrity",
       "module": "Database",
       "status": "PASSED",
-      "duration": 0.0060253143310546875,
+      "duration": 0.028123140335083008,
       "error": null,
       "details": {
         "db_file": "database.sqlite",
@@ -74,7 +74,7 @@
       "name": "Telegram Configuration & Token Audit",
       "module": "Telegram",
       "status": "PASSED",
-      "duration": 0.010814666748046875,
+      "duration": 0.01662731170654297,
       "error": null,
       "details": {
         "chat_id": "6543226262",
@@ -86,7 +86,7 @@
       "name": "Mandatory 'Apply Now' Inline Button Audit",
       "module": "Telegram",
       "status": "PASSED",
-      "duration": 0.0007839202880859375,
+      "duration": 0.0,
       "error": null,
       "details": {
         "verified_url": "https://loansolutions.everythingrental.in/application"
@@ -97,7 +97,7 @@
       "name": "Telegram Outreach Custom Friend Request Counter",
       "module": "Telegram",
       "status": "PASSED",
-      "duration": 0.0005221366882324219,
+      "duration": 0.0,
       "error": null,
       "details": {
         "custom_counter_supported": true
@@ -133,10 +133,10 @@
       "name": "Chrome Remote Debugging (Port 9222) Attachment",
       "module": "Browser",
       "status": "PASSED",
-      "duration": 1.1284232139587402,
+      "duration": 1.6037096977233887,
       "error": null,
       "details": {
-        "window_title": "AI Social Media Automation",
+        "window_title": "Loan Solutions",
         "port": 9222
       }
     },
@@ -145,7 +145,7 @@
       "name": "Tab-Safe Navigation (navigate() without trapping)",
       "module": "Browser",
       "status": "PASSED",
-      "duration": 5.401591062545776,
+      "duration": 10.441639184951782,
       "error": null,
       "details": {
         "current_url": "https://www.instagram.com/"
@@ -156,7 +156,7 @@
       "name": "Facebook Post Engine Syntax & Link Attachment",
       "module": "Facebook",
       "status": "PASSED",
-      "duration": 0.0,
+      "duration": 0.0022819042205810547,
       "error": null,
       "details": {
         "file_size_bytes": 14918
@@ -167,7 +167,7 @@
       "name": "End-to-End Instagram Media Post with Fitted Caption & Link",
       "module": "Instagram",
       "status": "PASSED",
-      "duration": 45.59697890281677,
+      "duration": 30.44645047187805,
       "error": null,
       "details": {
         "status": "success",
