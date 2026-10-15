@@ -46,6 +46,7 @@ try:
         edit_message_reply_markup,
         send_root_choice_menu,
         send_outreach_platform_menu,
+        send_facebook_accept_menu,
         send_outreach_location_menu,
         send_outreach_count_menu,
         send_antigravity_menu,
@@ -71,6 +72,7 @@ except (ImportError, ModuleNotFoundError):
         edit_message_reply_markup,
         send_root_choice_menu,
         send_outreach_platform_menu,
+        send_facebook_accept_menu,
         send_outreach_location_menu,
         send_outreach_count_menu,
         send_antigravity_menu,
@@ -379,6 +381,111 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
             send_text_message(chat_id, f"⚠️ Outreach error notice: {e_growth}")
 
     threading.Thread(target=_exec_growth, daemon=True).start()
+
+
+def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, message_id: int = None):
+    """Executes Facebook Friend Request Acceptor and manages live progress in Telegram."""
+    import threading
+    import uuid
+
+    job_id = str(uuid.uuid4())[:8]
+    target_label = "All Pending Requests" if target_count == 0 else f"First {target_count} Requests"
+    like_label = "Enabled 👍" if like_recent else "Disabled"
+
+    init_text = (
+        f"🤝 <b>Facebook Accept Sequence Started!</b>\n\n"
+        f"🎯 <b>Target:</b> {target_label}\n"
+        f"👍 <b>Auto-Like Recent Post:</b> {like_label}\n"
+        f"🌐 <b>Browser:</b> Chrome Port 9222 (Shivam Mishra)\n"
+        f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n\n"
+        f"⏳ <b>Status:</b> Connecting to Facebook Friend Requests page..."
+    )
+
+    stop_keyboard = {
+        "inline_keyboard": [
+            [{"text": "🛑 Stop Accepting", "callback_data": f"fb_acc:stop:{job_id}"}]
+        ]
+    }
+
+    sent_msg_id = None
+    if message_id:
+        try:
+            res = edit_message_text(chat_id, message_id, init_text, keyboard=stop_keyboard)
+            if res.get("ok"):
+                sent_msg_id = message_id
+        except Exception:
+            pass
+
+    if not sent_msg_id:
+        res_msg = send_text_message(chat_id, init_text, reply_markup=stop_keyboard)
+        if res_msg.get("response", {}).get("result"):
+            sent_msg_id = res_msg["response"]["result"].get("message_id")
+
+    def _exec_accept():
+        try:
+            from social.facebook_accept import accept_facebook_friend_requests
+
+            last_edit_time = [time.time()]
+
+            def _on_progress(accepted, target, name):
+                if time.time() - last_edit_time[0] >= 2.0:
+                    last_edit_time[0] = time.time()
+                    update_text = (
+                        f"⏳ <b>Accepting Facebook Friend Requests...</b>\n\n"
+                        f"✅ <b>Accepted:</b> <code>{accepted}</code>"
+                        f"{f' / {target}' if target else ''}\n"
+                        f"👤 <b>Latest:</b> <i>{name}</i>\n"
+                        f"👍 <b>Auto-Like:</b> {like_label}\n\n"
+                        "<i>Accepting in browser on port 9222...</i>"
+                    )
+                    if sent_msg_id:
+                        edit_message_text(chat_id, sent_msg_id, update_text, keyboard=stop_keyboard)
+
+            res = accept_facebook_friend_requests(
+                target_count=target_count,
+                like_recent=like_recent,
+                safety_delay=3,
+                on_progress=_on_progress,
+                campaign_id=job_id
+            )
+
+            acc_count = res.get("accepted_count", 0)
+            liked_count = res.get("liked_count", 0)
+            people = res.get("accepted_people", [])
+
+            people_list = ""
+            if people:
+                people_list = "\n📋 <b>Recently Accepted:</b>\n"
+                for p in people[:6]:
+                    people_list += f"• <b>{p['name']}</b>\n"
+                if len(people) > 6:
+                    people_list += f"<i>...and {len(people) - 6} more</i>\n"
+
+            done_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "👥 Back to Friend Requests Center", "callback_data": "outreach:fb_accept_menu"}],
+                    [{"text": "🔙 Main Menu", "callback_data": "root:main"}]
+                ]
+            }
+
+            final_text = (
+                f"🎉 <b>Facebook Friend Requests Processed!</b>\n\n"
+                f"✅ <b>Total Accepted:</b> <code>{acc_count}</code>\n"
+                f"👍 <b>Posts Liked:</b> <code>{liked_count}</code>\n"
+                f"{people_list}\n"
+                f"<i>Execution finished via Chrome on port 9222.</i>"
+            )
+
+            if sent_msg_id:
+                edit_message_text(chat_id, sent_msg_id, final_text, keyboard=done_keyboard)
+            else:
+                send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+
+        except Exception as e_acc:
+            logger.error(f"Error in facebook accept thread: {e_acc}", exc_info=True)
+            send_text_message(chat_id, f"⚠️ Facebook accept error: {e_acc}")
+
+    threading.Thread(target=_exec_accept, daemon=True).start()
 
 
 def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms: list, message_id: int = None):
@@ -900,6 +1007,33 @@ def handle_callback_query(callback: dict):
         if callback_id:
             answer_callback_query(callback_id)
         send_outreach_platform_menu(chat_id, message_id=message_id)
+
+    # 14b. Facebook Friend Requests Acceptor Menu
+    elif callback_data == "outreach:fb_accept_menu":
+        if callback_id:
+            answer_callback_query(callback_id, text="🔍 Scanning Facebook for pending requests...")
+        send_facebook_accept_menu(chat_id, message_id=message_id)
+
+    # 14c. Facebook Friend Requests Execute Action (e.g. fb_acc:run:all:like)
+    elif callback_data.startswith("fb_acc:run:"):
+        parts = callback_data.split(":")
+        count_str = parts[2] if len(parts) > 2 else "all"
+        target_cnt = 0 if count_str == "all" else int(count_str)
+        like_post = (parts[3] == "like") if len(parts) > 3 else False
+
+        if callback_id:
+            answer_callback_query(callback_id, text="⚡ Initiating Facebook Accept Sequence...")
+        launch_fb_accept_task(chat_id, target_count=target_cnt, like_recent=like_post, message_id=message_id)
+
+    # 14d. Facebook Friend Requests Stop Action
+    elif callback_data.startswith("fb_acc:stop:"):
+        job_id = callback_data.split(":", 2)[2] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="🛑 Halting Facebook accept sequence...")
+        stop_flag = BASE_DIR / "data" / f"stop_{job_id}.flag"
+        stop_flag.parent.mkdir(parents=True, exist_ok=True)
+        stop_flag.write_text("STOP", encoding="utf-8")
+        send_text_message(chat_id, f"🛑 <b>Stop signal sent</b> for accept job <code>{job_id}</code>.")
 
     # 15. Outreach Step 2: Platform Selected -> Select Location
     elif callback_data.startswith("outreach:plat:"):

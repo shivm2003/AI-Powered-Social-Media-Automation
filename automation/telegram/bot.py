@@ -733,12 +733,82 @@ def send_outreach_platform_menu(chat_id: str, message_id: int = None) -> dict:
 
     keyboard = {
         "inline_keyboard": [
+            [{"text": "🤝 Accept Pending Friend Requests (FB)", "callback_data": "outreach:fb_accept_menu"}],
             [{"text": "⚡ Both Simultaneously (FB + IG)", "callback_data": "outreach:plat:both"}],
             [
-                {"text": "📘 Facebook (Friends)", "callback_data": "outreach:plat:facebook"},
+                {"text": "📘 Facebook (Send Requests)", "callback_data": "outreach:plat:facebook"},
                 {"text": "📸 Instagram (Follows)", "callback_data": "outreach:plat:instagram"}
             ],
             [{"text": "🔙 Back to Main Menu", "callback_data": "root:main"}]
+        ]
+    }
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_facebook_accept_menu(chat_id: str, message_id: int = None) -> dict:
+    """Outreach: Facebook Friend Requests Auto-Accept Menu."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    # Scan pending requests
+    pending_info = None
+    try:
+        from social.facebook_accept import get_pending_friend_requests
+        pending_info = get_pending_friend_requests(max_scrolls=1)
+    except Exception as e:
+        logger.warning(f"Error scanning pending requests for Telegram: {e}")
+
+    count = pending_info.get("count", 0) if pending_info else 0
+    title_badge = pending_info.get("title_badge", "") if pending_info else ""
+    requests = pending_info.get("requests", []) if pending_info else []
+
+    count_str = f"{count}"
+    if title_badge and title_badge != str(count):
+        count_str += f" ({title_badge})"
+
+    sample_lines = ""
+    if requests:
+        sample_lines = "\n\n📋 <b>Pending Requesters:</b>\n"
+        for r in requests[:4]:
+            mutual = f" • <i>{r['mutual_friends']}</i>" if r.get("mutual_friends") else ""
+            sample_lines += f"• <b>{r['name']}</b>{mutual}\n"
+        if len(requests) > 4:
+            sample_lines += f"<i>...and {len(requests) - 4} more waiting</i>\n"
+
+    text = (
+        "🤝 <b>Facebook Friend Requests Center</b>\n"
+        "<i>Connected to your authenticated Chrome browser on port 9222</i>\n\n"
+        f"📊 <b>Pending Requests:</b> <code>{count_str}</code>"
+        f"{sample_lines}\n"
+        "👇 <b>Select an action to execute:</b>"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": f"⚡ Accept All ({count}) + Auto-Like 👍", "callback_data": "fb_acc:run:all:like"}],
+            [{"text": f"⚡ Accept All ({count}) (No Like)", "callback_data": "fb_acc:run:all:nolike"}],
+            [
+                {"text": "🔟 Accept 10 + Like", "callback_data": "fb_acc:run:10:like"},
+                {"text": "🔄 Rescan Requests", "callback_data": "outreach:fb_accept_menu"}
+            ],
+            [{"text": "🔙 Back to Outreach Menu", "callback_data": "root:outreach"}]
         ]
     }
 
