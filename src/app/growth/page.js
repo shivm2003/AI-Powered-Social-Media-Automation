@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import FacebookAcceptDeck from "@/components/growth/FacebookAcceptDeck";
+import InstagramUnfollowDeck from "@/components/growth/InstagramUnfollowDeck";
 
 const PRESET_LOCATIONS = [
   "New Delhi",
@@ -188,6 +189,17 @@ export default function GrowthPage() {
           </span>
         </button>
         <button
+          id="btn-tab-unfollow"
+          onClick={() => setActiveTab("unfollow")}
+          className={`btn ${activeTab === "unfollow" ? "btn-primary" : "btn-secondary"}`}
+          style={{ padding: "0.6rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}
+        >
+          <span>📉 Instagram Unfollow</span>
+          <span style={{ background: "rgba(244, 63, 94, 0.2)", color: "#f43f5e", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 700 }}>
+            Prune
+          </span>
+        </button>
+        <button
           id="btn-tab-launcher"
           onClick={() => setActiveTab("launcher")}
           className={`btn ${activeTab === "launcher" ? "btn-primary" : "btn-secondary"}`}
@@ -207,6 +219,10 @@ export default function GrowthPage() {
 
       {activeTab === "accept" && (
         <FacebookAcceptDeck />
+      )}
+
+      {activeTab === "unfollow" && (
+        <InstagramUnfollowDeck />
       )}
 
       {activeTab === "launcher" ? (

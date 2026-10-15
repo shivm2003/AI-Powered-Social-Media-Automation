@@ -4,6 +4,7 @@ Finds active user profiles by location tag / keyword search and sends follow req
 Follows the standard outreach template matching facebook_friends.py.
 """
 import sys
+import os
 import time
 import random
 import urllib.parse
@@ -14,10 +15,13 @@ from pathlib import Path
 # Ensure UTF-8 output on Windows
 if sys.stdout.encoding != 'utf-8':
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
     except Exception:
         pass
+
+BASE_DIR = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(BASE_DIR / "automation"))
 
 from browser.driver import browser
 from config import PLATFORM_URLS
@@ -58,6 +62,28 @@ def extract_ig_profile_info(btn, loc: str = "") -> tuple[str, str]:
     return real_name, real_url
 
 
+def extract_author_from_post_page(driver) -> tuple[str, str]:
+    """
+    Extracts the author's username and profile URL from an Instagram post or reel page.
+    Uses multi-container XPath and parses the URL path to guarantee accuracy.
+    """
+    from selenium.webdriver.common.by import By
+    try:
+        links = driver.find_elements(By.XPATH, "//article//a | //main//a | //div[@role='main']//a | //header//a")
+        for l in links:
+            h = l.get_attribute("href") or ""
+            if h and "instagram.com/" in h and not any(x in h for x in ["/explore", "/direct", "/reels", "/p/", "/stories", "/legal", "/about", "/c/", "#"]):
+                parts = [p for p in h.rstrip("/").split("/") if p]
+                if len(parts) >= 3 and "instagram.com" in parts[-2]:
+                    username = parts[-1]
+                    if username and not username.isdigit() and username not in ["accounts", "login", "explore", "reels"]:
+                        return username, h
+    except Exception as e:
+        logger.debug(f"Author extraction note: {e}")
+
+    return None, None
+
+
 def send_instagram_follow_requests(
     location: str,
     target_count: int = 10,
@@ -86,7 +112,6 @@ def send_instagram_follow_requests(
     processed_urls = set()
 
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.common.keys import Keys
     from selenium.webdriver.common.action_chains import ActionChains
 
     try:
@@ -116,237 +141,203 @@ def send_instagram_follow_requests(
 
         time.sleep(random.uniform(2.5, 3.8))
 
-        scroll_attempts = 0
-        max_scroll_attempts = 25
-
-        while sent_count < target_count and scroll_attempts < max_scroll_attempts:
-            if stop_event and stop_event.is_set():
-                logs.append("🛑 Instagram follow task stopped by user.")
-                logger.info("Instagram follow loop stopped via stop_event.")
+        # ── Step 1: Check for visible direct Follow buttons on search page ──
+        xpaths = [
+            "//div[contains(@class, 'x1i10hfl') and @role='button' and not(@data-bot-sent='true')]",
+            "//div[@role='button' and not(@data-bot-sent='true')]",
+            "//button[not(@data-bot-sent='true')]"
+        ]
+        seen_ids = set()
+        for xp in xpaths:
+            if sent_count >= target_count:
                 break
-
-            # ── Strategy 1: Check for visible direct Follow buttons on screen ──
-            xpaths = [
-                "//div[contains(@class, 'x1i10hfl') and @role='button' and not(@data-bot-sent='true')]",
-                "//div[@role='button' and not(@data-bot-sent='true')]",
-                "//button[not(@data-bot-sent='true')]"
-            ]
-
-            follow_buttons = []
-            seen_ids = set()
-            for xp in xpaths:
-                try:
-                    for b in driver.find_elements(By.XPATH, xp):
-                        try:
-                            inner = (b.get_attribute("innerText") or "").strip().lower()
-                            if inner == "follow" and b.id not in seen_ids and b.get_attribute("data-bot-sent") != "true":
-                                seen_ids.add(b.id)
-                                follow_buttons.append(b)
-                        except Exception:
-                            continue
-                except Exception:
-                    continue
-
-            if follow_buttons:
-                for btn in follow_buttons:
-                    if stop_event and stop_event.is_set() or sent_count >= target_count:
+            try:
+                for b in driver.find_elements(By.XPATH, xp):
+                    if sent_count >= target_count or (stop_event and stop_event.is_set()):
                         break
-
                     try:
-                        if btn.get_attribute("data-bot-sent") == "true":
-                            continue
-
-                        # Extract profile name and URL
-                        user_name, user_url = extract_ig_profile_info(btn, location)
-                        display_name = user_name if user_name else f"Creator in {location}"
-
-                        if user_name and user_name.lower() in processed_users:
-                            continue
-                        if user_url and user_url in processed_urls:
-                            continue
-
-                        if user_name:
-                            processed_users.add(user_name.lower())
-                        if user_url:
-                            processed_urls.add(user_url)
-
-                        # Tag in DOM so we never click again
-                        driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
-                        driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", btn)
-                        time.sleep(random.uniform(0.6, 1.2))
-
-                        clicked = False
-                        try:
-                            ActionChains(driver).move_to_element(btn).pause(0.3).click().perform()
-                            clicked = True
-                        except Exception:
-                            pass
-
-                        if not clicked:
-                            try:
-                                driver.execute_script("arguments[0].click();", btn)
-                                clicked = True
-                            except Exception:
-                                pass
-
-                        if not clicked:
-                            skipped_count += 1
-                            continue
-
-                        sent_count += 1
-                        log_entry = f"✅ Followed #{sent_count}: '@{display_name}' ({location})"
-                        logs.append(log_entry)
-                        logger.info(log_entry)
-
-                        if on_progress:
-                            try:
-                                on_progress(sent_count, target_count, {
-                                    "platform": "instagram",
-                                    "user": display_name,
-                                    "url": user_url,
-                                    "location": location,
-                                    "sent": sent_count,
-                                    "target": target_count,
-                                })
-                            except Exception as e_cb:
-                                logger.debug(f"Progress callback note: {e_cb}")
-
-                        if sent_count >= target_count:
-                            break
-
-                        current_delay = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
-                        logger.info(f"Human safety pause: {current_delay:.1f}s before next follow ({sent_count}/{target_count})...")
-                        time.sleep(current_delay)
-
-                    except Exception as e_f:
-                        skipped_count += 1
-                        logger.debug(f"Direct follow button click error: {e_f}")
-
-            # ── Strategy 2: Location-Based Posts author follow ──
-            if sent_count < target_count:
-                post_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/p/') or contains(@href, '/reel/')]")
-                valid_posts = []
-                for pl in post_links:
-                    try:
-                        href = pl.get_attribute("href") or ""
-                        if href and href not in processed_urls:
-                            valid_posts.append(href)
-                    except Exception:
-                        continue
-
-                for post_href in valid_posts[:6]:
-                    if stop_event and stop_event.is_set() or sent_count >= target_count:
-                        break
-
-                    processed_urls.add(post_href)
-
-                    try:
-                        # Navigate directly to the post to inspect author
-                        driver.get(post_href)
-                        time.sleep(random.uniform(2.5, 3.5))
-
-                        # Look for Follow button in the post header
-                        post_follow_candidates = driver.find_elements(
-                            By.XPATH,
-                            "//div[contains(@class, 'x1i10hfl') and @role='button'] | //div[@role='button'] | //button"
-                        )
-
-                        post_btn = None
-                        for cand in post_follow_candidates:
-                            try:
-                                inner = (cand.get_attribute("innerText") or "").strip().lower()
-                                if inner == "follow" and cand.is_displayed():
-                                    post_btn = cand
-                                    break
-                            except Exception:
+                        inner = (b.get_attribute("innerText") or "").strip().lower()
+                        if inner == "follow" and b.id not in seen_ids and b.get_attribute("data-bot-sent") != "true":
+                            seen_ids.add(b.id)
+                            u_name, u_url = extract_ig_profile_info(b, location)
+                            disp = u_name or f"User_{len(processed_users)+1}"
+                            if u_name and u_name.lower() in processed_users:
                                 continue
+                            if u_name:
+                                processed_users.add(u_name.lower())
 
-                        if post_btn:
-                            # Extract author username
-                            author_name = "Creator in " + location
-                            author_url = ""
-                            try:
-                                author_links = driver.find_elements(By.XPATH, "//header//a | //div[contains(@class, 'x1i10hfl')]//a")
-                                for al in author_links:
-                                    h = al.get_attribute("href") or ""
-                                    t = (al.get_attribute("innerText") or al.text or "").strip()
-                                    if h and not any(x in h for x in ["/explore", "/direct", "/reels", "/p/"]):
-                                        author_name = t or h.rstrip("/").split("/")[-1]
-                                        author_url = h
-                                        break
-                            except Exception:
-                                pass
-
-                            if author_name.lower() in processed_users:
-                                continue
-                            processed_users.add(author_name.lower())
-
-                            # Click follow on author
-                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post_btn)
-                            time.sleep(0.5)
+                            driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", b)
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", b)
+                            time.sleep(0.6)
 
                             clicked = False
                             try:
-                                ActionChains(driver).move_to_element(post_btn).pause(0.3).click().perform()
+                                ActionChains(driver).move_to_element(b).pause(0.3).click().perform()
                                 clicked = True
                             except Exception:
                                 pass
-
                             if not clicked:
                                 try:
-                                    driver.execute_script("arguments[0].click();", post_btn)
+                                    driver.execute_script("arguments[0].click();", b)
                                     clicked = True
                                 except Exception:
                                     pass
 
                             if clicked:
                                 sent_count += 1
-                                log_entry = f"✅ Followed #{sent_count}: '@{author_name}' ({location})"
+                                log_entry = f"✅ Followed #{sent_count}: '@{disp}' ({location})"
                                 logs.append(log_entry)
                                 logger.info(log_entry)
-
                                 if on_progress:
-                                    try:
-                                        on_progress(sent_count, target_count, {
-                                            "platform": "instagram",
-                                            "user": author_name,
-                                            "url": author_url or post_href,
-                                            "location": location,
-                                            "sent": sent_count,
-                                            "target": target_count,
-                                        })
-                                    except Exception as e_cb:
-                                        logger.debug(f"Progress callback note: {e_cb}")
-
-                                if sent_count >= target_count:
-                                    break
-
-                                current_delay = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
-                                logger.info(f"Human safety pause: {current_delay:.1f}s before next follow...")
-                                time.sleep(current_delay)
-                            else:
-                                skipped_count += 1
-
-                    except Exception as e_post:
-                        logger.debug(f"Post navigation error: {e_post}")
-                        skipped_count += 1
-
-                # If still under target, return to the keyword search page to scroll down
-                if sent_count < target_count:
-                    try:
-                        driver.get(keyword_url)
-                        time.sleep(2.0)
+                                    on_progress(sent_count, target_count, {
+                                        "platform": "instagram",
+                                        "user": disp,
+                                        "url": u_url,
+                                        "location": location,
+                                        "sent": sent_count,
+                                        "target": target_count,
+                                    })
+                                pause = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
+                                time.sleep(pause)
                     except Exception:
-                        pass
+                        continue
+            except Exception:
+                pass
 
-            # Scroll down to load more content
-            scroll_attempts += 1
-            scroll_y = random.randint(500, 900)
-            driver.execute_script(f"window.scrollBy(0, {scroll_y});")
-            time.sleep(random.uniform(2.0, 3.5))
+        # ── Step 2: Harvest Location Post Candidates Pool ──
+        candidate_queue = []
+        scroll_harvests = 0
+        while len(candidate_queue) < max(25, target_count * 3) and scroll_harvests < 6:
+            post_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/p/') or contains(@href, '/reel/')]")
+            for pl in post_links:
+                try:
+                    h = pl.get_attribute("href") or ""
+                    if h and h not in processed_urls and h not in candidate_queue:
+                        candidate_queue.append(h)
+                except Exception:
+                    continue
+            # Scroll down to load more posts
+            driver.execute_script("window.scrollBy(0, 800);")
+            scroll_harvests += 1
+            time.sleep(1.8)
+
+        logs.append(f"📦 Harvested {len(candidate_queue)} location post candidates for '{location}'. Processing follows...")
+
+        # ── Step 3: Process Post Authors Sequentially ──
+        for post_href in candidate_queue:
+            if sent_count >= target_count:
+                break
+            if stop_event and stop_event.is_set():
+                logs.append("🛑 Instagram follow task stopped by user.")
+                logger.info("Instagram follow loop stopped via stop_event.")
+                break
+
+            processed_urls.add(post_href)
+
+            try:
+                driver.get(post_href)
+                time.sleep(random.uniform(2.5, 3.5))
+
+                # Extract author username
+                author_name, author_url = extract_author_from_post_page(driver)
+
+                # If author was not identifiable from post page, use unique post slug fallback
+                post_id = post_href.rstrip("/").split("/")[-1]
+                effective_author = author_name or f"creator_post_{post_id}"
+
+                if effective_author.lower() in processed_users:
+                    skipped_count += 1
+                    continue
+
+                processed_users.add(effective_author.lower())
+
+                # Check for Follow button on the post/reel page
+                post_btns = driver.find_elements(
+                    By.XPATH,
+                    "//div[contains(@class, 'x1i10hfl') and @role='button'] | //div[@role='button'] | //button"
+                )
+
+                post_follow_btn = None
+                for cand in post_btns:
+                    try:
+                        inner = (cand.text or cand.get_attribute("innerText") or "").strip().lower()
+                        if inner == "follow" and cand.is_displayed():
+                            post_follow_btn = cand
+                            break
+                        elif inner in ["following", "requested"]:
+                            # Already followed or requested
+                            post_follow_btn = None
+                            break
+                    except Exception:
+                        continue
+
+                clicked = False
+                if post_follow_btn:
+                    try:
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post_follow_btn)
+                        time.sleep(0.5)
+                        ActionChains(driver).move_to_element(post_follow_btn).pause(0.3).click().perform()
+                        clicked = True
+                    except Exception:
+                        try:
+                            driver.execute_script("arguments[0].click();", post_follow_btn)
+                            clicked = True
+                        except Exception:
+                            pass
+
+                # If post button not found or failed, try visiting their profile directly
+                if not clicked and author_name and author_url:
+                    try:
+                        driver.get(author_url)
+                        time.sleep(2.5)
+                        profile_btns = driver.find_elements(By.XPATH, "//header//button | //main//button | //button")
+                        for pb in profile_btns:
+                            t = (pb.text or pb.get_attribute("innerText") or "").strip().lower()
+                            if t == "follow" and pb.is_displayed():
+                                ActionChains(driver).move_to_element(pb).pause(0.3).click().perform()
+                                clicked = True
+                                break
+                            elif t in ["following", "requested"]:
+                                # Already following
+                                break
+                    except Exception as e_prof:
+                        logger.debug(f"Profile follow note: {e_prof}")
+
+                if clicked:
+                    sent_count += 1
+                    display_tag = author_name or effective_author
+                    log_entry = f"✅ Followed #{sent_count}: '@{display_tag}' ({location})"
+                    logs.append(log_entry)
+                    logger.info(log_entry)
+
+                    if on_progress:
+                        try:
+                            on_progress(sent_count, target_count, {
+                                "platform": "instagram",
+                                "user": display_tag,
+                                "url": author_url or post_href,
+                                "location": location,
+                                "sent": sent_count,
+                                "target": target_count,
+                            })
+                        except Exception as e_cb:
+                            logger.debug(f"Progress callback note: {e_cb}")
+
+                    if sent_count >= target_count:
+                        break
+
+                    current_delay = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
+                    logger.info(f"Human safety pause: {current_delay:.1f}s before next follow ({sent_count}/{target_count})...")
+                    time.sleep(current_delay)
+                else:
+                    skipped_count += 1
+
+            except Exception as e_post:
+                logger.debug(f"Error processing post {post_href}: {e_post}")
+                skipped_count += 1
 
         status_label = "stopped" if (stop_event and stop_event.is_set()) else ("completed" if sent_count >= target_count else "partial")
-        logs.append(f"🏁 Finished Instagram follow session. Total follows: {sent_count}/{target_count}.")
+        logs.append(f"🏁 Finished Instagram follow session. Total follows: {sent_count}/{target_count} (Skipped: {skipped_count}).")
 
         return {
             "status": status_label,
@@ -373,8 +364,7 @@ def send_instagram_follow_requests(
 
 
 if __name__ == "__main__":
-    import sys
-    test_loc = sys.argv[1] if len(sys.argv) > 1 else "Mumbai"
-    test_num = int(sys.argv[2]) if len(sys.argv) > 2 else 2
-    res = send_instagram_follow_requests(location=test_loc, target_count=test_num, safety_delay=8)
+    test_loc = sys.argv[1] if len(sys.argv) > 1 else "Delhi"
+    test_num = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+    res = send_instagram_follow_requests(location=test_loc, target_count=test_num, safety_delay=6)
     print("\nResult:", res)

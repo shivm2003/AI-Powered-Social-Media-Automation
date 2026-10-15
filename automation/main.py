@@ -364,6 +364,35 @@ def handle_command(command: dict):
             )
             send_response(res)
 
+        elif action == "ig_get_following_list":
+            from social.instagram_unfollow import get_instagram_following_list
+            max_count = int(command.get("max_count", 50))
+            res = get_instagram_following_list(max_count=max_count)
+            send_response(res)
+
+        elif action == "ig_unfollow_accounts":
+            from social.instagram_unfollow import unfollow_instagram_accounts
+            target_count = command.get("target_count")
+            if target_count is not None and str(target_count).lower() != "all":
+                try:
+                    target_count = int(target_count)
+                except Exception:
+                    target_count = 10
+            else:
+                target_count = 0
+
+            safety_delay = int(command.get("safety_delay", 10))
+            specific_users = command.get("specific_users")
+            campaign_id = command.get("campaign_id")
+
+            res = unfollow_instagram_accounts(
+                target_count=target_count,
+                specific_users=specific_users,
+                safety_delay=safety_delay,
+                campaign_id=campaign_id
+            )
+            send_response(res)
+
         else:
             send_response({
                 "status": "error",

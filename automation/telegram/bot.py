@@ -734,12 +734,79 @@ def send_outreach_platform_menu(chat_id: str, message_id: int = None) -> dict:
     keyboard = {
         "inline_keyboard": [
             [{"text": "🤝 Accept Pending Friend Requests (FB)", "callback_data": "outreach:fb_accept_menu"}],
+            [{"text": "📉 Prune / Unfollow Accounts (Instagram)", "callback_data": "outreach:ig_unfollow_menu"}],
             [{"text": "⚡ Both Simultaneously (FB + IG)", "callback_data": "outreach:plat:both"}],
             [
                 {"text": "📘 Facebook (Send Requests)", "callback_data": "outreach:plat:facebook"},
                 {"text": "📸 Instagram (Follows)", "callback_data": "outreach:plat:instagram"}
             ],
             [{"text": "🔙 Back to Main Menu", "callback_data": "root:main"}]
+        ]
+    }
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_instagram_unfollow_menu(chat_id: str, message_id: int = None) -> dict:
+    """Outreach: Instagram Following Pruning & Unfollow Menu."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    following_info = None
+    try:
+        from social.instagram_unfollow import get_instagram_following_list
+        following_info = get_instagram_following_list(max_count=15)
+    except Exception as e:
+        logger.warning(f"Error fetching Instagram following list: {e}")
+
+    total_cnt = following_info.get("total_following", 0) if following_info else 0
+    username = following_info.get("username", "loansolutions2026") if following_info else "loansolutions2026"
+    accounts = following_info.get("accounts", []) if following_info else []
+
+    sample_lines = ""
+    if accounts:
+        sample_lines = "\n\n📋 <b>Currently Followed Accounts:</b>\n"
+        for acc in accounts[:5]:
+            sample_lines += f"• <b>@{acc['username']}</b>\n"
+        if len(accounts) > 5:
+            sample_lines += f"<i>...and {total_cnt - 5} more</i>\n"
+
+    text = (
+        "📉 <b>Instagram Unfollow & Pruning Center</b>\n"
+        "<i>Connected to your authenticated Chrome browser on port 9222</i>\n\n"
+        f"📊 <b>Total Following:</b> <code>{total_cnt} accounts</code>\n"
+        f"👤 <b>Active Account:</b> @{username}"
+        f"{sample_lines}\n"
+        "👇 <b>Select an action to execute:</b>"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": f"⚡ Unfollow All ({total_cnt})", "callback_data": "ig_unf:run:all"}],
+            [
+                {"text": "5️⃣ Unfollow 5", "callback_data": "ig_unf:run:5"},
+                {"text": "🔟 Unfollow 10", "callback_data": "ig_unf:run:10"}
+            ],
+            [
+                {"text": "🔄 Refresh List", "callback_data": "outreach:ig_unfollow_menu"},
+                {"text": "🔙 Back to Outreach", "callback_data": "root:outreach"}
+            ]
         ]
     }
 

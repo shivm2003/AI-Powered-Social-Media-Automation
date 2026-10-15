@@ -47,6 +47,7 @@ try:
         send_root_choice_menu,
         send_outreach_platform_menu,
         send_facebook_accept_menu,
+        send_instagram_unfollow_menu,
         send_outreach_location_menu,
         send_outreach_count_menu,
         send_antigravity_menu,
@@ -73,6 +74,7 @@ except (ImportError, ModuleNotFoundError):
         send_root_choice_menu,
         send_outreach_platform_menu,
         send_facebook_accept_menu,
+        send_instagram_unfollow_menu,
         send_outreach_location_menu,
         send_outreach_count_menu,
         send_antigravity_menu,
@@ -486,6 +488,106 @@ def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, me
             send_text_message(chat_id, f"⚠️ Facebook accept error: {e_acc}")
 
     threading.Thread(target=_exec_accept, daemon=True).start()
+
+
+def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = None):
+    """Executes Instagram Unfollow and manages live throttled progress in Telegram."""
+    import threading
+    import uuid
+
+    job_id = str(uuid.uuid4())[:8]
+    target_label = "All Followed Accounts" if target_count == 0 else f"{target_count} Accounts"
+
+    init_text = (
+        f"📉 <b>Instagram Unfollow Sequence Initiated!</b>\n\n"
+        f"🎯 <b>Target:</b> {target_label}\n"
+        f"🌐 <b>Browser:</b> Chrome Port 9222 (loansolutions2026)\n"
+        f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n\n"
+        f"⏳ <b>Status:</b> Connecting to Instagram following dialog..."
+    )
+
+    stop_keyboard = {
+        "inline_keyboard": [
+            [{"text": "🛑 Stop Unfollowing", "callback_data": f"ig_unf:stop:{job_id}"}]
+        ]
+    }
+
+    sent_msg_id = None
+    if message_id:
+        try:
+            res = edit_message_text(chat_id, message_id, init_text, keyboard=stop_keyboard)
+            if res.get("ok"):
+                sent_msg_id = message_id
+        except Exception:
+            pass
+
+    if not sent_msg_id:
+        res_msg = send_text_message(chat_id, init_text, reply_markup=stop_keyboard)
+        if res_msg.get("response", {}).get("result"):
+            sent_msg_id = res_msg["response"]["result"].get("message_id")
+
+    def _exec_unfollow():
+        try:
+            from social.instagram_unfollow import unfollow_instagram_accounts
+
+            last_edit_time = [time.time()]
+
+            def _on_progress(unfollowed, target, details):
+                if time.time() - last_edit_time[0] >= 2.0:
+                    last_edit_time[0] = time.time()
+                    u_user = details.get("user", "")
+                    update_text = (
+                        f"⏳ <b>Pruning Instagram Following...</b>\n\n"
+                        f"📉 <b>Unfollowed:</b> <code>{unfollowed}</code>"
+                        f"{f' / {target}' if target and target != 9999 else ''}\n"
+                        f"👤 <b>Recent:</b> <i>@{u_user}</i>\n"
+                        f"🛡️ <i>Human safety delays active to protect your account.</i>"
+                    )
+                    if sent_msg_id:
+                        edit_message_text(chat_id, sent_msg_id, update_text, keyboard=stop_keyboard)
+
+            res = unfollow_instagram_accounts(
+                target_count=target_count,
+                safety_delay=10,
+                on_progress=_on_progress,
+                campaign_id=job_id
+            )
+
+            unf_count = res.get("unfollowed_count", 0)
+            people = res.get("unfollowed_accounts", [])
+
+            people_list = ""
+            if people:
+                people_list = "\n📋 <b>Recently Unfollowed:</b>\n"
+                for p in people[:6]:
+                    people_list += f"• <b>@{p}</b>\n"
+                if len(people) > 6:
+                    people_list += f"<i>...and {len(people) - 6} more</i>\n"
+
+            done_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "📉 Back to Unfollow Center", "callback_data": "outreach:ig_unfollow_menu"}],
+                    [{"text": "🔙 Main Menu", "callback_data": "root:main"}]
+                ]
+            }
+
+            final_text = (
+                f"🎉 <b>Instagram Pruning Finished!</b>\n\n"
+                f"📉 <b>Total Accounts Unfollowed:</b> <code>{unf_count}</code>\n"
+                f"{people_list}\n"
+                f"<i>Execution finished via Chrome on port 9222.</i>"
+            )
+
+            if sent_msg_id:
+                edit_message_text(chat_id, sent_msg_id, final_text, keyboard=done_keyboard)
+            else:
+                send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+
+        except Exception as e_unf:
+            logger.error(f"Error in instagram unfollow thread: {e_unf}", exc_info=True)
+            send_text_message(chat_id, f"⚠️ Instagram unfollow error: {e_unf}")
+
+    threading.Thread(target=_exec_unfollow, daemon=True).start()
 
 
 def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms: list, message_id: int = None):
@@ -1034,6 +1136,31 @@ def handle_callback_query(callback: dict):
         stop_flag.parent.mkdir(parents=True, exist_ok=True)
         stop_flag.write_text("STOP", encoding="utf-8")
         send_text_message(chat_id, f"🛑 <b>Stop signal sent</b> for accept job <code>{job_id}</code>.")
+
+    # 14e. Instagram Unfollow Menu
+    elif callback_data == "outreach:ig_unfollow_menu":
+        if callback_id:
+            answer_callback_query(callback_id, text="🔍 Scanning Instagram following list...")
+        send_instagram_unfollow_menu(chat_id, message_id=message_id)
+
+    # 14f. Instagram Unfollow Execute Action (e.g. ig_unf:run:5 or ig_unf:run:all)
+    elif callback_data.startswith("ig_unf:run:"):
+        count_str = callback_data.split(":", 2)[2] if ":" in callback_data else "10"
+        target_cnt = 0 if count_str == "all" else int(count_str)
+
+        if callback_id:
+            answer_callback_query(callback_id, text="⚡ Initiating Instagram Unfollow Sequence...")
+        launch_ig_unfollow_task(chat_id, target_count=target_cnt, message_id=message_id)
+
+    # 14g. Instagram Unfollow Stop Action
+    elif callback_data.startswith("ig_unf:stop:"):
+        job_id = callback_data.split(":", 2)[2] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="🛑 Halting Instagram unfollow sequence...")
+        stop_flag = BASE_DIR / "data" / f"stop_{job_id}.flag"
+        stop_flag.parent.mkdir(parents=True, exist_ok=True)
+        stop_flag.write_text("STOP", encoding="utf-8")
+        send_text_message(chat_id, f"🛑 <b>Stop signal sent</b> for unfollow job <code>{job_id}</code>.")
 
     # 15. Outreach Step 2: Platform Selected -> Select Location
     elif callback_data.startswith("outreach:plat:"):
