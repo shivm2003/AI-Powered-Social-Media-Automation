@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "AI Social Media Automation",
-  description: "AI-powered social media content generation and publishing with Gemini, ChatGPT, and Claude",
+  title: "Manvxi AI — Autonomous Social Media & Growth Engine",
+  description: "Next-generation 3D AI-powered social media content generation, visual design, and multi-platform publishing",
 };
 
 export default function RootLayout({ children }) {

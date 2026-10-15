@@ -1,8 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { CAMPAIGN_STATUSES } from "@/lib/constants";
+import AuroraBackdrop3D from "@/components/3d/AuroraBackdrop3D";
+import ThreeDScene from "@/components/3d/ThreeDScene";
+import Hero3D from "@/components/dashboard/Hero3D";
+import StatsGrid3D from "@/components/dashboard/StatsGrid3D";
+import FeatureMatrix3D from "@/components/dashboard/FeatureMatrix3D";
+import QuickActions3D from "@/components/dashboard/QuickActions3D";
+import ActivityStream3D from "@/components/dashboard/ActivityStream3D";
+import GettingStarted3D from "@/components/dashboard/GettingStarted3D";
+import styles from "./page.module.css";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
@@ -26,185 +33,40 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="loading-overlay">
-        <div className="spinner" />
-        <span>Loading dashboard...</span>
+      <div className={styles.loadingContainer}>
+        <div className={styles.spinner3D} />
+        <div className={styles.loadingText}>
+          <span>⚡</span> Initializing Manvxi AI 3D Command Matrix...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="animate-fadeIn">
-      {/* Page Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Your AI-powered social media command center</p>
-        </div>
-        <Link href="/generate" className="btn btn-primary btn-lg">
-          ✨ Generate Content
-        </Link>
+    <div className={styles.pageContainer}>
+      {/* 3D Ambient Lighting Backdrop */}
+      <AuroraBackdrop3D />
+
+      {/* WebGL 3D Interactive Hero Canvas */}
+      <ThreeDScene />
+
+      {/* Futuristic 3D Command Banner */}
+      <Hero3D stats={stats} />
+
+      {/* 3D Perspective Tilt Metric Cards */}
+      <StatsGrid3D stats={stats} />
+
+      {/* 3D Neural Automation Pipeline Grid */}
+      <FeatureMatrix3D />
+
+      {/* Command Deck & Activity Stream Grid */}
+      <div className={styles.twoColumnGrid}>
+        <QuickActions3D />
+        <ActivityStream3D campaigns={stats?.recentCampaigns} />
       </div>
 
-      {/* Stats Grid */}
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-icon purple">📦</div>
-          <div>
-            <div className="stat-value">{stats?.productCount || 0}</div>
-            <div className="stat-label">Products</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon cyan">🔗</div>
-          <div>
-            <div className="stat-value">{stats?.accountCount || 0}</div>
-            <div className="stat-label">Connected Accounts</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon green">🎉</div>
-          <div>
-            <div className="stat-value">{stats?.postedCount || 0}</div>
-            <div className="stat-label">Published Posts</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon orange">⏳</div>
-          <div>
-            <div className="stat-value">{stats?.pendingCount || 0}</div>
-            <div className="stat-label">Pending Approval</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions + Recent Activity */}
-      <div className="grid-2">
-        {/* Quick Actions */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">⚡ Quick Actions</h3>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-            <Link href="/products" className="btn btn-secondary" style={{ justifyContent: "flex-start" }}>
-              📦 Manage Products
-            </Link>
-            <Link href="/accounts" className="btn btn-secondary" style={{ justifyContent: "flex-start" }}>
-              🔗 Connect Social Accounts
-            </Link>
-            <Link href="/generate" className="btn btn-secondary" style={{ justifyContent: "flex-start" }}>
-              ✨ Generate New Content
-            </Link>
-            <Link href="/settings" className="btn btn-secondary" style={{ justifyContent: "flex-start" }}>
-              ⚙️ Configure Settings
-            </Link>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">📋 Recent Activity</h3>
-          </div>
-          {stats?.recentCampaigns?.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-              {stats.recentCampaigns.slice(0, 5).map((campaign) => {
-                const statusConfig = CAMPAIGN_STATUSES[campaign.status] || CAMPAIGN_STATUSES.draft;
-                return (
-                  <div
-                    key={campaign.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "var(--space-3) var(--space-4)",
-                      background: "var(--bg-tertiary)",
-                      borderRadius: "var(--radius-md)",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                      <span>{statusConfig.icon}</span>
-                      <div>
-                        <div style={{ fontSize: "var(--font-sm)", fontWeight: 600 }}>
-                          {campaign.product_name || "Untitled"}
-                        </div>
-                        <div style={{ fontSize: "var(--font-xs)", color: "var(--text-tertiary)" }}>
-                          {campaign.content_type} • {campaign.llm_provider}
-                        </div>
-                      </div>
-                    </div>
-                    <span className={`tag tag-${statusConfig.color}`}>{statusConfig.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty-state" style={{ padding: "var(--space-8) 0" }}>
-              <div className="empty-state-icon">📋</div>
-              <p className="empty-state-description">
-                No campaigns yet. Generate your first content to get started!
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Getting Started Guide */}
-      {stats?.productCount === 0 && (
-        <div
-          className="card animate-slideUp"
-          style={{
-            marginTop: "var(--space-8)",
-            background: "var(--accent-primary-muted)",
-            borderColor: "var(--accent-primary)",
-          }}
-        >
-          <div className="card-header">
-            <h3 className="card-title">🚀 Getting Started</h3>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-              <div className="stepper-number" style={{ background: "var(--accent-primary)", color: "white", borderColor: "var(--accent-primary)" }}>1</div>
-              <div>
-                <div style={{ fontWeight: 600 }}>Add your first product</div>
-                <div style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>
-                  Define your brand, target audience, and visual identity
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-              <div className="stepper-number">2</div>
-              <div>
-                <div style={{ fontWeight: 600 }}>Connect social media accounts</div>
-                <div style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>
-                  Link Facebook, Instagram, LinkedIn, or WhatsApp
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-              <div className="stepper-number">3</div>
-              <div>
-                <div style={{ fontWeight: 600 }}>Configure Telegram bot</div>
-                <div style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>
-                  Set up approval workflow via Telegram
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-              <div className="stepper-number">4</div>
-              <div>
-                <div style={{ fontWeight: 600 }}>Generate your first post!</div>
-                <div style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>
-                  Let AI create amazing content for your social media
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Step-by-Step Guide for New Workspaces */}
+      {stats?.productCount === 0 && <GettingStarted3D />}
     </div>
   );
 }

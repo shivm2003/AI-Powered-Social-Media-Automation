@@ -12,8 +12,14 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import logging
+import sys
 from pathlib import Path
 import sqlite3
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+except Exception:
+    pass
 
 logger = logging.getLogger("automation.telegram")
 
@@ -666,7 +672,7 @@ def send_root_choice_menu(chat_id: str, message_id: int = None) -> dict:
         return {"status": "error", "message": "Missing Telegram credentials."}
 
     text = (
-        "⚡ <b>AI Social Media & Growth Engine</b>\n"
+        "⚡ <b>Manvxi AI & Growth Engine</b>\n"
         "<i>Welcome! Automate viral campaigns & grow your audience with human-like AI.</i>\n\n"
         "🎯 <b>What would you like to execute today?</b>"
     )

@@ -1,4 +1,4 @@
-# Python automation for AI Social Media
+# Python automation for Manvxi AI
 # This module handles Selenium-based browser automation for:
 # - LLM interaction (Gemini, ChatGPT, Claude)
 # - Social media posting (Facebook, Instagram, LinkedIn, WhatsApp)

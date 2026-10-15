@@ -1,7 +1,7 @@
 @echo off
-title AI Social Media Automation - Browser Launcher
+title Manvxi AI - Browser Launcher
 echo ==============================================================================
-echo   AI Social Media Automation - Unified Browser Launcher
+echo   Manvxi AI - Unified Browser Launcher
 echo ==============================================================================
 echo.
 echo Launching Google Chrome connected to the Automation Engine (Port 9222)...

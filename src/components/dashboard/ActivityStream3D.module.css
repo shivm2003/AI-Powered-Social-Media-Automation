@@ -1,0 +1,127 @@
+.streamContainer {
+  padding: 1.5rem;
+  height: 100%;
+}
+
+.streamHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.75rem;
+}
+
+.streamTitle {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.streamCount {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.95rem;
+  background: rgba(30, 35, 60, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md, 10px);
+  transition: all 0.2s ease;
+  transform: translateZ(15px);
+}
+
+.item:hover {
+  background: rgba(45, 55, 95, 0.65);
+  border-color: rgba(168, 85, 247, 0.35);
+  transform: translateZ(25px);
+}
+
+.itemLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.statusIcon {
+  font-size: 1.1rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.itemDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.itemTitle {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.itemSub {
+  font-size: 0.72rem;
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.7;
+}
+
+.emptyText {
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.75);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.viewAllLink {
+  margin-top: 1rem;
+  display: block;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a855f7;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.viewAllLink:hover {
+  color: #c084fc;
+}

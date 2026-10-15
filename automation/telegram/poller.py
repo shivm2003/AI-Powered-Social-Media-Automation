@@ -16,8 +16,8 @@ from pathlib import Path
 
 # Ensure UTF-8 output on Windows and unbuffered streaming
 try:
-    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
-    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 except Exception:
     pass
 

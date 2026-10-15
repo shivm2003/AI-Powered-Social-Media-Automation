@@ -66,7 +66,7 @@ export async function POST(request) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
-          text: "🚀 <b>AI Social Media Automation</b>: Telegram connection verified successfully!",
+          text: "🚀 <b>Manvxi AI</b>: Telegram connection verified successfully!",
           parse_mode: "HTML",
         }),
       });

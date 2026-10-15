@@ -1,4 +1,4 @@
-# AI Social Media Automation — Python engine
+# Manvxi AI — Python engine
 import sys
 from pathlib import Path
 

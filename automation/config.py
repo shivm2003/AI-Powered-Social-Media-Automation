@@ -1,5 +1,5 @@
 """
-AI Social Media Automation — Configuration
+Manvxi AI — Configuration
 """
 import os
 from pathlib import Path

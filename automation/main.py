@@ -1,5 +1,5 @@
 """
-AI Social Media Automation — Main Entry Point
+Manvxi AI — Main Entry Point
 
 Receives JSON commands from the Node.js backend via stdin/stdout IPC.
 Handles:
@@ -368,7 +368,7 @@ def interactive_mode():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Social Media Automation Engine")
+    parser = argparse.ArgumentParser(description="Manvxi AI Engine")
     parser.add_argument("--test-login", type=str, help="Test login for a platform (facebook, instagram, linkedin, whatsapp)")
     parser.add_argument("--test-llm", type=str, help="Test LLM (gemini, chatgpt, claude)")
     args = parser.parse_args()

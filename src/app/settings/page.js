@@ -215,9 +215,9 @@ export default function SettingsPage() {
             }}
           >
             <span style={{ color: "var(--text-tertiary)" }}>Application:</span>
-            <span>AI Social Media Automation</span>
+            <span>Manvxi AI</span>
             <span style={{ color: "var(--text-tertiary)" }}>Version:</span>
-            <span>0.1.0</span>
+            <span>2.0.0 (3D Edition)</span>
             <span style={{ color: "var(--text-tertiary)" }}>Database:</span>
             <span>SQLite (local)</span>
             <span style={{ color: "var(--text-tertiary)" }}>Automation:</span>
