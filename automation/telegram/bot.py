@@ -762,6 +762,52 @@ def send_outreach_platform_menu(chat_id: str, message_id: int = None) -> dict:
     return {"status": "success" if res.get("ok") else "error", "response": res}
 
 
+def send_instagram_steps_menu(chat_id: str, message_id: int = None) -> dict:
+    """Outreach: Dedicated Instagram Growth & Follow Steps Menu."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    text = (
+        "📸 <b>Instagram Growth & Follow Engine — Guided Steps</b>\n"
+        "<i>Connected to your authenticated Chrome browser on port 9222</i>\n\n"
+        "👇 <b>Select an Instagram Step below:</b>\n\n"
+        "🎯 <b>Step 1: Follow Specific Account:</b>\n"
+        "Follow any target account by typing their <code>@username</code> (or multiple accounts comma-separated).\n\n"
+        "📍 <b>Step 2: Auto-Follow by Location / City:</b>\n"
+        "Discover & follow local active accounts in Lucknow, Delhi, Mumbai, etc. with human safety pacing.\n\n"
+        "📉 <b>Step 3: Prune / Unfollow Accounts:</b>\n"
+        "Clean inactive followings and manage your follow ratio safely.\n\n"
+        "💡 <i>Quick Tip: You can also type <code>/follow @username</code> directly in chat!</i>"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🎯 Step 1: Follow Specific Account (@username)", "callback_data": "outreach:ig_mode:username"}],
+            [{"text": "📍 Step 2: Auto-Follow by Location / City", "callback_data": "outreach:ig_mode:location"}],
+            [{"text": "📉 Step 3: Prune / Unfollow Accounts", "callback_data": "outreach:ig_unfollow_menu"}],
+            [{"text": "🔙 Back to Outreach Menu", "callback_data": "root:outreach"}]
+        ]
+    }
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
 def send_instagram_unfollow_menu(chat_id: str, message_id: int = None) -> dict:
     """Outreach: Instagram Following Pruning & Unfollow Menu."""
     bot_token, _ = get_telegram_credentials()

@@ -46,6 +46,7 @@ try:
         edit_message_reply_markup,
         send_root_choice_menu,
         send_outreach_platform_menu,
+        send_instagram_steps_menu,
         send_facebook_accept_menu,
         send_instagram_unfollow_menu,
         send_outreach_location_menu,
@@ -73,6 +74,7 @@ except (ImportError, ModuleNotFoundError):
         edit_message_reply_markup,
         send_root_choice_menu,
         send_outreach_platform_menu,
+        send_instagram_steps_menu,
         send_facebook_accept_menu,
         send_instagram_unfollow_menu,
         send_outreach_location_menu,
@@ -588,6 +590,164 @@ def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = N
             send_text_message(chat_id, f"⚠️ Instagram unfollow error: {e_unf}")
 
     threading.Thread(target=_exec_unfollow, daemon=True).start()
+
+
+def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int = None):
+    """
+    Executes Instagram following on specific accounts in Chrome on port 9222.
+    Streams real-time status and interactive feedback to Telegram.
+    """
+    import random
+    from social.instagram_follow import clean_instagram_username, follow_specific_instagram_user
+
+    clean_list = []
+    for raw in usernames:
+        c = clean_instagram_username(raw)
+        if c and c not in clean_list:
+            clean_list.append(c)
+
+    if not clean_list:
+        send_text_message(
+            chat_id,
+            "⚠️ <b>No valid Instagram usernames detected.</b>\n"
+            "Please provide a valid @username (e.g. <code>@lucknowi_vibes_</code>) or use /cancel."
+        )
+        return
+
+    job_id = str(uuid.uuid4())[:8]
+    stop_flag = BASE_DIR / "data" / f"stop_{job_id}.flag"
+
+    init_text = (
+        f"📸 <b>Instagram Follow Sequence Initiated!</b>\n\n"
+        f"🎯 <b>Target Accounts ({len(clean_list)}):</b>\n"
+        + "\n".join([f"• <b>@{u}</b>" for u in clean_list[:6]])
+        + (f"\n<i>...and {len(clean_list)-6} more</i>" if len(clean_list) > 6 else "") + "\n\n"
+        f"🌐 <b>Browser:</b> Chrome Port 9222 (loansolutions2026)\n"
+        f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n\n"
+        f"⏳ <b>Status:</b> Connecting to Instagram user profiles..."
+    )
+
+    stop_keyboard = {
+        "inline_keyboard": [
+            [{"text": "🛑 Stop Follow Task", "callback_data": f"ig_flw:stop:{job_id}"}]
+        ]
+    }
+
+    sent_msg_id = None
+    if message_id:
+        try:
+            res = edit_message_text(chat_id, message_id, init_text, keyboard=stop_keyboard)
+            if res.get("ok"):
+                sent_msg_id = message_id
+        except Exception:
+            pass
+
+    if not sent_msg_id:
+        res_msg = send_text_message(chat_id, init_text, reply_markup=stop_keyboard)
+        if res_msg.get("response", {}).get("result"):
+            sent_msg_id = res_msg["response"]["result"].get("message_id")
+
+    def _exec_follow_users():
+        try:
+            results = []
+            sent_count = 0
+            already_count = 0
+            req_count = 0
+            failed_count = 0
+
+            for i, u in enumerate(clean_list):
+                if stop_flag.exists():
+                    logger.info(f"Stop flag detected for follow job {job_id}")
+                    try:
+                        stop_flag.unlink()
+                    except Exception:
+                        pass
+                    break
+
+                res = follow_specific_instagram_user(u)
+                results.append(res)
+                st = res.get("status")
+
+                if st == "success":
+                    sent_count += 1
+                    icon = "✅"
+                elif st == "already_following":
+                    already_count += 1
+                    icon = "ℹ️"
+                elif st == "requested":
+                    req_count += 1
+                    icon = "📨"
+                else:
+                    failed_count += 1
+                    icon = "⚠️"
+
+                update_text = (
+                    f"📸 <b>Instagram Following in Progress...</b>\n\n"
+                    f"👤 <b>Account ({i+1}/{len(clean_list)}):</b> @{u}\n"
+                    f"📊 <b>Result:</b> {icon} <i>{res.get('message', '')}</i>\n"
+                    f"🎯 <b>Followed:</b> <code>{sent_count}</code> | "
+                    f"<b>Already Following:</b> <code>{already_count}</code>\n\n"
+                    f"🛡️ <i>Human safety pauses active to protect your account.</i>"
+                )
+
+                if sent_msg_id:
+                    try:
+                        edit_message_text(chat_id, sent_msg_id, update_text, keyboard=stop_keyboard)
+                    except Exception:
+                        pass
+
+                if i < len(clean_list) - 1:
+                    pause = random.uniform(7.0, 11.0)
+                    time.sleep(pause)
+
+            # Final summary
+            lines = []
+            for r in results:
+                st = r.get("status")
+                u_tag = f"@{r.get('username')}"
+                if st == "success":
+                    lines.append(f"• ✅ <b>{u_tag}:</b> Followed successfully!")
+                elif st == "already_following":
+                    lines.append(f"• ℹ️ <b>{u_tag}:</b> Already following")
+                elif st == "requested":
+                    lines.append(f"• 📨 <b>{u_tag}:</b> Request sent (Private)")
+                elif st == "not_found":
+                    lines.append(f"• ❌ <b>{u_tag}:</b> Account not found")
+                else:
+                    lines.append(f"• ⚠️ <b>{u_tag}:</b> {r.get('message', 'Failed')}")
+
+            done_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "🎯 Follow Another Account", "callback_data": "outreach:ig_mode:username"}],
+                    [{"text": "📸 Instagram Steps Menu", "callback_data": "outreach:plat:instagram"}],
+                    [{"text": "👥 Outreach Menu", "callback_data": "root:outreach"}]
+                ]
+            }
+
+            final_text = (
+                f"🎉 <b>Instagram Follow Sequence Finished!</b>\n\n"
+                f"📊 <b>Summary:</b>\n"
+                + "\n".join(lines[:10])
+                + (f"\n<i>...and {len(lines)-10} more</i>" if len(lines) > 10 else "") + "\n\n"
+                f"🏆 <b>New Follows:</b> <code>{sent_count}</code>\n"
+                f"👥 <b>Already Following:</b> <code>{already_count}</code>\n"
+                f"📨 <b>Requested (Private):</b> <code>{req_count}</code>\n\n"
+                f"<i>Executed safely via Chrome on port 9222.</i>"
+            )
+
+            if sent_msg_id:
+                try:
+                    edit_message_text(chat_id, sent_msg_id, final_text, keyboard=done_keyboard)
+                except Exception:
+                    send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+            else:
+                send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+
+        except Exception as e_flw:
+            logger.error(f"Error in instagram follow users thread: {e_flw}", exc_info=True)
+            send_text_message(chat_id, f"⚠️ Instagram follow error: {e_flw}")
+
+    threading.Thread(target=_exec_follow_users, daemon=True).start()
 
 
 def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms: list, message_id: int = None):
@@ -1162,12 +1322,55 @@ def handle_callback_query(callback: dict):
         stop_flag.write_text("STOP", encoding="utf-8")
         send_text_message(chat_id, f"🛑 <b>Stop signal sent</b> for unfollow job <code>{job_id}</code>.")
 
-    # 15. Outreach Step 2: Platform Selected -> Select Location
+    # 15. Outreach Step 2: Platform Selected -> Route to Steps or Location
     elif callback_data.startswith("outreach:plat:"):
         platform = callback_data.split(":", 2)[2].lower()
         if callback_id:
             answer_callback_query(callback_id)
-        send_outreach_location_menu(chat_id, platform=platform, message_id=message_id)
+        if platform == "instagram":
+            send_instagram_steps_menu(chat_id, message_id=message_id)
+        else:
+            send_outreach_location_menu(chat_id, platform=platform, message_id=message_id)
+
+    # 15b. Instagram Guided Steps Menu
+    elif callback_data == "outreach:ig_steps":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_instagram_steps_menu(chat_id, message_id=message_id)
+
+    # 15c. Instagram Mode: Specific Username
+    elif callback_data == "outreach:ig_mode:username":
+        if callback_id:
+            answer_callback_query(callback_id)
+        chat_sessions[chat_id] = {
+            "action": "AWAITING_IG_USERNAME",
+            "message_id": message_id
+        }
+        send_text_message(
+            chat_id,
+            "🎯 <b>Instagram Follow — Target Account(s)</b>\n\n"
+            "Please type the Instagram <code>@username</code> you want to follow:\n\n"
+            "<i>Examples:</i>\n"
+            "• <code>@lucknowi_vibes_</code>\n"
+            "• <code>@lucknow_hearts, @lucknowi_view_</code>\n\n"
+            "<i>(Type /cancel anytime to return to the menu)</i>"
+        )
+
+    # 15d. Instagram Mode: Location
+    elif callback_data == "outreach:ig_mode:location":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_outreach_location_menu(chat_id, platform="instagram", message_id=message_id)
+
+    # 15e. Instagram Specific Follow Stop Action
+    elif callback_data.startswith("ig_flw:stop:"):
+        job_id = callback_data.split(":", 2)[2] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="🛑 Halting Instagram follow sequence...")
+        stop_flag = BASE_DIR / "data" / f"stop_{job_id}.flag"
+        stop_flag.parent.mkdir(parents=True, exist_ok=True)
+        stop_flag.write_text("STOP", encoding="utf-8")
+        send_text_message(chat_id, f"🛑 <b>Stop signal sent</b> for follow job <code>{job_id}</code>.")
 
     # 16. Outreach Custom Location: Prompt user to type location text
     elif callback_data.startswith("outreach:loc_custom:"):
@@ -1290,11 +1493,54 @@ def handle_text_message(message: dict):
         send_root_choice_menu(chat_id)
         return
 
+    # Direct Follow Commands: /follow @user or follow @user
+    import re
+    if clean_text.startswith("/follow") or clean_text.startswith("follow @") or clean_text.startswith("follow "):
+        raw_cmd = text
+        for prefix in ["/follow", "follow @", "follow"]:
+            if raw_cmd.lower().startswith(prefix):
+                raw_cmd = raw_cmd[len(prefix):].strip()
+                break
+        target_users = [u.strip().lstrip("@") for u in re.split(r"[\s,]+", raw_cmd) if u.strip().lstrip("@")]
+        if target_users:
+            if chat_id in chat_sessions:
+                del chat_sessions[chat_id]
+            launch_ig_follow_users_task(chat_id, target_users)
+            return
+
     session = chat_sessions.get(chat_id)
     if not session:
+        # If user directly typed @username without prior command
+        if text.startswith("@") and len(text.split()) == 1:
+            target_users = [text.strip().lstrip("@")]
+            launch_ig_follow_users_task(chat_id, target_users)
+            return
+
         if text.startswith("/"):
             send_root_choice_menu(chat_id)
         return
+
+    # User provided specific Instagram username(s) to follow
+    if session.get("action") == "AWAITING_IG_USERNAME":
+        target_msg_id = session.get("message_id")
+        del chat_sessions[chat_id]
+        target_users = [u.strip().lstrip("@") for u in re.split(r"[\s,]+", text) if u.strip().lstrip("@")]
+        if target_users:
+            launch_ig_follow_users_task(chat_id, target_users, message_id=target_msg_id)
+        else:
+            send_text_message(
+                chat_id,
+                "⚠️ <b>Invalid format.</b> Please specify an account with @username (e.g. <code>@lucknowi_vibes_</code>) or use /cancel."
+            )
+        return
+
+    # If session is Antigravity prompt but user entered an Instagram handle or follow command
+    if session.get("action") == "AWAITING_ANTIGRAVITY_PROMPT" and (text.startswith("@") or clean_text.startswith("follow")):
+        target_users = [u.strip().lstrip("@") for u in re.split(r"[\s,]+", text.replace("follow", "")) if u.strip().lstrip("@")]
+        if target_users:
+            del chat_sessions[chat_id]
+            launch_ig_follow_users_task(chat_id, target_users)
+            return
 
     # User sent prompt for Antigravity / Laptop Remote Control
     if session.get("action") == "AWAITING_ANTIGRAVITY_PROMPT":

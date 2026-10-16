@@ -59,6 +59,46 @@ def get_progress_bar(current: int, total: int, length: int = 10) -> str:
     return f"[{'■' * filled}{'□' * empty}]"
 
 
+def ensure_db_campaign_exists(campaign_id: str, platform: str, location: str, target_count: int):
+    """Ensures campaign record exists in PostgreSQL and SQLite before updating."""
+    # 1. PostgreSQL
+    try:
+        import psycopg2
+        pg_user = os.environ.get("DB_USER", "postgres")
+        pg_pass = os.environ.get("DB_PASSWORD", "Shivam@123")
+        pg_host = os.environ.get("DB_HOST", "localhost")
+        pg_port = int(os.environ.get("DB_PORT", "5432"))
+        pg_db = os.environ.get("DB_NAME", "Social_Media")
+        conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO growth_campaigns (id, platform, location, target_count, fb_sent_count, ig_sent_count, status, logs, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, 0, 0, 'running', '[]', NOW(), NOW())
+            ON CONFLICT (id) DO NOTHING
+        """, (campaign_id, platform, location, target_count))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.debug(f"PG campaign insert note: {e}")
+
+    # 2. SQLite
+    db_path = BASE_DIR / "data" / "database.sqlite"
+    if db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT OR IGNORE INTO growth_campaigns (id, platform, location, target_count, fb_sent_count, ig_sent_count, status, logs, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 0, 0, 'running', '[]', datetime('now'), datetime('now'))
+            """, (campaign_id, platform, location, target_count))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.debug(f"SQLite campaign insert note: {e}")
+
+
 def update_db_campaign_status(campaign_id: str, fb_sent: int, ig_sent: int, status: str, log_list: list = None):
     """Updates campaign status and counters in PostgreSQL and SQLite."""
     # 1. PostgreSQL
@@ -225,6 +265,7 @@ def run_growth_campaign(
         send_tg_live_update()
 
     # Initial DB status
+    ensure_db_campaign_exists(campaign_id, clean_platform, location, target_count)
     update_db_campaign_status(campaign_id, 0, 0, "running", ["Outreach campaign started"])
     send_tg_live_update(force=True)
 
