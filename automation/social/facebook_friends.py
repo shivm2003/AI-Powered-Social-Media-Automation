@@ -189,6 +189,13 @@ def send_facebook_friend_requests(
                         continue
 
                 if not chosen_btn:
+                    # Self-healing check: Verify page didn't unrender or turn into blank white screen
+                    if browser.is_blank_or_unrendered(driver):
+                        logger.warning("⚠️ Facebook blank white screen detected during friend requests! Auto-recovering...")
+                        browser.ensure_healthy_page(driver, "facebook", target_url=search_url)
+                        time.sleep(2.0)
+                        continue
+
                     # No unvisited Add Friend button currently visible -> scroll down both container and window
                     scroll_attempts += 1
                     scroll_script = """
@@ -208,13 +215,10 @@ def send_facebook_friend_requests(
                         pass
 
                     # If multiple empty scrolls, refresh page to get fresh batch from Facebook
-                    if scroll_attempts % 6 == 0:
+                    if scroll_attempts % 5 == 0:
                         logger.info("Refreshing Facebook to retrieve fresh batch of suggestions...")
-                        try:
-                            driver.refresh()
-                            time.sleep(2.0)
-                        except Exception:
-                            pass
+                        browser.ensure_healthy_page(driver, "facebook", target_url=search_url)
+                        time.sleep(2.0)
                 else:
                     # Tag candidate in DOM to avoid duplicate clicks
                     driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", chosen_btn)

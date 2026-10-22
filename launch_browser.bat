@@ -26,7 +26,7 @@ if %CHROME_EXE%=="" (
 set PROFILE_DIR=%~dp0chrome_profiles\shared_browser
 if not exist "%PROFILE_DIR%" mkdir "%PROFILE_DIR%"
 
-start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir="%PROFILE_DIR%" --profile-directory=Default --no-first-run http://localhost:3000
+start "" %CHROME_EXE% --remote-debugging-port=9222 --user-data-dir="%PROFILE_DIR%" --profile-directory=Default --no-first-run --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,AutomaticTabDiscarding,FreezingOnBatterySaver http://localhost:3000
 
 echo [SUCCESS] Chrome started with Shivam Mishra (2003shivam1990@gmail.com) on port 9222!
 echo URL: http://localhost:3000

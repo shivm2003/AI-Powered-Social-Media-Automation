@@ -75,6 +75,10 @@ def ensure_debugging_browser():
         f"--user-data-dir={shared_profile}",
         "--no-first-run",
         "--no-default-browser-check",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+        "--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,AutomaticTabDiscarding,FreezingOnBatterySaver",
     ]
     try:
         subprocess.Popen(args)
@@ -98,12 +102,177 @@ class BrowserDriver:
         self.drivers = {}  # platform -> driver instance
         self.lock = threading.RLock()  # Thread-safe reentrant lock across concurrent tasks
         self.platform_tabs = {}  # platform -> window_handle for tab isolation
+        self._watchdog_started = False
+        self._start_health_watchdog()
+
+    def _start_health_watchdog(self):
+        """Starts a background daemon thread that checks idle tabs periodically to auto-heal blank white screens."""
+        if self._watchdog_started:
+            return
+        self._watchdog_started = True
+
+        def _watchdog_loop():
+            while True:
+                time.sleep(35)
+                try:
+                    # Non-blocking lock check: Only check health if no bot task is currently holding the lock
+                    acquired = self.lock.acquire(blocking=False)
+                    if not acquired:
+                        continue
+                    try:
+                        shared_driver = self.drivers.get("_shared_debug_driver")
+                        if not shared_driver:
+                            continue
+                        try:
+                            handles = shared_driver.window_handles
+                        except Exception:
+                            continue
+
+                        for platform, handle in list(self.platform_tabs.items()):
+                            if handle in handles:
+                                try:
+                                    shared_driver.switch_to.window(handle)
+                                    if self.is_blank_or_unrendered(shared_driver):
+                                        logger.warning(f"⚡ Background Watchdog: {platform.capitalize()} tab was blank white! Auto-refreshing...")
+                                        self.ensure_healthy_page(shared_driver, platform)
+                                except Exception:
+                                    pass
+                    finally:
+                        self.lock.release()
+                except Exception:
+                    pass
+
+        t = threading.Thread(target=_watchdog_loop, daemon=True, name="ManvxiTabHealthWatchdog")
+        t.start()
+
+    def is_blank_or_unrendered(self, driver) -> bool:
+        """
+        Detects if the webpage is currently in an unrendered blank white state,
+        crashed React shell, empty body, or disconnected DOM state.
+        """
+        try:
+            res = driver.execute_script("""
+                if (!document || !document.body) return { blank: true, reason: 'no_body' };
+
+                // 1. Chrome error / crash page detection
+                var title = (document.title || '').trim().toLowerCase();
+                if (document.getElementById('main-frame-error') || title.includes('aw, snap') || title.includes('error')) {
+                    return { blank: true, reason: 'chrome_error_or_crash' };
+                }
+
+                var text = (document.body.innerText || '').trim();
+                var divs = document.querySelectorAll('div').length;
+                var interactives = document.querySelectorAll('button, a, input, [role="button"]').length;
+                var hasMain = !!document.querySelector('main, [role="main"], [data-pagelet], #facebook, #react-root, section, article');
+
+                // 2. Completely empty or zero interactives and zero text
+                if (interactives === 0 && text.length < 30) {
+                    return { blank: true, reason: 'zero_interactives_no_text', divs: divs, interactives: interactives, text_len: text.length };
+                }
+
+                // 3. Blank white screen: low divs, near-zero interactives, almost no text
+                if (divs < 30 && interactives < 2 && text.length < 50) {
+                    return { blank: true, reason: 'empty_dom', divs: divs, interactives: interactives, text_len: text.length };
+                }
+
+                // 4. Meta applications (Facebook / Instagram): missing main app container with minimal text
+                var href = window.location.href.toLowerCase();
+                var isMetaApp = href.includes('facebook.com') || href.includes('instagram.com');
+                if (isMetaApp && !hasMain && interactives < 5 && text.length < 80) {
+                    return { blank: true, reason: 'missing_meta_main_container', divs: divs, interactives: interactives };
+                }
+
+                // 5. Unmounted React root or empty mount container
+                var root = document.getElementById('react-root') || document.querySelector('[data-reactroot]') || document.querySelector("div[id^='mount_0_']");
+                if (root && root.children.length === 0 && divs < 20) {
+                    return { blank: true, reason: 'empty_root_children' };
+                }
+
+                return { blank: false, divs: divs, interactives: interactives, text_len: text.length };
+            """)
+            if isinstance(res, dict) and res.get("blank"):
+                return True
+            return False
+        except Exception as e:
+            logger.debug(f"Blank check exception (page likely unresponsive or crashed): {e}")
+            return True
+
+    def ensure_healthy_page(self, driver, platform: str, target_url: str = None) -> bool:
+        """
+        Auto-recovers from blank white screen or frozen background tab.
+        If blank white is detected, executes clean refresh, rehydrates the DOM,
+        and waits for interactive elements to appear.
+        Also installs an in-browser watchdog to auto-refresh if the tab ever blanks out.
+        """
+        try:
+            # 1. Wake up window and fire visibility events in case React is sleeping
+            try:
+                driver.execute_script("window.focus(); document.dispatchEvent(new Event('visibilitychange'));")
+            except Exception:
+                pass
+
+            # 2. Check if page is currently in a blank white screen state
+            if self.is_blank_or_unrendered(driver):
+                curr_u = getattr(driver, "current_url", "unknown")
+                logger.warning(f"⚠️ Blank white screen detected on {platform.capitalize()} ({curr_u})! Auto-refreshing and rehydrating...")
+                try:
+                    if target_url and "http" in target_url:
+                        driver.get(target_url)
+                    else:
+                        driver.refresh()
+
+                    # Settle and poll until healthy render
+                    time.sleep(2.0)
+                    for attempt in range(10):
+                        if not self.is_blank_or_unrendered(driver):
+                            logger.info(f"✅ {platform.capitalize()} auto-recovered successfully from blank white screen! DOM active & hydrated.")
+                            break
+                        time.sleep(0.8)
+                except Exception as e_ref:
+                    logger.warning(f"Auto-recovery refresh error: {e_ref}")
+
+            # 3. Inject lightweight client-side watchdog to auto-refresh if tab blanks out while idle
+            try:
+                driver.execute_script("""
+                    if (!window.__manvxi_blank_guard_installed) {
+                        window.__manvxi_blank_guard_installed = true;
+                        window.__blank_tick_count = 0;
+                        setInterval(function() {
+                            try {
+                                if (!document || !document.body) return;
+                                var text = (document.body.innerText || '').trim();
+                                var interactives = document.querySelectorAll('button, a, input, [role="button"]').length;
+                                var hasMain = !!document.querySelector('main, [role="main"], [data-pagelet], #facebook, #react-root, section');
+
+                                // Blank condition: virtually no text and no interactives
+                                if (interactives === 0 && text.length < 20 && !hasMain) {
+                                    window.__blank_tick_count = (window.__blank_tick_count || 0) + 1;
+                                    // If blank for 2 consecutive checks (approx 10s), auto-refresh
+                                    if (window.__blank_tick_count >= 2) {
+                                        console.warn('[Manvxi Guard] Blank white screen detected in tab! Auto-reloading page...');
+                                        window.__blank_tick_count = 0;
+                                        location.reload();
+                                    }
+                                } else {
+                                    window.__blank_tick_count = 0;
+                                }
+                            } catch(e) {}
+                        }, 5000);
+                    }
+                """)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.debug(f"ensure_healthy_page note: {e}")
+        return True
 
     @contextmanager
     def tab_focus(self, platform: str, url: str = None, refresh_first: bool = False):
         """
         Thread-safe context manager that acquires the browser lock and ensures
         the active tab is isolated to the requested platform.
+        Auto-detects and recovers from blank white screens before yielding.
         Releases the lock on exit so concurrent tasks can interleave safely without collisions.
         """
         with self.lock:
@@ -114,12 +283,16 @@ class BrowserDriver:
                 driver.get(url)
                 if refresh_first:
                     self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
+
+            # Self-healing check: Verify page isn't in blank white screen state
+            self.ensure_healthy_page(driver, platform, target_url=url)
+
             yield driver
 
     tab_context = tab_focus
 
     def switch_to_platform_tab(self, platform: str, target_url: str = None, driver = None):
-        """Switches to the designated tab for platform, creating one if not present."""
+        """Switches to the designated tab for platform, creating one if not present, and ensures it is rendered."""
         with self.lock:
             driver = driver or self.get_driver(platform)
             target_url = target_url or PLATFORM_URLS.get(platform, "https://google.com")
@@ -138,6 +311,8 @@ class BrowserDriver:
                             tgt_clean = target_url.rstrip('/')
                             if cur_clean != tgt_clean and not cur_clean.startswith(tgt_clean):
                                 driver.get(target_url)
+                        # Wake up and auto-heal blank screen
+                        self.ensure_healthy_page(driver, platform, target_url=target_url)
                         return driver
                 except Exception:
                     pass
@@ -154,6 +329,8 @@ class BrowserDriver:
                             tgt_clean = target_url.rstrip('/')
                             if cur_clean != tgt_clean and not cur_clean.startswith(tgt_clean):
                                 driver.get(target_url)
+                        # Wake up and auto-heal blank screen
+                        self.ensure_healthy_page(driver, platform, target_url=target_url)
                         return driver
                 except Exception:
                     continue
@@ -168,6 +345,8 @@ class BrowserDriver:
                 logger.warning(f"Could not open new tab for {platform}: {e_new}")
                 driver.get(target_url)
                 self.platform_tabs[platform] = driver.current_window_handle
+
+            self.ensure_healthy_page(driver, platform, target_url=target_url)
             return driver
 
     def get_driver(self, platform):
@@ -279,6 +458,11 @@ class BrowserDriver:
         sel_opts.add_argument("--disable-blink-features=AutomationControlled")
         sel_opts.add_argument("--no-first-run")
         sel_opts.add_argument("--no-default-browser-check")
+        # Anti-tab-freezing, prevent background tab discarding and sleeping
+        sel_opts.add_argument("--disable-background-timer-throttling")
+        sel_opts.add_argument("--disable-backgrounding-occluded-windows")
+        sel_opts.add_argument("--disable-renderer-backgrounding")
+        sel_opts.add_argument("--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,AutomaticTabDiscarding,FreezingOnBatterySaver")
         sel_opts.add_experimental_option("excludeSwitches", ["enable-automation"])
         sel_opts.add_experimental_option("useAutomationExtension", False)
 
@@ -368,6 +552,7 @@ class BrowserDriver:
                 self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
             else:
                 self.human_wait("page")
+            self.ensure_healthy_page(driver, platform, target_url=target_url)
             return driver
 
     def close(self, platform):

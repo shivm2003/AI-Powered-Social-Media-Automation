@@ -101,7 +101,12 @@ def follow_specific_instagram_user(username: str, driver=None) -> dict:
         with browser.tab_focus("instagram", url=profile_url):
             time.sleep(random.uniform(1.8, 2.8))
 
-            # Check for 404 / Unavailable
+            # Check for 404 / Unavailable / Blank page
+            if browser.is_blank_or_unrendered(driver):
+                logger.warning(f"⚠️ Instagram profile @{clean_user} unrendered or blank white. Auto-recovering...")
+                browser.ensure_healthy_page(driver, "instagram", target_url=profile_url)
+                time.sleep(1.5)
+
             page_title = driver.title or ""
             page_source = driver.page_source.lower()
             if "page not found" in page_title.lower() or "isn't available" in page_source:
@@ -333,8 +338,21 @@ def _follow_instagram_suggestions(driver, target_count, safety_delay, on_progres
                     continue
 
             if not chosen_btn:
+                # Self-healing check: Verify page didn't unrender or turn into blank white screen
+                if browser.is_blank_or_unrendered(driver):
+                    logger.warning("⚠️ Instagram suggestions page went blank white! Auto-recovering...")
+                    browser.ensure_healthy_page(driver, "instagram", target_url="https://www.instagram.com/explore/people/")
+                    time.sleep(2.0)
+                    continue
+
                 # No unvisited follow button on screen -> scroll down to load more
                 scroll_attempts += 1
+                if scroll_attempts % 5 == 0:
+                    logger.info("Refreshing Instagram suggestions to load fresh candidates...")
+                    browser.ensure_healthy_page(driver, "instagram", target_url="https://www.instagram.com/explore/people/")
+                    time.sleep(2.0)
+                    continue
+
                 driver.execute_script("window.scrollBy(0, 800);")
                 time.sleep(random.uniform(1.2, 1.8))
                 continue
@@ -468,6 +486,13 @@ def _follow_instagram_random_explore(driver, target_count, safety_delay, on_prog
         author_name = None
 
         with browser.tab_focus("instagram", url="https://www.instagram.com/explore/"):
+            # Check if explore feed or modal became blank white
+            if browser.is_blank_or_unrendered(driver):
+                logger.warning("⚠️ Instagram explore feed unrendered or blank white! Auto-recovering...")
+                browser.ensure_healthy_page(driver, "instagram", target_url="https://www.instagram.com/explore/")
+                time.sleep(2.0)
+                continue
+
             # Check for dialog container
             dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
             active_container = dialogs[0] if dialogs else driver
