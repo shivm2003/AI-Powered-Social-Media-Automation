@@ -115,170 +115,184 @@ def send_facebook_friend_requests(
                 logger.info("Facebook friend request loop stopped via stop_event.")
                 break
 
-            # Tab isolation: Ensure active window is locked to Facebook before querying DOM
-            browser.switch_to_platform_tab("facebook", driver=driver)
+            clicked_action = False
+            display_name = None
 
-            # Find 'Add friend' buttons on the page using comprehensive selectors
-            add_buttons = []
-            seen_ids = set()
-            xpaths = [
-                "//div[@role='button'][contains(translate(@aria-label, 'AD', 'ad'), 'add friend') and not(@data-bot-sent='true')]",
-                "//div[contains(translate(@aria-label, 'AD', 'ad'), 'add friend') and not(@data-bot-sent='true')]",
-                "//span[contains(translate(text(), 'AD', 'ad'), 'add friend') and not(ancestor::div[@data-bot-sent='true'])]/ancestor::div[@role='button'][1]",
-                "//span[contains(translate(text(), 'AD', 'ad'), 'add friend') and not(ancestor::div[@data-bot-sent='true'])]/ancestor::div[1]",
-            ]
+            # ── ATOMIC BROWSER ACTION (protected under browser lock) ──
+            with browser.tab_focus("facebook", url=search_url):
+                # Check for login redirection
+                from social.facebook import is_facebook_login_needed
+                if is_facebook_login_needed(driver):
+                    msg = "Facebook login required. Please verify login in Chrome on port 9222."
+                    logs.append(f"⚠️ {msg}")
+                    return {"status": "login_required", "sent": sent_count, "logs": logs}
 
-            for xp in xpaths:
-                try:
-                    candidates = driver.find_elements(By.XPATH, xp)
-                    for cand in candidates:
-                        try:
-                            if not cand.is_displayed():
-                                continue
-                            if cand.get_attribute("data-bot-sent") == "true":
-                                continue
-                            if cand.id not in seen_ids and cand.id not in processed_elements:
-                                seen_ids.add(cand.id)
-                                add_buttons.append(cand)
-                        except Exception:
-                            continue
-                except Exception:
-                    continue
+                # Find 'Add friend' buttons on the page using comprehensive selectors
+                candidates = []
+                xpaths = [
+                    "//div[@role='button'][contains(translate(@aria-label, 'AD', 'ad'), 'add friend') and not(@data-bot-sent='true')]",
+                    "//div[contains(translate(@aria-label, 'AD', 'ad'), 'add friend') and not(@data-bot-sent='true')]",
+                    "//span[contains(translate(text(), 'AD', 'ad'), 'add friend') and not(ancestor::div[@data-bot-sent='true'])]/ancestor::div[@role='button'][1]",
+                    "//span[contains(translate(text(), 'AD', 'ad'), 'add friend') and not(ancestor::div[@data-bot-sent='true'])]/ancestor::div[1]",
+                ]
 
-            logger.info(f"Discovered {len(add_buttons)} candidate Add Friend buttons on screen (Sent so far: {sent_count}/{target_count}).")
-
-            # In random mode, shuffle candidate buttons for organic non-linear selection
-            if mode == "random" and len(add_buttons) > 1:
-                random.shuffle(add_buttons)
-
-            # Process candidates found on current screen
-            for btn in add_buttons:
-                if stop_event and stop_event.is_set() or sent_count >= target_count:
-                    break
-
-                try:
-                    if not btn.is_displayed() or btn.get_attribute("data-bot-sent") == "true":
-                        continue
-
-                    # Tab check: Ensure focus before clicking
-                    browser.switch_to_platform_tab("facebook", driver=driver)
-
-                    # Extract actual profile name and profile URL
-                    profile_name, profile_url = extract_fb_profile_info(btn, loc_display)
-                    fallback_label = f"Suggested Contact #{sent_count + 1}" if mode != "location" else f"Person in {loc_display}"
-                    display_name = profile_name if profile_name else fallback_label
-
-                    # Deduplication checks
-                    if profile_url and profile_url in processed_urls:
-                        continue
-                    if profile_name and profile_name.lower() in processed_names:
-                        continue
-
-                    # Record in tracking sets
-                    processed_elements.add(btn.id)
-                    if profile_url:
-                        processed_urls.add(profile_url)
-                    if profile_name:
-                        processed_names.add(profile_name.lower())
-
-                    # Tag in DOM to ensure no duplicate clicks across scrolls
-                    driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
-
-                    # Smooth scroll button into view
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", btn)
-                    time.sleep(random.uniform(0.6, 1.2))
-
-                    # Move mouse like human & click
-                    clicked = False
+                seen_ids = set()
+                for xp in xpaths:
                     try:
-                        ActionChains(driver).move_to_element(btn).pause(random.uniform(0.2, 0.4)).click().perform()
-                        clicked = True
+                        for cand in driver.find_elements(By.XPATH, xp):
+                            try:
+                                if not cand.is_displayed():
+                                    continue
+                                if cand.get_attribute("data-bot-sent") == "true":
+                                    continue
+                                if cand.id not in seen_ids and cand.id not in processed_elements:
+                                    seen_ids.add(cand.id)
+                                    candidates.append(cand)
+                            except Exception:
+                                continue
+                    except Exception:
+                        continue
+                    if candidates:
+                        break
+
+                if mode == "random" and len(candidates) > 1:
+                    random.shuffle(candidates)
+
+                chosen_btn = None
+                for btn in candidates:
+                    try:
+                        if not btn.is_displayed() or btn.get_attribute("data-bot-sent") == "true":
+                            continue
+
+                        # Extract profile name and URL
+                        p_name, p_url = extract_fb_profile_info(btn, loc_display)
+                        if p_url and p_url in processed_urls:
+                            driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
+                            continue
+                        if p_name and p_name.lower() in processed_names:
+                            driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
+                            continue
+
+                        fb_fallback = f"Suggested Contact #{sent_count + 1}" if mode != "location" else f"Person in {loc_display}"
+                        display_name = p_name if p_name else fb_fallback
+
+                        # Mark in tracking sets
+                        processed_elements.add(btn.id)
+                        if p_url:
+                            processed_urls.add(p_url)
+                        if p_name:
+                            processed_names.add(p_name.lower())
+
+                        chosen_btn = btn
+                        break
+                    except Exception:
+                        continue
+
+                if not chosen_btn:
+                    # No unvisited Add Friend button currently visible -> scroll down both container and window
+                    scroll_attempts += 1
+                    scroll_script = """
+                    var elements = document.querySelectorAll('*');
+                    for (var i = 0; i < elements.length; i++) {
+                        var el = elements[i];
+                        var style = window.getComputedStyle(el);
+                        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+                            el.scrollTop += 900;
+                        }
+                    }
+                    window.scrollBy(0, 750);
+                    """
+                    try:
+                        driver.execute_script(scroll_script)
                     except Exception:
                         pass
 
-                    if not clicked:
+                    # If multiple empty scrolls, refresh page to get fresh batch from Facebook
+                    if scroll_attempts % 6 == 0:
+                        logger.info("Refreshing Facebook to retrieve fresh batch of suggestions...")
                         try:
-                            driver.execute_script("arguments[0].click();", btn)
-                            clicked = True
+                            driver.refresh()
+                            time.sleep(2.0)
+                        except Exception:
+                            pass
+                else:
+                    # Tag candidate in DOM to avoid duplicate clicks
+                    driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", chosen_btn)
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", chosen_btn)
+                    time.sleep(random.uniform(0.4, 0.7))
+
+                    # Move mouse & click
+                    try:
+                        ActionChains(driver).move_to_element(chosen_btn).pause(0.2).click().perform()
+                        clicked_action = True
+                    except Exception:
+                        try:
+                            driver.execute_script("arguments[0].click();", chosen_btn)
+                            clicked_action = True
+                        except Exception as e_clk:
+                            logger.warning(f"Could not click Add Friend button: {e_clk}")
+
+                    if clicked_action:
+                        time.sleep(random.uniform(0.3, 0.6))
+                        try:
+                            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
                         except Exception:
                             pass
 
-                    if not clicked:
-                        skipped_count += 1
-                        continue
+            # ── OUTSIDE BROWSER LOCK (yields browser to concurrent tasks like Instagram) ──
+            if clicked_action:
+                sent_count += 1
+                log_entry = f"✅ Sent friend request #{sent_count} to '{display_name}' ({loc_display})"
+                logs.append(log_entry)
+                logger.info(log_entry)
 
-                    sent_count += 1
-                    log_entry = f"✅ Sent friend request #{sent_count} to '{display_name}' ({loc_display})"
-                    logs.append(log_entry)
-                    logger.info(log_entry)
-
-                    # Dismiss any unexpected modal/overlay by sending ESCAPE to body
-                    time.sleep(random.uniform(0.4, 0.8))
+                if on_progress:
                     try:
-                        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
-                    except Exception:
-                        pass
+                        on_progress(sent_count, target_count, {
+                            "platform": "facebook",
+                            "user": display_name,
+                            "location": loc_display,
+                            "mode": mode,
+                            "sent": sent_count,
+                            "target": target_count,
+                        })
+                    except Exception as e_cb:
+                        logger.debug(f"Progress callback note: {e_cb}")
 
+                if sent_count >= target_count:
+                    break
+
+                # Mandatory 2-minute (120s) safety break after every 250 sent requests
+                if sent_count > 0 and sent_count % 250 == 0:
+                    cooldown_secs = 120
+                    cooldown_msg = f"⏸️ Reached {sent_count} friend requests milestone. Taking a 2-minute safety break to protect account health..."
+                    logs.append(cooldown_msg)
+                    logger.info(cooldown_msg)
                     if on_progress:
                         try:
                             on_progress(sent_count, target_count, {
                                 "platform": "facebook",
                                 "user": display_name,
-                                "location": loc_display,
-                                "mode": mode,
-                                "sent": sent_count,
-                                "target": target_count,
+                                "cooldown": True,
+                                "cooldown_seconds": cooldown_secs,
+                                "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
                             })
                         except Exception as e_cb:
-                            logger.debug(f"Progress callback note: {e_cb}")
+                            logger.debug(f"Progress cooldown note: {e_cb}")
+                    for _ in range(cooldown_secs):
+                        if stop_event and stop_event.is_set():
+                            break
+                        time.sleep(1.0)
+                    logs.append(f"▶️ 2-minute safety cooldown completed. Resuming friend requests ({sent_count}/{target_count})...")
+                    logger.info("Resuming friend requests after 2-minute safety break.")
 
-                    # If reached target, break immediately without waiting for delay
-                    if sent_count >= target_count:
-                        break
-
-                    # Mandatory 2-minute (120s) safety break after every 250 sent requests
-                    if sent_count > 0 and sent_count % 250 == 0:
-                        cooldown_secs = 120
-                        cooldown_msg = f"⏸️ Reached {sent_count} friend requests milestone. Taking a 2-minute safety break to protect account health..."
-                        logs.append(cooldown_msg)
-                        logger.info(cooldown_msg)
-                        if on_progress:
-                            try:
-                                on_progress(sent_count, target_count, {
-                                    "platform": "facebook",
-                                    "user": display_name,
-                                    "cooldown": True,
-                                    "cooldown_seconds": cooldown_secs,
-                                    "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
-                                })
-                            except Exception as e_cb:
-                                logger.debug(f"Progress cooldown note: {e_cb}")
-                        for _ in range(cooldown_secs):
-                            if stop_event and stop_event.is_set():
-                                break
-                            time.sleep(1.0)
-                        logs.append(f"▶️ 2-minute safety cooldown completed. Resuming friend requests ({sent_count}/{target_count})...")
-                        logger.info("Resuming friend requests after 2-minute safety break.")
-
-                    # Anti-detection human delay before next action
-                    current_delay = random.uniform(max(6.0, safety_delay * 0.5), max(8.0, safety_delay * 0.85))
-                    logger.info(f"Human safety pause: {current_delay:.1f}s before next request ({sent_count}/{target_count})...")
-                    time.sleep(current_delay)
-
-                except Exception as e_click:
-                    skipped_count += 1
-                    logger.debug(f"Error clicking Add friend candidate: {e_click}")
-                    continue
-
-            # If reached target count, exit scroll loop immediately
-            if sent_count >= target_count:
-                break
-
-            # Scroll down to load more people
-            scroll_attempts += 1
-            scroll_y = random.randint(550, 850)
-            driver.execute_script(f"window.scrollBy(0, {scroll_y});")
-            time.sleep(random.uniform(2.0, 3.2))
+                # Anti-detection human delay completely outside browser lock
+                current_delay = random.uniform(max(6.0, safety_delay * 0.5), max(8.0, safety_delay * 0.85))
+                logger.info(f"Human safety pause: {current_delay:.1f}s before next request ({sent_count}/{target_count})...")
+                time.sleep(current_delay)
+            else:
+                skipped_count += 1
+                time.sleep(1.2)
 
         status_label = "stopped" if (stop_event and stop_event.is_set()) else ("completed" if sent_count >= target_count else "partial")
         logs.append(f"🏁 Finished Facebook friend request session. Total sent: {sent_count}/{target_count}.")

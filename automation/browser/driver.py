@@ -100,10 +100,11 @@ class BrowserDriver:
         self.platform_tabs = {}  # platform -> window_handle for tab isolation
 
     @contextmanager
-    def tab_context(self, platform: str, url: str = None, refresh_first: bool = False):
+    def tab_focus(self, platform: str, url: str = None, refresh_first: bool = False):
         """
         Thread-safe context manager that acquires the browser lock and ensures
         the active tab is isolated to the requested platform.
+        Releases the lock on exit so concurrent tasks can interleave safely without collisions.
         """
         with self.lock:
             driver = self.get_driver(platform)
@@ -114,6 +115,8 @@ class BrowserDriver:
                 if refresh_first:
                     self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
             yield driver
+
+    tab_context = tab_focus
 
     def switch_to_platform_tab(self, platform: str, target_url: str = None, driver = None):
         """Switches to the designated tab for platform, creating one if not present."""
@@ -130,6 +133,11 @@ class BrowserDriver:
                     driver.switch_to.window(saved_handle)
                     current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
                     if target_netloc and (target_netloc in current_netloc or current_netloc in target_netloc):
+                        if target_url and target_url != PLATFORM_URLS.get(platform, "https://google.com"):
+                            cur_clean = driver.current_url.rstrip('/')
+                            tgt_clean = target_url.rstrip('/')
+                            if cur_clean != tgt_clean and not cur_clean.startswith(tgt_clean):
+                                driver.get(target_url)
                         return driver
                 except Exception:
                     pass
@@ -141,6 +149,11 @@ class BrowserDriver:
                     current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
                     if target_netloc and (target_netloc in current_netloc or current_netloc in target_netloc):
                         self.platform_tabs[platform] = handle
+                        if target_url and target_url != PLATFORM_URLS.get(platform, "https://google.com"):
+                            cur_clean = driver.current_url.rstrip('/')
+                            tgt_clean = target_url.rstrip('/')
+                            if cur_clean != tgt_clean and not cur_clean.startswith(tgt_clean):
+                                driver.get(target_url)
                         return driver
                 except Exception:
                     continue
