@@ -14,27 +14,45 @@ logger = logging.getLogger("automation.social.facebook_friends")
 
 
 def send_facebook_friend_requests(
-    location: str,
+    location: str = "",
     target_count: int = 10,
     safety_delay: int = 15,
     on_progress=None,
-    stop_event=None
+    stop_event=None,
+    mode: str = "location"
 ) -> dict:
     """
-    Searches for people by location on Facebook and sends friend requests like a human.
+    Searches for people or navigates to suggestions on Facebook and sends friend requests like a human.
 
     Args:
-        location: Target location (e.g., 'New Delhi', 'Mumbai', 'New York').
+        location: Target location (e.g., 'New Delhi', 'Mumbai') if mode is 'location'.
         target_count: Number of friend requests to send.
         safety_delay: Baseline seconds delay between requests (randomized +-30%).
         on_progress: Optional callback function(sent_count, target_count, details).
         stop_event: Optional threading.Event to signal early cancellation.
+        mode: Discovery mode - 'location' (default), 'suggestions' (PYMK), or 'random' (shuffled PYMK).
 
     Returns:
         Dict with status, count of sent requests, and activity logs.
     """
-    logger.info(f"Starting Facebook friend requests for location: '{location}' (Target: {target_count})...")
-    logs = []
+    mode = (mode or "location").lower().strip()
+    if mode == "suggestions":
+        mode_label = "🌟 Algorithmic Suggestions (People You May Know)"
+        search_url = "https://www.facebook.com/friends/suggestions"
+        loc_display = "Suggested Friends"
+    elif mode == "random":
+        mode_label = "🎲 Random Discovery (Shuffled Recommendations)"
+        search_url = "https://www.facebook.com/friends/suggestions"
+        loc_display = "Random Discovery"
+    else:
+        mode = "location"
+        loc_display = location or "New Delhi"
+        mode_label = f"📍 Location Search: '{loc_display}'"
+        encoded_query = urllib.parse.quote(loc_display)
+        search_url = f"https://www.facebook.com/search/people/?q={encoded_query}"
+
+    logger.info(f"Starting Facebook friend requests | Mode: {mode_label} (Target: {target_count})...")
+    logs = [f"🚀 Initiated Facebook outreach: {mode_label} (Target: {target_count})"]
     sent_count = 0
     skipped_count = 0
     processed_urls = set()
@@ -73,16 +91,14 @@ def send_facebook_friend_requests(
         return real_name, real_url
 
     try:
-        # Navigate to Facebook people search with location query
-        encoded_query = urllib.parse.quote(location)
-        search_url = f"https://www.facebook.com/search/people/?q={encoded_query}"
+        # Navigate to target Facebook URL with fresh page content
         driver = browser.navigate("facebook", search_url, refresh_first=True)
-        logs.append(f"🔄 Facebook page refreshed first - fresh search results loaded for '{location}'")
+        logs.append(f"🔄 Navigated to {search_url} (Fresh page state ensured)")
 
         # Check if redirected to login
         from social.facebook import is_facebook_login_needed
         if is_facebook_login_needed(driver):
-            msg = "Facebook login required. Please verify login in Chrome."
+            msg = "Facebook login required. Please verify login in Chrome on port 9222."
             logs.append(f"⚠️ {msg}")
             return {"status": "login_required", "sent": 0, "logs": logs}
 
@@ -91,13 +107,16 @@ def send_facebook_friend_requests(
 
         # Main pagination / scroll loop
         scroll_attempts = 0
-        max_scroll_attempts = 25
+        max_scroll_attempts = max(100, int((target_count / 3) + 30))
 
         while sent_count < target_count and scroll_attempts < max_scroll_attempts:
             if stop_event and stop_event.is_set():
                 logs.append("🛑 Friend request task stopped by user.")
                 logger.info("Facebook friend request loop stopped via stop_event.")
                 break
+
+            # Tab isolation: Ensure active window is locked to Facebook before querying DOM
+            browser.switch_to_platform_tab("facebook", driver=driver)
 
             # Find 'Add friend' buttons on the page using comprehensive selectors
             add_buttons = []
@@ -128,6 +147,10 @@ def send_facebook_friend_requests(
 
             logger.info(f"Discovered {len(add_buttons)} candidate Add Friend buttons on screen (Sent so far: {sent_count}/{target_count}).")
 
+            # In random mode, shuffle candidate buttons for organic non-linear selection
+            if mode == "random" and len(add_buttons) > 1:
+                random.shuffle(add_buttons)
+
             # Process candidates found on current screen
             for btn in add_buttons:
                 if stop_event and stop_event.is_set() or sent_count >= target_count:
@@ -137,9 +160,13 @@ def send_facebook_friend_requests(
                     if not btn.is_displayed() or btn.get_attribute("data-bot-sent") == "true":
                         continue
 
+                    # Tab check: Ensure focus before clicking
+                    browser.switch_to_platform_tab("facebook", driver=driver)
+
                     # Extract actual profile name and profile URL
-                    profile_name, profile_url = extract_fb_profile_info(btn, location)
-                    display_name = profile_name if profile_name else f"Person in {location}"
+                    profile_name, profile_url = extract_fb_profile_info(btn, loc_display)
+                    fallback_label = f"Suggested Contact #{sent_count + 1}" if mode != "location" else f"Person in {loc_display}"
+                    display_name = profile_name if profile_name else fallback_label
 
                     # Deduplication checks
                     if profile_url and profile_url in processed_urls:
@@ -181,7 +208,7 @@ def send_facebook_friend_requests(
                         continue
 
                     sent_count += 1
-                    log_entry = f"✅ Sent friend request #{sent_count} to '{display_name}' ({location})"
+                    log_entry = f"✅ Sent friend request #{sent_count} to '{display_name}' ({loc_display})"
                     logs.append(log_entry)
                     logger.info(log_entry)
 
@@ -197,7 +224,8 @@ def send_facebook_friend_requests(
                             on_progress(sent_count, target_count, {
                                 "platform": "facebook",
                                 "user": display_name,
-                                "location": location,
+                                "location": loc_display,
+                                "mode": mode,
                                 "sent": sent_count,
                                 "target": target_count,
                             })
@@ -207,6 +235,30 @@ def send_facebook_friend_requests(
                     # If reached target, break immediately without waiting for delay
                     if sent_count >= target_count:
                         break
+
+                    # Mandatory 2-minute (120s) safety break after every 250 sent requests
+                    if sent_count > 0 and sent_count % 250 == 0:
+                        cooldown_secs = 120
+                        cooldown_msg = f"⏸️ Reached {sent_count} friend requests milestone. Taking a 2-minute safety break to protect account health..."
+                        logs.append(cooldown_msg)
+                        logger.info(cooldown_msg)
+                        if on_progress:
+                            try:
+                                on_progress(sent_count, target_count, {
+                                    "platform": "facebook",
+                                    "user": display_name,
+                                    "cooldown": True,
+                                    "cooldown_seconds": cooldown_secs,
+                                    "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
+                                })
+                            except Exception as e_cb:
+                                logger.debug(f"Progress cooldown note: {e_cb}")
+                        for _ in range(cooldown_secs):
+                            if stop_event and stop_event.is_set():
+                                break
+                            time.sleep(1.0)
+                        logs.append(f"▶️ 2-minute safety cooldown completed. Resuming friend requests ({sent_count}/{target_count})...")
+                        logger.info("Resuming friend requests after 2-minute safety break.")
 
                     # Anti-detection human delay before next action
                     current_delay = random.uniform(max(6.0, safety_delay * 0.5), max(8.0, safety_delay * 0.85))
@@ -234,7 +286,8 @@ def send_facebook_friend_requests(
         return {
             "status": status_label,
             "platform": "facebook",
-            "location": location,
+            "location": loc_display,
+            "mode": mode,
             "sent": sent_count,
             "target": target_count,
             "skipped": skipped_count,
@@ -247,7 +300,8 @@ def send_facebook_friend_requests(
         return {
             "status": "error",
             "platform": "facebook",
-            "location": location,
+            "location": loc_display,
+            "mode": mode,
             "sent": sent_count,
             "target": target_count,
             "error": str(e),

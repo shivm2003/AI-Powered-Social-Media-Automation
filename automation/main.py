@@ -306,18 +306,20 @@ def handle_command(command: dict):
         elif action == "growth_outreach":
             campaign_id = command.get("campaign_id") or str(uuid.uuid4())
             platform = command.get("platform", "both")
-            location = command.get("location", "New Delhi")
+            location = command.get("location", "Global")
+            mode = command.get("mode", "location")
             target_count = int(command.get("target_count", 10))
             safety_delay = int(command.get("safety_delay", 15))
             tg_chat_id = command.get("telegram_chat_id", None)
             tg_message_id = command.get("telegram_message_id", None)
 
-            logger.info(f"Executing growth_outreach for {platform} in {location}...")
+            logger.info(f"Executing growth_outreach for {platform} | Mode: {mode} | Location: {location}...")
             from social.growth_orchestrator import run_growth_campaign
             result = run_growth_campaign(
                 campaign_id=campaign_id,
                 platform=platform,
                 location=location,
+                mode=mode,
                 target_count=target_count,
                 safety_delay=safety_delay,
                 tg_chat_id=tg_chat_id,
@@ -392,6 +394,42 @@ def handle_command(command: dict):
                 campaign_id=campaign_id
             )
             send_response(res)
+
+        elif action == "create_social_group":
+            from social.social_groups import run_social_group_task
+            task_id = command.get("task_id") or str(uuid.uuid4())
+            platform = command.get("platform", "facebook")
+            group_type = command.get("group_type", "community_group")
+            group_name = command.get("group_name", "My Community Group")
+            privacy = command.get("privacy", "private")
+            initial_message = command.get("initial_message")
+            max_invites = int(command.get("max_invites", 50))
+            tg_chat_id = command.get("telegram_chat_id")
+            tg_message_id = command.get("telegram_message_id")
+
+            logger.info(f"Executing create_social_group for {platform} ({group_type}): '{group_name}'...")
+            res = run_social_group_task(
+                task_id=task_id,
+                platform=platform,
+                group_type=group_type,
+                group_name=group_name,
+                privacy=privacy,
+                initial_message=initial_message,
+                max_invites=max_invites,
+                tg_chat_id=tg_chat_id,
+                tg_message_id=tg_message_id
+            )
+            send_response(res)
+
+        elif action == "stop_social_group":
+            from social.social_groups import stop_social_group_task
+            task_id = command.get("task_id", "")
+            stopped = stop_social_group_task(task_id)
+            send_response({
+                "status": "success",
+                "task_id": task_id,
+                "stopped": stopped
+            })
 
         else:
             send_response({

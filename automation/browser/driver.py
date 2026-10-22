@@ -88,46 +88,110 @@ def ensure_debugging_browser():
     return False
 
 
+import threading
+from contextlib import contextmanager
+
 class BrowserDriver:
     """Manages Chrome browser instances with persistent profiles or attached user browser."""
 
     def __init__(self):
         self.drivers = {}  # platform -> driver instance
+        self.lock = threading.RLock()  # Thread-safe reentrant lock across concurrent tasks
+        self.platform_tabs = {}  # platform -> window_handle for tab isolation
+
+    @contextmanager
+    def tab_context(self, platform: str, url: str = None, refresh_first: bool = False):
+        """
+        Thread-safe context manager that acquires the browser lock and ensures
+        the active tab is isolated to the requested platform.
+        """
+        with self.lock:
+            driver = self.get_driver(platform)
+            if getattr(driver, "_is_shared", False):
+                self.switch_to_platform_tab(platform, target_url=url, driver=driver)
+            elif url and driver.current_url.rstrip('/') != url.rstrip('/'):
+                driver.get(url)
+                if refresh_first:
+                    self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
+            yield driver
+
+    def switch_to_platform_tab(self, platform: str, target_url: str = None, driver = None):
+        """Switches to the designated tab for platform, creating one if not present."""
+        with self.lock:
+            driver = driver or self.get_driver(platform)
+            target_url = target_url or PLATFORM_URLS.get(platform, "https://google.com")
+            import urllib.parse
+            target_netloc = urllib.parse.urlparse(target_url).netloc.lower()
+
+            # 1. Check if we already have a saved window handle that is still open
+            saved_handle = self.platform_tabs.get(platform)
+            if saved_handle and saved_handle in driver.window_handles:
+                try:
+                    driver.switch_to.window(saved_handle)
+                    current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
+                    if target_netloc and (target_netloc in current_netloc or current_netloc in target_netloc):
+                        return driver
+                except Exception:
+                    pass
+
+            # 2. Search existing window handles for a tab matching the target domain
+            for handle in driver.window_handles:
+                try:
+                    driver.switch_to.window(handle)
+                    current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
+                    if target_netloc and (target_netloc in current_netloc or current_netloc in target_netloc):
+                        self.platform_tabs[platform] = handle
+                        return driver
+                except Exception:
+                    continue
+
+            # 3. If no matching tab exists, create a new tab and record its handle
+            try:
+                driver.switch_to.new_window('tab')
+                driver.get(target_url)
+                self.platform_tabs[platform] = driver.current_window_handle
+                time.sleep(1.0)
+            except Exception as e_new:
+                logger.warning(f"Could not open new tab for {platform}: {e_new}")
+                driver.get(target_url)
+                self.platform_tabs[platform] = driver.current_window_handle
+            return driver
 
     def get_driver(self, platform):
         """Get or create a Chrome driver. Prioritizes connecting to user's open browser if port 9222 is active."""
-        if not HAS_SELENIUM:
-            raise RuntimeError("Selenium is not installed. Run: pip install undetected-chromedriver selenium")
+        with self.lock:
+            if not HAS_SELENIUM:
+                raise RuntimeError("Selenium is not installed. Run: pip install undetected-chromedriver selenium")
 
-        # ── 1. If remote debugging port 9222 is active or can be activated, connect to user's browser ──
-        if not is_debugging_port_open(9222):
-            ensure_debugging_browser()
+            # ── 1. If remote debugging port 9222 is active or can be activated, connect to user's browser ──
+            if not is_debugging_port_open(9222):
+                ensure_debugging_browser()
 
-        if is_debugging_port_open(9222):
-            shared_driver = self.drivers.get("_shared_debug_driver")
-            if shared_driver:
+            if is_debugging_port_open(9222):
+                shared_driver = self.drivers.get("_shared_debug_driver")
+                if shared_driver:
+                    try:
+                        shared_driver.title
+                        self.drivers[platform] = shared_driver
+                        return shared_driver
+                    except Exception:
+                        self.drivers.pop("_shared_debug_driver", None)
+
+                logger.info("Found active Chrome on port 9222! Attaching bot to user's existing browser window...")
                 try:
-                    shared_driver.title
-                    self.drivers[platform] = shared_driver
-                    return shared_driver
-                except Exception:
-                    self.drivers.pop("_shared_debug_driver", None)
+                    from selenium import webdriver
+                    from selenium.webdriver.chrome.options import Options as SeleniumOptions
 
-            logger.info("Found active Chrome on port 9222! Attaching bot to user's existing browser window...")
-            try:
-                from selenium import webdriver
-                from selenium.webdriver.chrome.options import Options as SeleniumOptions
-
-                options = SeleniumOptions()
-                options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
-                driver = webdriver.Chrome(options=options)
-                driver._is_shared = True
-                self.drivers["_shared_debug_driver"] = driver
-                self.drivers[platform] = driver
-                logger.info(f"Successfully attached to user's browser! Window title: {driver.title}")
-                return driver
-            except Exception as e:
-                logger.warning(f"Could not attach to port 9222 ({e}). Falling back to standalone profile.")
+                    options = SeleniumOptions()
+                    options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+                    driver = webdriver.Chrome(options=options)
+                    driver._is_shared = True
+                    self.drivers["_shared_debug_driver"] = driver
+                    self.drivers[platform] = driver
+                    logger.info(f"Successfully attached to user's browser! Window title: {driver.title}")
+                    return driver
+                except Exception as e:
+                    logger.warning(f"Could not attach to port 9222 ({e}). Falling back to standalone profile.")
 
         # ── 2. Fallback: Standalone undetected-chromedriver with dedicated profile ──
         if platform in self.drivers:
@@ -270,44 +334,28 @@ class BrowserDriver:
 
     def navigate(self, platform, url=None, refresh_first=True):
         """Navigate to a URL or the platform's default URL. Respects existing user tabs if attached. Refreshes first by default."""
-        import urllib.parse
-        driver = self.get_driver(platform)
-        target_url = url or PLATFORM_URLS.get(platform, "https://google.com")
-        logger.info(f"Navigating {platform} to {target_url} (refresh_first={refresh_first})")
+        with self.lock:
+            import urllib.parse
+            driver = self.get_driver(platform)
+            target_url = url or PLATFORM_URLS.get(platform, "https://google.com")
+            logger.info(f"Navigating {platform} to {target_url} (refresh_first={refresh_first})")
 
-        if getattr(driver, "_is_shared", False):
-            # Working inside user's active browser: check if domain is already open in a tab
-            try:
-                target_netloc = urllib.parse.urlparse(target_url).netloc.lower()
-                found = False
-                for handle in driver.window_handles:
-                    driver.switch_to.window(handle)
-                    current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
-                    if target_netloc and (target_netloc in current_netloc or current_netloc in target_netloc):
-                        found = True
-                        cur_clean = driver.current_url.rstrip('/')
-                        tgt_clean = target_url.rstrip('/')
-                        if cur_clean != tgt_clean:
-                            driver.get(target_url)
-                        elif refresh_first:
-                            refresh_and_wait(driver, platform)
-                        break
-
-                if not found:
-                    # Open in a new tab so user's app/dashboard page remains intact
-                    driver.switch_to.new_window('tab')
+            if getattr(driver, "_is_shared", False):
+                self.switch_to_platform_tab(platform, target_url=target_url, driver=driver)
+                cur_clean = driver.current_url.rstrip('/')
+                tgt_clean = target_url.rstrip('/')
+                if cur_clean != tgt_clean:
                     driver.get(target_url)
-            except Exception as e:
-                logger.warning(f"Shared tab navigation note: {e}")
+                elif refresh_first:
+                    self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
+            else:
                 driver.get(target_url)
-        else:
-            driver.get(target_url)
 
-        if refresh_first:
-            self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
-        else:
-            self.human_wait("page")
-        return driver
+            if refresh_first and not getattr(driver, "_is_shared", False):
+                self.refresh_and_ensure_fresh(driver, platform_name=platform.capitalize())
+            else:
+                self.human_wait("page")
+            return driver
 
     def close(self, platform):
         """Close browser instance or release tab if shared."""
@@ -351,30 +399,34 @@ class BrowserDriver:
 
     def wait_for_element(self, driver, by, value, timeout=None):
         """Wait for an element to be present and return it."""
-        timeout = timeout or TIMEOUTS["element_wait"]
-        return WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((by, value))
-        )
+        with self.lock:
+            timeout = timeout or TIMEOUTS["element_wait"]
+            return WebDriverWait(driver, timeout).until(
+                EC.presence_of_element_located((by, value))
+            )
 
     def wait_for_clickable(self, driver, by, value, timeout=None):
         """Wait for an element to be clickable and return it."""
-        timeout = timeout or TIMEOUTS["element_wait"]
-        return WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((by, value))
-        )
+        with self.lock:
+            timeout = timeout or TIMEOUTS["element_wait"]
+            return WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((by, value))
+            )
 
     def safe_click(self, driver, element):
         """Click an element with human-like behavior."""
-        self.human_wait("action")
-        try:
-            element.click()
-        except Exception:
-            driver.execute_script("arguments[0].click();", element)
+        with self.lock:
+            self.human_wait("action")
+            try:
+                element.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", element)
 
     def scroll_to_element(self, driver, element):
         """Scroll element into view."""
-        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
-        self.human_wait("action")
+        with self.lock:
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+            self.human_wait("action")
 
 
 # Singleton instance

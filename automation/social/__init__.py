@@ -7,6 +7,7 @@ from .facebook import post_to_facebook
 from .instagram import post_to_instagram
 from .linkedin import post_to_linkedin
 from .whatsapp import post_to_whatsapp
+from .caption_helper import ensure_apply_now_at_start, LOAN_SOLUTIONS_APPLY_URL
 
 logger = logging.getLogger("automation.social")
 

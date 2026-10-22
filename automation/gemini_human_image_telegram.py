@@ -343,8 +343,9 @@ def run_gemini_human_image_and_telegram(custom_product=None):
                 human_sleep(0.3, 0.6)
                 task2_text = (
                     f"Now complete Task 2 for this image: Write the complete social media post for '{product_name}'. "
-                    "Include a compelling Headline, an engaging 2-3 paragraph marketing copy with call-to-action, "
-                    "and 5-6 viral hashtags."
+                    "MANDATORY: Start the post strictly on Line 1 with this exact link: 👉 Apply Now: https://loansolutions.everythingrental.in/application\n\n"
+                    "Include a compelling Headline, an engaging 2-3 paragraph marketing copy with strong hook and call-to-action, "
+                    "and fresh trending viral hashtags and SEO keywords tailored for Instagram and Facebook to maximize reach."
                 )
                 driver.execute_script("""
                     const ed = arguments[0];

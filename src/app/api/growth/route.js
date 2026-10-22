@@ -32,31 +32,38 @@ export async function POST(request) {
       location = "New Delhi",
       targetCount = 10,
       safetyDelay = 15,
+      mode = "location",
     } = body;
 
     const campaignId = uuidv4();
+    const effectiveLocation = mode === "suggestions" 
+      ? (location || "Suggested Accounts (PYMK)")
+      : mode === "random" 
+        ? (location || "Random Explore Feed")
+        : (location || "New Delhi");
 
     // 1. Create record in DB
     await createGrowthCampaign({
       id: campaignId,
       platform,
-      location,
+      location: effectiveLocation,
       target_count: parseInt(targetCount, 10),
       safety_delay_seconds: parseInt(safetyDelay, 10),
       status: "running",
-      logs: ["Outreach initiated from Web Dashboard"],
+      logs: [`Outreach initiated from Web Dashboard | Mode: ${mode}`],
     });
 
-    // 2. Launch execution via automation runner
-    // We launch it with runAutomationCommand in background
+    // 2. Launch execution via automation runner with dynamic timeout based on request count
+    const effectiveTimeoutMs = Math.max(600000, parseInt(targetCount, 10) * 35000);
     runAutomationCommand({
       action: "growth_outreach",
       campaign_id: campaignId,
       platform,
-      location,
+      location: effectiveLocation,
+      mode,
       target_count: parseInt(targetCount, 10),
       safety_delay: parseInt(safetyDelay, 10),
-    }, 300000).catch((err) => {
+    }, effectiveTimeoutMs).catch((err) => {
       console.error(`Growth outreach process error for ${campaignId}:`, err);
       updateGrowthCampaignStatus(campaignId, "failed", { logs: [err.message] });
     });
@@ -64,7 +71,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       campaignId,
-      message: `Outreach campaign started for ${platform} in ${location}`,
+      message: `Outreach campaign started for ${platform} (${mode})`,
     });
   } catch (error) {
     console.error("POST /api/growth error:", error);

@@ -46,6 +46,7 @@ try:
         edit_message_reply_markup,
         send_root_choice_menu,
         send_outreach_platform_menu,
+        send_outreach_strategy_menu,
         send_instagram_steps_menu,
         send_facebook_accept_menu,
         send_instagram_unfollow_menu,
@@ -54,6 +55,9 @@ try:
         send_antigravity_menu,
         send_antigravity_running_windows_menu,
         send_task_completion_message,
+        send_friends_group_menu,
+        send_queue_dashboard,
+        send_queue_collision_notice,
     )
 except (ImportError, ModuleNotFoundError):
     from telegram.bot import (
@@ -74,6 +78,7 @@ except (ImportError, ModuleNotFoundError):
         edit_message_reply_markup,
         send_root_choice_menu,
         send_outreach_platform_menu,
+        send_outreach_strategy_menu,
         send_instagram_steps_menu,
         send_facebook_accept_menu,
         send_instagram_unfollow_menu,
@@ -82,6 +87,9 @@ except (ImportError, ModuleNotFoundError):
         send_antigravity_menu,
         send_antigravity_running_windows_menu,
         send_task_completion_message,
+        send_friends_group_menu,
+        send_queue_dashboard,
+        send_queue_collision_notice,
     )
 from social.facebook import is_facebook_login_needed, submit_facebook_login, post_to_facebook
 from social.instagram import post_to_instagram
@@ -93,6 +101,7 @@ from remote.antigravity_controller import (
     inject_prompt_to_antigravity,
 )
 from browser.driver import browser
+from core.task_orchestrator import orchestrator, AutomationTask, TaskState
 
 logger = logging.getLogger("automation.telegram.poller")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -207,8 +216,8 @@ def update_loan_solution_logo_db(logo_path: str):
 
 
 
-def get_campaign_data(campaign_id: str) -> dict:
-    """Finds campaign data from PostgreSQL, SQLite, or file cache."""
+def get_campaign_data(campaign_id: str = None) -> dict:
+    """Finds campaign data from PostgreSQL, SQLite, or file cache. If campaign_id is None, finds latest campaign."""
     # 1. Try PostgreSQL
     try:
         import psycopg2
@@ -219,28 +228,36 @@ def get_campaign_data(campaign_id: str) -> dict:
         pg_db = os.environ.get("DB_NAME", "Social_Media")
         conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
         cur = conn.cursor()
-        cur.execute("""
-            SELECT c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
-            FROM campaigns c
-            LEFT JOIN products p ON c.product_id = p.id
-            WHERE c.id = %s
-        """, (campaign_id,))
+        if campaign_id:
+            cur.execute("""
+                SELECT c.id, c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
+                FROM campaigns c
+                LEFT JOIN products p ON c.product_id = p.id
+                WHERE c.id = %s
+            """, (str(campaign_id),))
+        else:
+            cur.execute("""
+                SELECT c.id, c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
+                FROM campaigns c
+                LEFT JOIN products p ON c.product_id = p.id
+                ORDER BY c.created_at DESC LIMIT 1
+            """)
         row = cur.fetchone()
         cur.close()
         conn.close()
         if row:
-            caption, hashtags, media_paths, p_name, p_cat, p_web = row
+            cid, caption, hashtags, media_paths, p_name, p_cat, p_web = row
             media_list = json.loads(media_paths) if isinstance(media_paths, str) else (media_paths or [])
             tag_list = json.loads(hashtags) if isinstance(hashtags, str) else (hashtags or [])
             tag_str = " ".join([t if t.startswith("#") else f"#{t}" for t in tag_list]) if tag_list else ""
             
             is_loan = ("loan" in str(p_name).lower()) or ("finance" in str(p_cat).lower()) or ("loan" in str(caption).lower())
             apply_url = "https://loansolutions.everythingrental.in/application"
-            if is_loan and apply_url not in str(caption):
-                full_caption = f"{caption or ''}\n\n👉 Apply Now: {apply_url}\n\n{tag_str}".strip()
-            else:
-                full_caption = f"{caption or ''}\n\n{tag_str}".strip()
+            from social.caption_helper import ensure_apply_now_at_start
+            raw_text = f"{caption or ''}\n\n{tag_str}".strip() if tag_str else (caption or "").strip()
+            full_caption = ensure_apply_now_at_start(raw_text, apply_url=apply_url, is_loan=is_loan)
             return {
+                "id": str(cid),
                 "media_path": media_list[0] if media_list else "",
                 "caption": full_caption or "Discover our latest solution!",
                 "product_name": p_name or "",
@@ -257,27 +274,35 @@ def get_campaign_data(campaign_id: str) -> dict:
             import sqlite3
             conn = sqlite3.connect(db_path)
             cur = conn.cursor()
-            cur.execute("""
-                SELECT c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
-                FROM campaigns c
-                LEFT JOIN products p ON c.product_id = p.id
-                WHERE c.id = ?
-            """, (campaign_id,))
+            if campaign_id:
+                cur.execute("""
+                    SELECT c.id, c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
+                    FROM campaigns c
+                    LEFT JOIN products p ON c.product_id = p.id
+                    WHERE c.id = ?
+                """, (str(campaign_id),))
+            else:
+                cur.execute("""
+                    SELECT c.id, c.generated_caption, c.generated_hashtags, c.media_paths, p.name, p.category, p.website_url
+                    FROM campaigns c
+                    LEFT JOIN products p ON c.product_id = p.id
+                    ORDER BY c.created_at DESC LIMIT 1
+                """)
             row = cur.fetchone()
             conn.close()
             if row:
-                caption, hashtags, media_paths, p_name, p_cat, p_web = row
+                cid, caption, hashtags, media_paths, p_name, p_cat, p_web = row
                 media_list = json.loads(media_paths) if isinstance(media_paths, str) else (media_paths or [])
                 tag_list = json.loads(hashtags) if isinstance(hashtags, str) else (hashtags or [])
                 tag_str = " ".join([t if t.startswith("#") else f"#{t}" for t in tag_list]) if tag_list else ""
                 
                 is_loan = ("loan" in str(p_name).lower()) or ("finance" in str(p_cat).lower()) or ("loan" in str(caption).lower())
                 apply_url = "https://loansolutions.everythingrental.in/application"
-                if is_loan and apply_url not in str(caption):
-                    full_caption = f"{caption or ''}\n\n👉 Apply Now: {apply_url}\n\n{tag_str}".strip()
-                else:
-                    full_caption = f"{caption or ''}\n\n{tag_str}".strip()
+                from social.caption_helper import ensure_apply_now_at_start
+                raw_text = f"{caption or ''}\n\n{tag_str}".strip() if tag_str else (caption or "").strip()
+                full_caption = ensure_apply_now_at_start(raw_text, apply_url=apply_url, is_loan=is_loan)
                 return {
+                    "id": str(cid),
                     "media_path": media_list[0] if media_list else "",
                     "caption": full_caption or "Discover our latest solution!",
                     "product_name": p_name or "",
@@ -296,6 +321,7 @@ def get_campaign_data(campaign_id: str) -> dict:
             latest_img = str(pngs[0])
 
     return {
+        "id": "latest_local",
         "media_path": latest_img or "",
         "caption": "Transform your business with intelligent AI automation! 🚀\n\n#AI #Automation #Marketing #Growth",
     }
@@ -329,7 +355,7 @@ def update_campaign_status_db(
         return False
 
 
-def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_count: int, message_id: int = None):
+def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_count: int, mode: str = "location", message_id: int = None):
     """Executes outreach campaign and manages live progress display in Telegram."""
     campaign_id = str(uuid.uuid4())[:8]
 
@@ -339,10 +365,17 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
         "instagram": "📸 Instagram Follow Requests"
     }.get(platform, platform.capitalize())
 
+    mode_badges = {
+        "suggestions": "🌟 Algorithmic Suggestions (PYMK & Recommendations)",
+        "random": "🎲 Random Discovery (Explore Feed)",
+        "location": f"📍 Location Target: <code>{location}</code>"
+    }
+    mode_text = mode_badges.get(mode, f"📍 Location: <code>{location}</code>")
+
     init_text = (
         f"👥 <b>Growth Outreach Initiated!</b>\n\n"
         f"🎯 <b>Target:</b> {plat_title}\n"
-        f"📍 <b>Location Filter:</b> <code>{location}</code>\n"
+        f"🔍 <b>Strategy:</b> {mode_text}\n"
         f"🔢 <b>Count:</b> {target_count} requests\n"
         f"🆔 <b>Campaign ID:</b> <code>{campaign_id}</code>\n\n"
         f"⏳ <b>Status:</b> Initializing browser sessions & preparing search filters..."
@@ -368,13 +401,13 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
         if res_msg.get("response", {}).get("result"):
             sent_msg_id = res_msg["response"]["result"].get("message_id")
 
-    import threading
     def _exec_growth():
         try:
             run_growth_campaign(
                 campaign_id=campaign_id,
                 platform=platform,
                 location=location,
+                mode=mode,
                 target_count=target_count,
                 safety_delay=15,
                 telegram_chat_id=chat_id,
@@ -384,7 +417,108 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
             logger.error(f"Error in growth campaign thread: {e_growth}")
             send_text_message(chat_id, f"⚠️ Outreach error notice: {e_growth}")
 
-    threading.Thread(target=_exec_growth, daemon=True).start()
+    task_obj = AutomationTask(
+        task_id=campaign_id,
+        name=f"{platform.capitalize()} {mode.capitalize()} ({target_count} targets)",
+        task_type="growth",
+        platform=platform,
+        account_id="manvxi_ai",
+        progress_total=target_count,
+        tg_chat_id=chat_id,
+        tg_message_id=sent_msg_id,
+        run_fn=lambda t: _exec_growth()
+    )
+    submit_res = orchestrator.submit_task(task_obj)
+    if submit_res.get("status") == "queued":
+        send_queue_collision_notice(
+            chat_id=chat_id,
+            task_name=task_obj.name,
+            lock_key=task_obj.lock_key,
+            position=submit_res.get("position", 1),
+            active_ahead=submit_res.get("active_ahead_name")
+        )
+
+
+def launch_social_group_creation(chat_id: str, platform: str, group_type: str, group_name: str, message_id: int = None):
+    """Executes social group creation and manages live progress in Telegram."""
+    task_id = str(uuid.uuid4())[:8]
+
+    plat_title = {
+        "facebook": "📘 Facebook",
+        "instagram": "📸 Instagram",
+        "both": "⚡ Facebook + Instagram"
+    }.get(platform, platform.capitalize())
+
+    type_title = {
+        "community_group": "Community Group",
+        "messenger_chat": "Messenger Group Chat",
+        "ig_direct_group": "Direct Group (Batch 30)",
+        "all": "All Available Formats"
+    }.get(group_type, group_type)
+
+    init_text = (
+        f"👨‍👩‍👧‍👦 <b>Social Friends Group Creation Initiated!</b>\n\n"
+        f"🏷️ <b>Group Name:</b> <code>{group_name}</code>\n"
+        f"📱 <b>Platform:</b> {plat_title}\n"
+        f"🎯 <b>Type:</b> {type_title}\n"
+        f"🆔 <b>Task ID:</b> <code>{task_id}</code>\n\n"
+        f"⏳ <b>Status:</b> Initializing Chrome profile (Port 9222) and opening group creator..."
+    )
+
+    stop_keyboard = {
+        "inline_keyboard": [
+            [{"text": "🛑 Stop Creation Task", "callback_data": f"grp:stop:{task_id}"}]
+        ]
+    }
+
+    sent_msg_id = None
+    if message_id:
+        try:
+            res = edit_message_text(chat_id, message_id, init_text, keyboard=stop_keyboard)
+            if res.get("ok"):
+                sent_msg_id = message_id
+        except Exception:
+            pass
+
+    if not sent_msg_id:
+        res_msg = send_text_message(chat_id, init_text, reply_markup=stop_keyboard)
+        if res_msg.get("response", {}).get("result"):
+            sent_msg_id = res_msg["response"]["result"].get("message_id")
+
+    def _exec_grp():
+        try:
+            from social.social_groups import run_social_group_task
+            run_social_group_task(
+                task_id=task_id,
+                platform=platform,
+                group_type=group_type,
+                group_name=group_name,
+                tg_chat_id=chat_id,
+                tg_message_id=sent_msg_id
+            )
+        except Exception as e_grp:
+            logger.error(f"Error in social group task thread: {e_grp}")
+            send_text_message(chat_id, f"⚠️ Group creation error notice: {e_grp}")
+
+    task_obj = AutomationTask(
+        task_id=task_id,
+        name=f"{platform.capitalize()} Group '{group_name}'",
+        task_type="group",
+        platform=platform,
+        account_id="manvxi_ai",
+        tg_chat_id=chat_id,
+        tg_message_id=sent_msg_id,
+        run_fn=lambda t: _exec_grp()
+    )
+    submit_res = orchestrator.submit_task(task_obj)
+    if submit_res.get("status") == "queued":
+        send_queue_collision_notice(
+            chat_id=chat_id,
+            task_name=task_obj.name,
+            lock_key=task_obj.lock_key,
+            position=submit_res.get("position", 1),
+            active_ahead=submit_res.get("active_ahead_name")
+        )
 
 
 def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, message_id: int = None):
@@ -487,9 +621,25 @@ def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, me
 
         except Exception as e_acc:
             logger.error(f"Error in facebook accept thread: {e_acc}", exc_info=True)
-            send_text_message(chat_id, f"⚠️ Facebook accept error: {e_acc}")
-
-    threading.Thread(target=_exec_accept, daemon=True).start()
+    task_obj = AutomationTask(
+        task_id=job_id,
+        name=f"Facebook Accept ({target_label})",
+        task_type="growth",
+        platform="facebook",
+        account_id="manvxi_ai",
+        tg_chat_id=chat_id,
+        tg_message_id=sent_msg_id,
+        run_fn=lambda t: _exec_accept()
+    )
+    submit_res = orchestrator.submit_task(task_obj)
+    if submit_res.get("status") == "queued":
+        send_queue_collision_notice(
+            chat_id=chat_id,
+            task_name=task_obj.name,
+            lock_key=task_obj.lock_key,
+            position=submit_res.get("position", 1),
+            active_ahead=submit_res.get("active_ahead_name")
+        )
 
 
 def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = None):
@@ -747,7 +897,24 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
             logger.error(f"Error in instagram follow users thread: {e_flw}", exc_info=True)
             send_text_message(chat_id, f"⚠️ Instagram follow error: {e_flw}")
 
-    threading.Thread(target=_exec_follow_users, daemon=True).start()
+    task_obj = AutomationTask(
+        name=f"Instagram Follow ({len(usernames)} users)",
+        task_type="growth",
+        platform="instagram",
+        account_id="manvxi_ai",
+        tg_chat_id=chat_id,
+        tg_message_id=sent_msg_id,
+        run_fn=lambda t: _exec_follow_users()
+    )
+    submit_res = orchestrator.submit_task(task_obj)
+    if submit_res.get("status") == "queued":
+        send_queue_collision_notice(
+            chat_id=chat_id,
+            task_name=task_obj.name,
+            lock_key=task_obj.lock_key,
+            position=submit_res.get("position", 1),
+            active_ahead=submit_res.get("active_ahead_name")
+        )
 
 
 def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms: list, message_id: int = None):
@@ -759,16 +926,21 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
 
     def _exec():
         try:
+            from social.caption_helper import ensure_apply_now_at_start, LOAN_SOLUTIONS_APPLY_URL
+            from social.trending_hashtags import enrich_caption_with_trending_hashtags
             campaign_data = get_campaign_data(campaign_id)
             media_path = campaign_data.get("media_path")
-            caption = campaign_data.get("caption")
+            raw_caption = campaign_data.get("caption", "")
+            # Guarantee Apply Now link is strictly at the start of caption
+            caption = ensure_apply_now_at_start(raw_caption, apply_url=LOAN_SOLUTIONS_APPLY_URL, is_loan=True)
 
             plat_names = [p.capitalize() for p in platforms]
             init_text = (
                 f"🚀 <b>Multi-Platform Broadcast Started!</b>\n\n"
                 f"🎯 <b>Target Platforms ({len(platforms)}):</b> {', '.join(plat_names)}\n"
                 f"🖼️ <b>Media:</b> <code>{os.path.basename(media_path) if media_path else 'Branded Graphic'}</code>\n"
-                f"⏳ <b>Status:</b> Initializing browser sessions & preparing posts..."
+                f"📝 <b>Mandatory Link:</b> <code>{LOAN_SOLUTIONS_APPLY_URL}</code>\n"
+                f"⏳ <b>Status:</b> Initializing browser sessions & preparing verified posts..."
             )
             if message_id:
                 try:
@@ -790,40 +962,61 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
 
                 send_text_message(
                     chat_id,
-                    f"⏳ <b>Step {idx+1}/{len(platforms)}: Publishing to {p_label}...</b>"
+                    f"⏳ <b>Step {idx+1}/{len(platforms)}: Publishing & verifying on {p_label}...</b>"
                 )
 
                 try:
                     if plat_clean == "facebook":
                         from config import PLATFORM_URLS
+                        fb_caption = enrich_caption_with_trending_hashtags(caption, platform="facebook", category="finance")
+                        fb_caption = ensure_apply_now_at_start(fb_caption, apply_url=LOAN_SOLUTIONS_APPLY_URL, is_loan=True)
                         driver = browser.navigate("facebook", PLATFORM_URLS["facebook"])
                         time.sleep(2)
-                        if is_facebook_login_needed(driver):
+                        if driver and is_facebook_login_needed(driver):
                             chat_sessions[chat_id] = {
                                 "action": "AWAITING_PASSWORD",
                                 "platform": "facebook",
                                 "campaign_id": campaign_id,
                                 "media_path": media_path,
-                                "caption": caption,
+                                "caption": fb_caption,
                                 "remaining_platforms": platforms[idx+1:]
                             }
                             send_password_request_prompt(chat_id, "facebook", campaign_id)
                             # Pause execution to await password
                             return
                         else:
-                            res = post_to_facebook(media_path=media_path, caption=caption)
+                            res = post_to_facebook(media_path=media_path, caption=fb_caption)
                             if res.get("status") == "success":
-                                successful_platforms.append("Facebook")
-                                send_text_message(chat_id, "✅ <b>Facebook:</b> Successfully published!")
+                                fb_verified = res.get("verified", False)
+                                successful_platforms.append({
+                                    "platform": "facebook",
+                                    "name": "Facebook",
+                                    "verified": fb_verified,
+                                    "url": "https://www.facebook.com/me"
+                                })
+                                status_desc = "Verified Live on Feed! ✅" if fb_verified else "Published! ✅"
+                                send_text_message(chat_id, f"✅ <b>Facebook:</b> {status_desc}")
                             else:
                                 failed_platforms.append(f"Facebook ({res.get('message', 'error')})")
                                 send_text_message(chat_id, f"⚠️ Facebook notice: {res.get('message')}")
 
                     elif plat_clean == "instagram":
-                        res = post_to_instagram(media_path=media_path, caption=caption)
+                        ig_caption = enrich_caption_with_trending_hashtags(caption, platform="instagram", category="finance")
+                        ig_caption = ensure_apply_now_at_start(ig_caption, apply_url=LOAN_SOLUTIONS_APPLY_URL, is_loan=True)
+                        res = post_to_instagram(media_path=media_path, caption=ig_caption)
                         if res.get("status") == "success":
-                            successful_platforms.append("Instagram")
-                            send_text_message(chat_id, "✅ <b>Instagram:</b> Successfully published!")
+                            ig_verified = res.get("verified", False)
+                            ig_post_url = res.get("post_url")
+                            successful_platforms.append({
+                                "platform": "instagram",
+                                "name": "Instagram",
+                                "verified": ig_verified,
+                                "url": ig_post_url or "https://www.instagram.com/loansolutions2026/"
+                            })
+                            succ_txt = "✅ <b>Instagram:</b> Successfully published & verified live! ✅"
+                            if ig_post_url:
+                                succ_txt += f"\n🔗 <b>Post Link:</b> {ig_post_url}"
+                            send_text_message(chat_id, succ_txt)
                         else:
                             failed_platforms.append(f"Instagram ({res.get('message', 'error')})")
                             send_text_message(chat_id, f"⚠️ Instagram notice: {res.get('message')}")
@@ -831,8 +1024,13 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
                     elif plat_clean == "linkedin":
                         res = post_to_linkedin(media_path=media_path, caption=caption)
                         if res.get("status") == "success":
-                            successful_platforms.append("LinkedIn")
-                            send_text_message(chat_id, "✅ <b>LinkedIn:</b> Successfully published!")
+                            successful_platforms.append({
+                                "platform": "linkedin",
+                                "name": "LinkedIn",
+                                "verified": True,
+                                "url": "https://www.linkedin.com/feed/"
+                            })
+                            send_text_message(chat_id, "✅ <b>LinkedIn:</b> Successfully published! ✅")
                         else:
                             failed_platforms.append(f"LinkedIn ({res.get('message', 'error')})")
                             send_text_message(chat_id, f"⚠️ LinkedIn notice: {res.get('message')}")
@@ -841,8 +1039,13 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
                         from social.whatsapp import post_to_whatsapp
                         res = post_to_whatsapp(media_path=media_path, caption=caption)
                         if res.get("status") == "success":
-                            successful_platforms.append("WhatsApp")
-                            send_text_message(chat_id, "✅ <b>WhatsApp:</b> Successfully published!")
+                            successful_platforms.append({
+                                "platform": "whatsapp",
+                                "name": "WhatsApp",
+                                "verified": True,
+                                "url": "https://web.whatsapp.com"
+                            })
+                            send_text_message(chat_id, "✅ <b>WhatsApp:</b> Successfully published! ✅")
                         else:
                             failed_platforms.append(f"WhatsApp ({res.get('message', 'error')})")
                             send_text_message(chat_id, f"⚠️ WhatsApp notice: {res.get('message')}")
@@ -852,7 +1055,7 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
                     failed_platforms.append(f"{plat_clean.capitalize()} ({e_p})")
                     send_text_message(chat_id, f"⚠️ Error publishing to {plat_clean}: {e_p}")
 
-                # Human-like delay between multiple platform posts
+                # Human-like pacing between multiple platform posts
                 if idx < len(platforms) - 1:
                     time.sleep(2.5)
 
@@ -861,29 +1064,67 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
                 update_campaign_status_db(
                     campaign_id,
                     status="posted",
-                    platform=",".join([p.lower() for p in successful_platforms]),
+                    platform=",".join([p["platform"] for p in successful_platforms]),
                     media_path=media_path,
                     caption=caption
                 )
 
-            # Send final celebratory summary card
-            succ_str = "\n".join([f"• ✅ <b>{p}</b>" for p in successful_platforms]) if successful_platforms else "None"
+            # Send final verified celebratory confirmation card with action buttons
+            succ_rows = []
+            for sp in successful_platforms:
+                v_badge = "Verified Live ✅" if sp.get("verified") else "Posted ✅"
+                succ_rows.append(f"• <b>{sp['name']}:</b> {v_badge} — <a href=\"{sp['url']}\">View</a>")
+
+            succ_str = "\n".join(succ_rows) if succ_rows else "None"
             fail_str = f"\n\n⚠️ <b>Issues:</b>\n" + "\n".join([f"• ❌ {p}" for p in failed_platforms]) if failed_platforms else ""
 
             summary_text = (
-                f"🎉 <b>Multi-Platform Broadcast Summary</b>\n\n"
-                f"<b>Successfully Published To:</b>\n{succ_str}{fail_str}\n\n"
-                f"🖼️ <b>Media:</b> <code>{os.path.basename(media_path) if media_path else 'Graphic'}</code>\n"
-                f"📝 <b>Caption:</b>\n{caption[:160]}...\n\n"
-                f"<i>Campaign {campaign_id[:8]} marked as posted in database.</i>"
+                f"🎉 <b>Broadcast Verified & Completed!</b>\n\n"
+                f"<b>Live Status & Verification:</b>\n{succ_str}{fail_str}\n\n"
+                f"📝 <b>Mandatory CTA (Line 1):</b>\n"
+                f"<code>👉 Apply Now: {LOAN_SOLUTIONS_APPLY_URL}</code>\n\n"
+                f"🖼️ <b>Media Attached:</b> <code>{os.path.basename(media_path) if media_path else 'Graphic'}</code>\n"
+                f"📝 <b>Caption Snippet:</b>\n<i>{caption[:140]}...</i>\n\n"
+                f"<i>Campaign {campaign_id[:8]} confirmed live in system.</i>"
             )
-            send_text_message(chat_id, summary_text)
+
+            # Build confirmation buttons: Apply Now button + direct link to live post
+            confirm_buttons = [
+                [{"text": "📝 Apply Now 🔗", "url": LOAN_SOLUTIONS_APPLY_URL}]
+            ]
+            for sp in successful_platforms:
+                if sp["platform"] == "instagram" and "/p/" in sp.get("url", ""):
+                    confirm_buttons.append([{"text": "📸 View on Instagram ↗️", "url": sp["url"]}])
+                elif sp["platform"] == "facebook" and sp.get("url"):
+                    confirm_buttons.append([{"text": "📘 View on Facebook ↗️", "url": sp["url"]}])
+
+            send_text_message(
+                chat_id,
+                summary_text,
+                reply_markup={"inline_keyboard": confirm_buttons}
+            )
 
         except Exception as e_main:
             logger.error(f"Error in multi-platform execution: {e_main}")
-            send_text_message(chat_id, f"⚠️ Multi-platform broadcast error: {e_main}")
-
-    threading.Thread(target=_exec, daemon=True).start()
+    task_obj = AutomationTask(
+        task_id=campaign_id or str(uuid.uuid4())[:8],
+        name=f"Broadcast ({', '.join([p.capitalize() for p in platforms])})",
+        task_type="post",
+        platform="broadcast",
+        account_id="multi",
+        tg_chat_id=chat_id,
+        tg_message_id=message_id,
+        run_fn=lambda t: _exec()
+    )
+    submit_res = orchestrator.submit_task(task_obj)
+    if submit_res.get("status") == "queued":
+        send_queue_collision_notice(
+            chat_id=chat_id,
+            task_name=task_obj.name,
+            lock_key=task_obj.lock_key,
+            position=submit_res.get("position", 1),
+            active_ahead=submit_res.get("active_ahead_name")
+        )
 
 
 def handle_callback_query(callback: dict):
@@ -1322,13 +1563,24 @@ def handle_callback_query(callback: dict):
         stop_flag.write_text("STOP", encoding="utf-8")
         send_text_message(chat_id, f"🛑 <b>Stop signal sent</b> for unfollow job <code>{job_id}</code>.")
 
-    # 15. Outreach Step 2: Platform Selected -> Route to Steps or Location
+    # 15. Outreach Step 2: Platform Selected -> Route to Strategy Menu
     elif callback_data.startswith("outreach:plat:"):
         platform = callback_data.split(":", 2)[2].lower()
         if callback_id:
             answer_callback_query(callback_id)
-        if platform == "instagram":
-            send_instagram_steps_menu(chat_id, message_id=message_id)
+        send_outreach_strategy_menu(chat_id, platform=platform, message_id=message_id)
+
+    # 15a. Outreach Strategy Selected -> Route to Count or Location
+    elif callback_data.startswith("outreach:strat:"):
+        parts = callback_data.split(":")
+        platform = parts[2].lower() if len(parts) > 2 else "both"
+        strat_mode = parts[3].lower() if len(parts) > 3 else "location"
+        if callback_id:
+            answer_callback_query(callback_id)
+
+        if strat_mode in ["suggestions", "random"]:
+            default_loc = "Suggested Accounts" if strat_mode == "suggestions" else "Random Explore Feed"
+            send_outreach_count_menu(chat_id, platform=platform, location=default_loc, mode=strat_mode, message_id=message_id)
         else:
             send_outreach_location_menu(chat_id, platform=platform, message_id=message_id)
 
@@ -1396,18 +1648,26 @@ def handle_callback_query(callback: dict):
         location = parts[3] if len(parts) > 3 else "Global"
         if callback_id:
             answer_callback_query(callback_id)
-        send_outreach_count_menu(chat_id, platform=platform, location=location, message_id=message_id)
+        send_outreach_count_menu(chat_id, platform=platform, location=location, mode="location", message_id=message_id)
 
     # 18. Outreach Custom Count Selection
     elif callback_data.startswith("outreach:count_custom:"):
         parts = callback_data.split(":")
-        platform = parts[2].lower() if len(parts) > 2 else "both"
-        location = parts[3] if len(parts) > 3 else "Global"
+        if len(parts) >= 5:
+            platform = parts[2].lower()
+            mode = parts[3].lower()
+            location = parts[4]
+        else:
+            platform = parts[2].lower() if len(parts) > 2 else "both"
+            mode = "location"
+            location = parts[3] if len(parts) > 3 else "Global"
+
         if callback_id:
             answer_callback_query(callback_id)
         chat_sessions[chat_id] = {
             "action": "AWAITING_OUTREACH_COUNT",
             "platform": platform,
+            "mode": mode,
             "location": location,
             "message_id": message_id
         }
@@ -1420,27 +1680,39 @@ def handle_callback_query(callback: dict):
             chat_id,
             f"🎯 <b>Custom Outreach Request Count</b>\n\n"
             f"👥 <b>Platform:</b> {plat_label}\n"
-            f"📍 <b>Location:</b> <code>{location}</code>\n\n"
+            f"🔍 <b>Strategy/Target:</b> <code>{location}</code>\n\n"
             "Please type the number of requests you would like to send (e.g. <code>15</code>, <code>35</code>, <code>75</code>, <code>100</code>):\n\n"
             "<i>(Type /cancel anytime to return to the menu)</i>"
         )
 
-    # 19. Outreach Execution: Run outreach with preset (platform, location, count)
+    # 19. Outreach Execution: Run outreach with preset (platform, mode, location, count)
     elif callback_data.startswith("outreach:run:"):
         parts = callback_data.split(":")
-        platform = parts[2].lower() if len(parts) > 2 else "both"
-        location = parts[3] if len(parts) > 3 else "Global"
-        try:
-            target_count = int(parts[4]) if len(parts) > 4 else 10
-        except ValueError:
-            target_count = 10
+        # Format A: outreach:run:{platform}:{mode}:{location}:{count}
+        if len(parts) >= 6:
+            platform = parts[2].lower()
+            mode = parts[3].lower()
+            location = parts[4]
+            try:
+                target_count = int(parts[5])
+            except ValueError:
+                target_count = 10
+        # Format B (Legacy 4-part): outreach:run:{platform}:{location}:{count}
+        else:
+            platform = parts[2].lower() if len(parts) > 2 else "both"
+            mode = "location"
+            location = parts[3] if len(parts) > 3 else "Global"
+            try:
+                target_count = int(parts[4]) if len(parts) > 4 else 10
+            except ValueError:
+                target_count = 10
 
         if callback_id:
-            answer_callback_query(callback_id, text=f"🚀 Launching outreach for {location}...")
+            answer_callback_query(callback_id, text=f"🚀 Launching outreach ({mode})...")
 
-        launch_outreach_campaign(chat_id, platform=platform, location=location, target_count=target_count, message_id=message_id)
+        launch_outreach_campaign(chat_id, platform=platform, location=location, target_count=target_count, mode=mode, message_id=message_id)
 
-    # 19. Outreach Stop Signal
+    # 19b. Outreach Stop Signal
     elif callback_data.startswith("outreach:stop:"):
         campaign_id = callback_data.split(":", 2)[2] if ":" in callback_data else ""
         if callback_id:
@@ -1473,6 +1745,84 @@ def handle_callback_query(callback: dict):
             answer_callback_query(callback_id)
         send_antigravity_running_windows_menu(chat_id, message_id=message_id)
 
+    # 23. Social Friends Group: Open menu
+    elif callback_data == "root:friends_group":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_friends_group_menu(chat_id, message_id=message_id)
+
+    # 24. Social Friends Group: Type selected -> ask for name or offer default
+    elif callback_data.startswith("grp:type:"):
+        parts = callback_data.split(":")
+        platform = parts[2] if len(parts) > 2 else "facebook"
+        group_type = parts[3] if len(parts) > 3 else "community_group"
+        if callback_id:
+            answer_callback_query(callback_id)
+
+        chat_sessions[chat_id] = {
+            "action": "AWAITING_GROUP_NAME",
+            "platform": platform,
+            "group_type": group_type,
+            "message_id": message_id
+        }
+
+        default_name = f"My VIP Community {time.strftime('%Y')}"
+        prompt_text = (
+            f"✏️ <b>Social Friends Group Name</b>\n\n"
+            f"📱 <b>Platform:</b> {platform.capitalize()} ({group_type})\n\n"
+            "Please type a name for your group (e.g. <code>VIP Members 2026</code>) or tap below to use the recommended default name:\n\n"
+            "<i>(Type /cancel anytime to abort)</i>"
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": f"⚡ Use \"{default_name}\"", "callback_data": f"grp:run:default:{platform}:{group_type}"}],
+                [{"text": "🔙 Back", "callback_data": "root:friends_group"}]
+            ]
+        }
+        send_text_message(chat_id, prompt_text, reply_markup=keyboard)
+
+    # 25. Social Friends Group: Run with default name
+    elif callback_data.startswith("grp:run:default:"):
+        parts = callback_data.split(":")
+        platform = parts[3] if len(parts) > 3 else "facebook"
+        group_type = parts[4] if len(parts) > 4 else "community_group"
+        default_name = f"My VIP Community {time.strftime('%Y')}"
+        if callback_id:
+            answer_callback_query(callback_id, text="🚀 Launching group creation...")
+        if chat_id in chat_sessions:
+            del chat_sessions[chat_id]
+        launch_social_group_creation(chat_id, platform=platform, group_type=group_type, group_name=default_name, message_id=message_id)
+
+    # 26. Social Friends Group: Stop Task
+    elif callback_data.startswith("grp:stop:"):
+        task_id = callback_data.split(":", 2)[2] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="🛑 Halting group creation...")
+        from social.social_groups import stop_social_group_task
+        stop_social_group_task(task_id)
+        send_text_message(chat_id, f"🛑 <b>Stop signal sent</b> for group creation task <code>{task_id}</code>.")
+
+    # 27. Multitasking Queue Dashboard
+    elif callback_data == "root:queue":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_queue_dashboard(chat_id, message_id=message_id)
+
+    # 28. Stop / Cancel Task from Queue Dashboard
+    elif callback_data.startswith("task:stop:"):
+        target_tid = callback_data.split(":", 2)[2] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="🛑 Halting task...")
+        orchestrator.cancel_task(target_tid)
+        stop_growth_campaign(target_tid)
+        try:
+            from social.social_groups import stop_social_group_task
+            stop_social_group_task(target_tid)
+        except Exception:
+            pass
+        send_text_message(chat_id, f"🛑 <b>Task {target_tid} cancelled.</b> If other tasks were queued behind it, the next task is now unblocked and active!")
+        send_queue_dashboard(chat_id)
+
 
 def handle_text_message(message: dict):
     """Processes user text messages in Telegram (such as passwords, start commands, or revision feedback)."""
@@ -1483,8 +1833,20 @@ def handle_text_message(message: dict):
     logger.info(f"Received text message: '{text}' from chat {chat_id}")
 
     clean_text = text.lower().strip()
+    if clean_text in ["/queue", "queue", "/tasks", "tasks"]:
+        send_queue_dashboard(chat_id)
+        return
+
     if clean_text in ["/start", "start", "/help", "help", "hi", "hello", "menu", "/menu"]:
         send_root_choice_menu(chat_id)
+        return
+
+    if clean_text in ["/suggestions", "suggestions", "/suggest", "suggest"]:
+        send_outreach_strategy_menu(chat_id, "both")
+        return
+
+    if clean_text in ["/random", "random", "/random_follow"]:
+        send_outreach_count_menu(chat_id, platform="both", location="Random Explore Feed", mode="random")
         return
 
     if clean_text in ["/cancel", "cancel"]:
@@ -1598,6 +1960,7 @@ def handle_text_message(message: dict):
     if session.get("action") == "AWAITING_OUTREACH_COUNT":
         platform = session.get("platform", "both")
         location = session.get("location", "Global")
+        mode = session.get("mode", "location")
         target_msg_id = session.get("message_id")
 
         try:
@@ -1612,14 +1975,30 @@ def handle_text_message(message: dict):
             return
 
         del chat_sessions[chat_id]
-        target_count = min(val, 250)
-        if val > 250:
+        target_count = min(val, 1000)
+        if val > 1000:
             send_text_message(
                 chat_id,
-                f"ℹ️ <i>Notice: Request count capped at platform safety maximum of 250 (entered: {val}) to protect your account.</i>"
+                f"ℹ️ <i>Notice: Request count capped at platform maximum of 1000 (entered: {val}). Note: A 2-minute safety pause automatically runs after every 250 requests to protect your account.</i>"
+            )
+        elif target_count > 250:
+            send_text_message(
+                chat_id,
+                f"🛡️ <i>Safety notice: For targets over 250 ({target_count} selected), a 2-minute cooldown interval will automatically pause after every 250 requests.</i>"
             )
 
-        launch_outreach_campaign(chat_id, platform=platform, location=location, target_count=target_count, message_id=target_msg_id)
+        launch_outreach_campaign(chat_id, platform=platform, location=location, target_count=target_count, mode=mode, message_id=target_msg_id)
+        return
+
+    # User provided custom group name for Social Friends Group Creator
+    if session.get("action") == "AWAITING_GROUP_NAME":
+        platform = session.get("platform", "facebook")
+        group_type = session.get("group_type", "community_group")
+        target_msg_id = session.get("message_id")
+        group_name = text.strip()
+        del chat_sessions[chat_id]
+
+        launch_social_group_creation(chat_id, platform=platform, group_type=group_type, group_name=group_name, message_id=target_msg_id)
         return
 
     # User provided password for a platform

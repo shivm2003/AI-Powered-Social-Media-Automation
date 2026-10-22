@@ -1049,11 +1049,11 @@ def execute_human_generation_and_telegram_flow(
                             pass
                         human_sleep(0.3, 0.5)
 
-                        apply_instruction = f" (MANDATORY: Always include this exact Apply Now link at the end: 👉 Apply Now: {LOAN_SOLUTIONS_APPLY_URL})" if is_loan_solutions else ""
+                        apply_instruction = f" (MANDATORY: Always place this exact Apply Now link strictly on the VERY FIRST LINE at the very beginning of the post before anything else: 👉 Apply Now: {LOAN_SOLUTIONS_APPLY_URL})" if is_loan_solutions else ""
                         task2_prompt = (
                             f"Now complete Task 2 for this image: Write the complete social media post for '{product_name}'. "
                             f"Include a compelling Headline, an engaging 2-3 paragraph marketing caption with strong hook and call-to-action{apply_instruction}, "
-                            f"and 5-6 viral hashtags for {', '.join(platforms)}."
+                            f"and fresh trending viral hashtags and keywords tailored for {', '.join(platforms)} to maximize reach and engagement."
                         )
                         driver.execute_script("""
                             const ed = arguments[0];
@@ -1376,11 +1376,11 @@ def execute_human_generation_and_telegram_flow(
                             pass
                         human_sleep(0.3, 0.5)
 
-                        apply_instruction = f" (MANDATORY: Always include this exact Apply Now link at the end: 👉 Apply Now: {LOAN_SOLUTIONS_APPLY_URL})" if is_loan_solutions else ""
+                        apply_instruction = f" (MANDATORY: Always place this exact Apply Now link strictly on the VERY FIRST LINE at the very beginning of the post before anything else: 👉 Apply Now: {LOAN_SOLUTIONS_APPLY_URL})" if is_loan_solutions else ""
                         task2_prompt = (
                             f"Now complete Task 2 for this image: Write the complete social media post for '{product_name}'. "
                             f"Include a compelling Headline, an engaging 2-3 paragraph marketing caption with strong hook and call-to-action{apply_instruction}, "
-                            f"and 5-6 viral hashtags for {', '.join(platforms)}."
+                            f"and fresh trending viral hashtags and keywords tailored for {', '.join(platforms)} to maximize reach and engagement."
                         )
                         driver.execute_script("""
                             const ed = arguments[0];
@@ -1521,12 +1521,14 @@ def execute_human_generation_and_telegram_flow(
     caption = content_data.get("caption", f"Discover {product_name}!")
     hashtags = content_data.get("hashtags", [])
     full_caption = caption
-    if is_loan_solutions and LOAN_SOLUTIONS_APPLY_URL not in full_caption:
-        full_caption = f"{full_caption.rstrip()}\n\n👉 Apply Now: {LOAN_SOLUTIONS_APPLY_URL}"
     if hashtags:
         tag_str = " ".join([h if h.startswith("#") else f"#{h}" for h in hashtags])
         if tag_str not in full_caption:
             full_caption = f"{full_caption}\n\n{tag_str}"
+
+    if is_loan_solutions:
+        from social.caption_helper import ensure_apply_now_at_start
+        full_caption = ensure_apply_now_at_start(full_caption, apply_url=LOAN_SOLUTIONS_APPLY_URL, is_loan=True)
 
     tg_result = send_preview_to_telegram(
         campaign_id=campaign_id,

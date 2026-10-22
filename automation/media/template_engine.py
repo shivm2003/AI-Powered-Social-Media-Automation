@@ -332,7 +332,7 @@ def build_diverse_visual_prompt(
         image_prompt += f"\n• Attached Reference Branding: The official brand image for '{product_name}' is uploaded into this conversation. Harmonize the visual concept, color palette, and styling with this branding."
 
     is_loan = "loan" in product_name.lower() or "loan" in description.lower() or category.lower() == "finance"
-    apply_cta_rule = "\nMandatory Call-to-Action Link: You MUST end the post caption with this exact application link: 👉 Apply Now: https://loansolutions.everythingrental.in/application" if is_loan else ""
+    apply_cta_rule = "\nMandatory Call-to-Action Link: You MUST start the post caption at the very beginning (Line 1) with this exact application link: 👉 Apply Now: https://loansolutions.everythingrental.in/application" if is_loan else ""
 
     # Assemble complete unified prompt with strict visual vs. text copy separation for Indian audience
     unified_prompt = (
@@ -343,7 +343,7 @@ def build_diverse_visual_prompt(
         f"In your text reply beneath the image, write the social media post tailored for an Indian middle-class audience:\n"
         f"Headline: A compelling, emotional hook for {product_name} celebrating family dreams, financial security, and easy approvals\n"
         f"Caption: An engaging 2-3 paragraph marketing copy highlighting trust, transparent process, low monthly EMIs in Indian Rupees (₹), quick disbursal, and a clear call-to-action.{apply_cta_rule}\n"
-        f"Hashtags: 5-6 viral India-relevant hashtags for {', '.join(platforms)} (e.g. #LoanSolutions #HomeLoanIndia #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom - written ONLY here in text, NEVER painted inside the image)."
+        f"Hashtags: Fresh, high-volume viral hashtags and SEO keywords tailored for {', '.join(platforms)} to maximize reach on Instagram and Facebook (e.g. #ExplorePage #ViralReels #LoanSolutions #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom - written ONLY here in text, NEVER painted inside the image)."
     )
 
     return {

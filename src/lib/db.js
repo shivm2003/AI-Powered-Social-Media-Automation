@@ -125,9 +125,23 @@ async function initializeDatabase(client) {
       platform TEXT NOT NULL,
       target_user_name TEXT,
       target_user_url TEXT,
-      location TEXT,
       status TEXT,
       timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS social_groups (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL,
+      group_type TEXT NOT NULL,
+      group_name TEXT NOT NULL,
+      group_url TEXT,
+      external_group_id TEXT,
+      member_count INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
+      logs TEXT DEFAULT '[]',
+      telegram_message_id TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
 
     INSERT INTO settings (key, value) VALUES ('llm_provider', 'gemini') ON CONFLICT (key) DO NOTHING;
@@ -467,5 +481,68 @@ export async function updateGrowthCampaignStatus(id, status, updates = {}) {
   params.push(id);
   const sql = `UPDATE growth_campaigns SET ${sets.join(", ")} WHERE id = $${params.length}`;
   return query(sql, params);
+}
+
+// ── Social Groups Queries ──
+
+export async function createSocialGroup(g) {
+  const sql = `
+    INSERT INTO social_groups (
+      id, platform, group_type, group_name, group_url,
+      external_group_id, member_count, status, logs
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING *
+  `;
+  const { rows } = await query(sql, [
+    g.id,
+    g.platform,
+    g.group_type || "community_group",
+    g.group_name,
+    g.group_url || null,
+    g.external_group_id || null,
+    g.member_count || 0,
+    g.status || "creating",
+    typeof g.logs === "string" ? g.logs : JSON.stringify(g.logs || []),
+  ]);
+  return rows[0];
+}
+
+export async function getSocialGroupById(id) {
+  const { rows } = await query("SELECT * FROM social_groups WHERE id = $1", [id]);
+  return rows[0] || null;
+}
+
+export async function getAllSocialGroups(limit = 50) {
+  const { rows } = await query("SELECT * FROM social_groups ORDER BY created_at DESC LIMIT $1", [limit]);
+  return rows;
+}
+
+export async function updateSocialGroup(id, status, updates = {}) {
+  const { memberCount, groupUrl, externalGroupId, logs } = updates;
+  const sets = ["status = $1", "updated_at = NOW()"];
+  const params = [status];
+
+  if (memberCount !== undefined) {
+    params.push(memberCount);
+    sets.push(`member_count = $${params.length}`);
+  }
+  if (groupUrl !== undefined) {
+    params.push(groupUrl);
+    sets.push(`group_url = $${params.length}`);
+  }
+  if (externalGroupId !== undefined) {
+    params.push(externalGroupId);
+    sets.push(`external_group_id = $${params.length}`);
+  }
+  if (logs !== undefined) {
+    params.push(typeof logs === "string" ? logs : JSON.stringify(logs));
+    sets.push(`logs = $${params.length}`);
+  }
+
+  params.push(id);
+  const sql = `UPDATE social_groups SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`;
+  const { rows } = await query(sql, params);
+  return rows[0] || null;
 }
 

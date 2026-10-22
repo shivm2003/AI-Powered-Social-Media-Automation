@@ -253,20 +253,367 @@ def follow_multiple_instagram_users(
     }
 
 
+def _follow_instagram_suggestions(driver, target_count, safety_delay, on_progress, stop_event, logs):
+    """
+    Follows accounts from Instagram's native Suggested Accounts page (https://www.instagram.com/explore/people/).
+    """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.action_chains import ActionChains
+
+    logs.append("🌟 Navigating to Instagram Suggested Accounts (https://www.instagram.com/explore/people/)...")
+    driver.get("https://www.instagram.com/explore/people/")
+    time.sleep(3.0)
+
+    # Dismiss any notification or cookie dialogs
+    for d_btn in driver.find_elements(By.XPATH, "//button[text()='Not Now' or text()='Cancel' or text()='Decline optional cookies']"):
+        try:
+            if d_btn.is_displayed():
+                d_btn.click()
+                time.sleep(0.5)
+        except Exception:
+            pass
+
+    sent_count = 0
+    skipped_count = 0
+    processed_users = set()
+    scroll_attempts = 0
+    max_scrolls = max(30, int(target_count / 3) + 15)
+
+    while sent_count < target_count and scroll_attempts < max_scrolls:
+        if stop_event and stop_event.is_set():
+            logs.append("🛑 Instagram follow task stopped by user.")
+            break
+
+        browser.switch_to_platform_tab("instagram", driver=driver)
+
+        # Find follow buttons in suggested accounts list
+        follow_btns = []
+        candidates = driver.find_elements(By.XPATH, "//button[.//div[text()='Follow'] or text()='Follow'][not(@data-bot-sent='true')]")
+        for btn in candidates:
+            try:
+                if btn.is_displayed() and btn.get_attribute("data-bot-sent") != "true":
+                    follow_btns.append(btn)
+            except Exception:
+                continue
+
+        logger.info(f"Discovered {len(follow_btns)} suggested accounts to follow (Sent: {sent_count}/{target_count}).")
+
+        if not follow_btns:
+            scroll_attempts += 1
+            driver.execute_script("window.scrollBy(0, 800);")
+            time.sleep(2.0)
+            continue
+
+        for btn in follow_btns:
+            if stop_event and stop_event.is_set() or sent_count >= target_count:
+                break
+
+            try:
+                if not btn.is_displayed() or btn.get_attribute("data-bot-sent") == "true":
+                    continue
+
+                browser.switch_to_platform_tab("instagram", driver=driver)
+
+                # Extract username from row
+                cand_username = ""
+                try:
+                    row_el = btn.find_element(By.XPATH, "./ancestor::div[contains(@class, 'x1')]")
+                    links = row_el.find_elements(By.XPATH, ".//a[contains(@href, '/')]")
+                    for l in links:
+                        h = l.get_attribute("href") or ""
+                        u = extract_username_from_url(h)
+                        if u and is_valid_ig_username(u):
+                            cand_username = u
+                            break
+                except Exception:
+                    pass
+
+                u_name = cand_username or f"suggested_user_{sent_count + 1}"
+
+                if cand_username and cand_username.lower() in processed_users:
+                    continue
+                if cand_username:
+                    processed_users.add(cand_username.lower())
+
+                driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", btn)
+                time.sleep(random.uniform(0.5, 1.0))
+
+                clicked = False
+                try:
+                    ActionChains(driver).move_to_element(btn).pause(0.2).click().perform()
+                    clicked = True
+                except Exception:
+                    try:
+                        driver.execute_script("arguments[0].click();", btn)
+                        clicked = True
+                    except Exception:
+                        pass
+
+                if clicked:
+                    sent_count += 1
+                    log_entry = f"✅ Followed #{sent_count}: '@{u_name}' (Suggested Account)"
+                    logs.append(log_entry)
+                    logger.info(log_entry)
+
+                    if on_progress:
+                        try:
+                            on_progress(sent_count, target_count, {
+                                "platform": "instagram",
+                                "user": u_name,
+                                "url": f"https://www.instagram.com/{cand_username}/" if cand_username else driver.current_url,
+                                "location": "Suggested Accounts",
+                                "mode": "suggestions",
+                                "sent": sent_count,
+                                "target": target_count,
+                            })
+                        except Exception:
+                            pass
+
+                    # 2-minute safety break after every 250 follows
+                    if sent_count > 0 and sent_count % 250 == 0 and sent_count < target_count:
+                        cooldown_secs = 120
+                        cooldown_msg = f"⏸️ Reached {sent_count} Instagram follows milestone. Taking a 2-minute safety break..."
+                        logs.append(cooldown_msg)
+                        logger.info(cooldown_msg)
+                        if on_progress:
+                            try:
+                                on_progress(sent_count, target_count, {
+                                    "platform": "instagram",
+                                    "user": u_name,
+                                    "cooldown": True,
+                                    "cooldown_seconds": cooldown_secs,
+                                    "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
+                                })
+                            except Exception:
+                                pass
+                        for _ in range(cooldown_secs):
+                            if stop_event and stop_event.is_set():
+                                break
+                            time.sleep(1.0)
+                        logs.append(f"▶️ 2-minute safety cooldown completed. Resuming follows ({sent_count}/{target_count})...")
+
+                    pause = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
+                    logger.info(f"Human safety pause: {pause:.1f}s before next follow ({sent_count}/{target_count})...")
+                    time.sleep(pause)
+                else:
+                    skipped_count += 1
+
+            except Exception as e_row:
+                skipped_count += 1
+                logger.debug(f"Row click error: {e_row}")
+                continue
+
+        # Scroll to load more suggestions
+        scroll_attempts += 1
+        driver.execute_script("window.scrollBy(0, 800);")
+        time.sleep(random.uniform(1.8, 2.5))
+
+    return sent_count, skipped_count
+
+
+def _follow_instagram_random_explore(driver, target_count, safety_delay, on_progress, stop_event, logs):
+    """
+    Follows creators discovered dynamically and randomly on the Instagram Explore Feed (https://www.instagram.com/explore/).
+    """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.common.action_chains import ActionChains
+
+    logs.append("🎲 Navigating to Instagram Explore Feed (https://www.instagram.com/explore/)...")
+    driver.get("https://www.instagram.com/explore/")
+    time.sleep(3.0)
+
+    # Dismiss dialogs
+    for d_btn in driver.find_elements(By.XPATH, "//button[text()='Not Now' or text()='Cancel' or text()='Decline optional cookies']"):
+        try:
+            if d_btn.is_displayed():
+                d_btn.click()
+                time.sleep(0.5)
+        except Exception:
+            pass
+
+    sent_count = 0
+    skipped_count = 0
+    processed_users = set()
+
+    thumbnails = driver.find_elements(By.XPATH, "//a[contains(@href, '/p/') or contains(@href, '/reel/')]")
+    logger.info(f"Explore page loaded {len(thumbnails)} post thumbnails for random discovery.")
+
+    if not thumbnails:
+        logs.append("⚠️ No Explore post thumbnails found.")
+        return 0, 0
+
+    # Pick a random thumbnail among the first 12 to start
+    start_idx = random.randint(0, min(10, len(thumbnails) - 1))
+    try:
+        driver.execute_script("arguments[0].click();", thumbnails[start_idx])
+        time.sleep(2.5)
+    except Exception as e_open:
+        logger.warning(f"Could not open initial thumbnail: {e_open}")
+        return 0, 0
+
+    cycles = 0
+    max_cycles = max(40, target_count * 5)
+
+    while sent_count < target_count and cycles < max_cycles:
+        if stop_event and stop_event.is_set():
+            logs.append("🛑 Instagram random follow task stopped by user.")
+            break
+
+        cycles += 1
+        browser.switch_to_platform_tab("instagram", driver=driver)
+
+        # Check for dialog container
+        dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
+        active_container = dialogs[0] if dialogs else driver
+
+        # Extract author
+        author_name = None
+        try:
+            author_links = active_container.find_elements(
+                By.XPATH,
+                ".//header//a | .//a[contains(@class, 'x1i10hfl') and not(contains(@href, '/p/'))]"
+            )
+            for al in author_links:
+                ahref = al.get_attribute("href") or ""
+                cand_u = extract_username_from_url(ahref)
+                if cand_u and cand_u.lower() not in SYSTEM_PATHS:
+                    author_name = cand_u
+                    break
+        except Exception:
+            pass
+
+        display_u = author_name or f"creator_{cycles}"
+
+        # If author already processed, cycle to next post (arrow right)
+        if author_name and author_name.lower() in processed_users:
+            try:
+                skips = random.randint(1, 3)
+                for _ in range(skips):
+                    driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
+                    time.sleep(random.uniform(0.8, 1.4))
+            except Exception:
+                pass
+            continue
+
+        if author_name:
+            processed_users.add(author_name.lower())
+
+        # Locate Follow button inside modal
+        follow_btn = None
+        modal_btns = active_container.find_elements(By.XPATH, ".//button | .//div[@role='button']")
+        for mb in modal_btns:
+            try:
+                mtxt = (mb.text or mb.get_attribute("innerText") or "").strip().lower()
+                if mtxt == "follow":
+                    follow_btn = mb
+                    break
+                elif mtxt in ["following", "requested"]:
+                    follow_btn = None
+                    break
+            except Exception:
+                continue
+
+        clicked = False
+        if follow_btn:
+            try:
+                ActionChains(driver).move_to_element(follow_btn).pause(0.2).click().perform()
+                clicked = True
+            except Exception:
+                try:
+                    driver.execute_script("arguments[0].click();", follow_btn)
+                    clicked = True
+                except Exception:
+                    pass
+
+        if clicked:
+            sent_count += 1
+            log_entry = f"✅ Followed #{sent_count}: '@{display_u}' (Random Explore Creator)"
+            logs.append(log_entry)
+            logger.info(log_entry)
+
+            if on_progress:
+                try:
+                    on_progress(sent_count, target_count, {
+                        "platform": "instagram",
+                        "user": display_u,
+                        "url": f"https://www.instagram.com/{author_name}/" if author_name else driver.current_url,
+                        "location": "Random Explore Feed",
+                        "mode": "random",
+                        "sent": sent_count,
+                        "target": target_count,
+                    })
+                except Exception:
+                    pass
+
+            # 2-minute safety break after every 250 follows
+            if sent_count > 0 and sent_count % 250 == 0 and sent_count < target_count:
+                cooldown_secs = 120
+                cooldown_msg = f"⏸️ Reached {sent_count} Instagram follows milestone. Taking a 2-minute safety break..."
+                logs.append(cooldown_msg)
+                logger.info(cooldown_msg)
+                if on_progress:
+                    try:
+                        on_progress(sent_count, target_count, {
+                            "platform": "instagram",
+                            "user": display_u,
+                            "cooldown": True,
+                            "cooldown_seconds": cooldown_secs,
+                            "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
+                        })
+                    except Exception:
+                        pass
+                for _ in range(cooldown_secs):
+                    if stop_event and stop_event.is_set():
+                        break
+                    time.sleep(1.0)
+                logs.append(f"▶️ 2-minute safety cooldown completed. Resuming Instagram follows ({sent_count}/{target_count})...")
+
+            pause = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
+            logger.info(f"Human safety pause: {pause:.1f}s before next follow ({sent_count}/{target_count})...")
+            time.sleep(pause)
+        else:
+            skipped_count += 1
+
+        # Smoothly cycle to next random post in modal using Arrow Right with random skipping (1-2 posts)
+        try:
+            skips = random.randint(1, 2)
+            for _ in range(skips):
+                driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
+                time.sleep(random.uniform(1.2, 2.0))
+        except Exception:
+            break
+
+    return sent_count, skipped_count
+
+
 def send_instagram_follow_requests(
-    location: str,
+    location: str = "",
     target_count: int = 10,
     safety_delay: int = 15,
     on_progress=None,
-    stop_event=None
+    stop_event=None,
+    mode: str = "location"
 ) -> dict:
     """
-    Discovers and follows active accounts in a target city or keyword niche on Instagram.
-    Uses native sidebar search account discovery and modal lightbox navigation
-    to completely eliminate HTTP 429 page-reload rate limits.
+    Discovers and follows active accounts on Instagram via Suggestions, Random Explore, or Location.
+    Uses native sidebar search and modal lightbox navigation to eliminate HTTP 429 page-reload rate limits.
     """
-    logger.info(f"Starting Instagram location follow for '{location}' (Target: {target_count})...")
-    logs = []
+    mode = (mode or "location").lower().strip()
+    if mode == "suggestions":
+        mode_label = "🌟 Algorithmic Suggestions (Suggested for You)"
+        loc_display = "Suggested Accounts"
+    elif mode == "random":
+        mode_label = "🎲 Random Discovery (Explore Feed Creators)"
+        loc_display = "Random Explore Feed"
+    else:
+        mode = "location"
+        loc_display = location or "Global"
+        mode_label = f"📍 Location / Keyword: '{loc_display}'"
+
+    logger.info(f"Starting Instagram follow campaign | Mode: {mode_label} (Target: {target_count})...")
+    logs = [f"🚀 Initiated Instagram follow campaign: {mode_label} (Target: {target_count})"]
     sent_count = 0
     skipped_count = 0
     processed_users = set()
@@ -276,13 +623,13 @@ def send_instagram_follow_requests(
     from selenium.webdriver.common.action_chains import ActionChains
 
     try:
-        # Step 1: Navigate to Instagram Home
+        # Step 1: Navigate to Instagram Home with tab locking
         driver = browser.navigate("instagram", "https://www.instagram.com/", refresh_first=False)
         time.sleep(2.0)
 
         # Check if login is required
         if "accounts/login" in driver.current_url.lower():
-            msg = "Instagram login required. Please verify login in Chrome."
+            msg = "Instagram login required. Please verify login in Chrome on port 9222."
             logs.append(f"⚠️ {msg}")
             return {"status": "login_required", "sent": 0, "logs": logs}
 
@@ -295,35 +642,61 @@ def send_instagram_follow_requests(
             except Exception:
                 pass
 
-        # ── Strategy A: Harvest High-Relevance Accounts via Native Sidebar Search ──
-        candidate_usernames = []
-        try:
-            search_btns = driver.find_elements(
-                By.XPATH,
-                "//a[contains(@href, '#') and .//span[text()='Search']] | //span[text()='Search'] | //*[@aria-label='Search']"
+        # ── Branch: Suggestions Mode ──
+        if mode == "suggestions":
+            s_sent, s_skip = _follow_instagram_suggestions(
+                driver=driver,
+                target_count=target_count,
+                safety_delay=safety_delay,
+                on_progress=on_progress,
+                stop_event=stop_event,
+                logs=logs
             )
-            if search_btns:
-                search_btns[0].click()
-                time.sleep(1.5)
-                search_inputs = driver.find_elements(By.XPATH, "//input[@placeholder='Search' or @aria-label='Search input']")
-                if search_inputs:
-                    inp = search_inputs[0]
-                    inp.clear()
-                    inp.send_keys(location)
-                    time.sleep(2.5)
+            sent_count += s_sent
+            skipped_count += s_skip
 
-                    result_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/')]")
-                    for r in result_links:
-                        try:
-                            h = r.get_attribute("href") or ""
-                            u = extract_username_from_url(h)
-                            if u and u.lower() not in processed_users and u not in candidate_usernames:
-                                candidate_usernames.append(u)
-                        except Exception:
-                            continue
-                    logger.info(f"Search sidebar yielded {len(candidate_usernames)} target accounts for '{location}': {candidate_usernames[:8]}")
-        except Exception as e_search:
-            logger.debug(f"Sidebar search note: {e_search}")
+        # ── Branch: Random Explore Mode ──
+        elif mode == "random":
+            r_sent, r_skip = _follow_instagram_random_explore(
+                driver=driver,
+                target_count=target_count,
+                safety_delay=safety_delay,
+                on_progress=on_progress,
+                stop_event=stop_event,
+                logs=logs
+            )
+            sent_count += r_sent
+            skipped_count += r_skip
+
+        # ── Branch: Location / Keyword Search Mode (Existing) ──
+        else:
+            try:
+                search_btns = driver.find_elements(
+                    By.XPATH,
+                    "//a[contains(@href, '#') and .//span[text()='Search']] | //span[text()='Search'] | //*[@aria-label='Search']"
+                )
+                if search_btns:
+                    search_btns[0].click()
+                    time.sleep(1.5)
+                    search_inputs = driver.find_elements(By.XPATH, "//input[@placeholder='Search' or @aria-label='Search input']")
+                    if search_inputs:
+                        inp = search_inputs[0]
+                        inp.clear()
+                        inp.send_keys(location)
+                        time.sleep(2.5)
+
+                        result_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/')]")
+                        for r in result_links:
+                            try:
+                                h = r.get_attribute("href") or ""
+                                u = extract_username_from_url(h)
+                                if u and u.lower() not in processed_users and u not in candidate_usernames:
+                                    candidate_usernames.append(u)
+                            except Exception:
+                                continue
+                        logger.info(f"Search sidebar yielded {len(candidate_usernames)} target accounts for '{location}': {candidate_usernames[:8]}")
+            except Exception as e_search:
+                logger.debug(f"Sidebar search note: {e_search}")
 
         # Follow harvested sidebar accounts first
         for u in candidate_usernames:
@@ -355,14 +728,38 @@ def send_instagram_follow_requests(
                     except Exception:
                         pass
 
+                # Mandatory 2-minute (120s) safety break after every 250 follows
+                if sent_count > 0 and sent_count % 250 == 0 and sent_count < target_count:
+                    cooldown_secs = 120
+                    cooldown_msg = f"⏸️ Reached {sent_count} Instagram follows milestone. Taking a 2-minute safety break to protect account health..."
+                    logs.append(cooldown_msg)
+                    logger.info(cooldown_msg)
+                    if on_progress:
+                        try:
+                            on_progress(sent_count, target_count, {
+                                "platform": "instagram",
+                                "user": u,
+                                "cooldown": True,
+                                "cooldown_seconds": cooldown_secs,
+                                "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
+                            })
+                        except Exception:
+                            pass
+                    for _ in range(cooldown_secs):
+                        if stop_event and stop_event.is_set():
+                            break
+                        time.sleep(1.0)
+                    logs.append(f"▶️ 2-minute safety cooldown completed. Resuming Instagram follows ({sent_count}/{target_count})...")
+                    logger.info("Resuming Instagram follows after 2-minute safety break.")
+
                 pause = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
                 logger.info(f"Human safety pause: {pause:.1f}s before next follow ({sent_count}/{target_count})...")
                 time.sleep(pause)
             else:
                 skipped_count += 1
 
-        # ── Strategy B: Explore Search Modal Navigation (If more targets needed) ──
-        if sent_count < target_count and not (stop_event and stop_event.is_set()):
+        # ── Strategy B: Explore Search Modal Navigation (If more targets needed for location mode) ──
+        if mode not in ("suggestions", "random") and sent_count < target_count and not (stop_event and stop_event.is_set()):
             keyword_url = f"https://www.instagram.com/explore/search/keyword/?q={urllib.parse.quote(location)}"
             driver.get(keyword_url)
             time.sleep(3.0)
@@ -468,6 +865,30 @@ def send_instagram_follow_requests(
                             except Exception:
                                 pass
 
+                        # Mandatory 2-minute (120s) safety break after every 250 follows
+                        if sent_count > 0 and sent_count % 250 == 0 and sent_count < target_count:
+                            cooldown_secs = 120
+                            cooldown_msg = f"⏸️ Reached {sent_count} Instagram follows milestone. Taking a 2-minute safety break to protect account health..."
+                            logs.append(cooldown_msg)
+                            logger.info(cooldown_msg)
+                            if on_progress:
+                                try:
+                                    on_progress(sent_count, target_count, {
+                                        "platform": "instagram",
+                                        "user": display_u,
+                                        "cooldown": True,
+                                        "cooldown_seconds": cooldown_secs,
+                                        "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
+                                    })
+                                except Exception:
+                                    pass
+                            for _ in range(cooldown_secs):
+                                if stop_event and stop_event.is_set():
+                                    break
+                                time.sleep(1.0)
+                            logs.append(f"▶️ 2-minute safety cooldown completed. Resuming Instagram follows ({sent_count}/{target_count})...")
+                            logger.info("Resuming Instagram follows after 2-minute safety break.")
+
                         pause = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
                         logger.info(f"Human safety pause: {pause:.1f}s before next follow ({sent_count}/{target_count})...")
                         time.sleep(pause)
@@ -487,7 +908,8 @@ def send_instagram_follow_requests(
         return {
             "status": status_label,
             "platform": "instagram",
-            "location": location,
+            "location": loc_display,
+            "mode": mode,
             "sent": sent_count,
             "target": target_count,
             "skipped": skipped_count,
@@ -500,7 +922,8 @@ def send_instagram_follow_requests(
         return {
             "status": "error",
             "platform": "instagram",
-            "location": location,
+            "location": loc_display,
+            "mode": mode,
             "sent": sent_count,
             "target": target_count,
             "error": str(e),

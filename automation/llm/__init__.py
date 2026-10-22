@@ -73,20 +73,18 @@ def generate_smart_marketing_copy(
     }
     action_cta = cta_labels.get(cta, "Discover More Today")
 
-    # Clean hashtags with Indian market relevance
+    # Hashtags with Indian market relevance and algorithmic virality
     clean_name = "".join(ch for ch in product_name.title() if ch.isalnum())
     clean_cat = "".join(ch for ch in category.title() if ch.isalnum())
     is_finance = "loan" in product_name.lower() or "loan" in desc.lower() or "finance" in category.lower()
     
+    from social.trending_hashtags import get_fresh_trending_hashtags
+    hashtags = get_fresh_trending_hashtags(
+        platform="instagram",
+        category="finance" if is_finance else "general"
+    )
+
     if is_finance:
-        hashtags = [
-            f"#{clean_name}" if clean_name else "#LoanSolutions",
-            "#HomeLoanIndia",
-            "#PersonalLoan",
-            "#IndianMiddleClass",
-            "#LowEMI",
-            "#ApnaGhar",
-        ]
         default_bullets = (
             "✅ Fast Disbursal directly to bank account\n"
             "✅ Easy EMIs starting at low monthly rates in ₹\n"
@@ -94,14 +92,6 @@ def generate_smart_marketing_copy(
             "✅ Trusted financial partner for your family's dreams"
         )
     else:
-        hashtags = [
-            f"#{clean_name}" if clean_name else "#Innovation",
-            f"#{clean_cat}" if clean_cat and clean_cat != "Other" else "#IndiaBusiness",
-            "#IndianMiddleClass",
-            "#MadeInIndia",
-            "#Growth",
-            "#TrustedSolutions",
-        ]
         default_bullets = f"✅ Fast & reliable\n✅ Designed for {audience or 'Indian families'}\n✅ 100% transparent and hassle-free experience"
 
     # Benefits formatted
@@ -134,16 +124,24 @@ def generate_smart_marketing_copy(
     if is_finance:
         action_cta = "Apply Now"
         cta_line = "👉 Apply Now: https://loansolutions.everythingrental.in/application"
+        caption = (
+            f"{cta_line}\n\n"
+            f"{hook}\n\n"
+            f"{desc}\n\n"
+            f"Key Highlights:\n"
+            f"{bullet_points}\n\n"
+            f"{' '.join(hashtags)}"
+        )
     else:
         cta_line = f"👉 Click below to {action_cta.lower()}!"
-
-    caption = (
-        f"{hook}\n\n"
-        f"{desc}\n\n"
-        f"Key Highlights:\n"
-        f"{bullet_points}\n\n"
-        f"{cta_line}"
-    )
+        caption = (
+            f"{hook}\n\n"
+            f"{desc}\n\n"
+            f"Key Highlights:\n"
+            f"{bullet_points}\n\n"
+            f"{cta_line}\n\n"
+            f"{' '.join(hashtags)}"
+        )
 
     if is_finance:
         short_caption = f"Level up with {product_name}! {desc[:80]}... 👉 Apply Now: https://loansolutions.everythingrental.in/application"
@@ -224,6 +222,7 @@ def generate_marketing_content(
     )
 
     provider_lower = (provider or "gemini").lower()
+    raw_output_data = None
 
     # ── 1. Check for Direct API Keys (super fast, ~1-2s) ──
     gemini_key = os.environ.get("GEMINI_API_KEY")
@@ -232,37 +231,46 @@ def generate_marketing_content(
             logger.info("Generating marketing content with Google Gemini API...")
             raw_text = generate_with_gemini_api(prompt, gemini_key)
             if raw_text:
-                return extract_json_or_fallback(raw_text, fallback_data)
+                raw_output_data = extract_json_or_fallback(raw_text, fallback_data)
         except Exception as e:
             logger.warning(f"Gemini API request notice: {e}")
 
     # ── 2. Check browser interaction (port 9222 or dedicated profile) ──
-    try:
-        if is_debugging_port_open(9222) or provider_lower == "chatgpt":
-            logger.info(f"Generating content with browser automation ({provider_lower})...")
-            raw_output = None
-            if provider_lower == "gemini":
-                from .gemini import generate_with_gemini_browser
-                raw_output = generate_with_gemini_browser(prompt)
-            elif provider_lower == "chatgpt":
-                from .chatgpt import generate_with_chatgpt_browser
-                raw_output = generate_with_chatgpt_browser(prompt)
+    if not raw_output_data:
+        try:
+            if is_debugging_port_open(9222) or provider_lower == "chatgpt":
+                logger.info(f"Generating content with browser automation ({provider_lower})...")
+                raw_output = None
+                if provider_lower == "gemini":
+                    from .gemini import generate_with_gemini_browser
+                    raw_output = generate_with_gemini_browser(prompt)
+                elif provider_lower == "chatgpt":
+                    from .chatgpt import generate_with_chatgpt_browser
+                    raw_output = generate_with_chatgpt_browser(prompt)
 
-            if raw_output:
-                return extract_json_or_fallback(raw_output, fallback_data)
-    except Exception as e:
-        logger.info(f"Browser interaction note: {e}. Using smart copy synthesizer.")
+                if raw_output:
+                    raw_output_data = extract_json_or_fallback(raw_output, fallback_data)
+        except Exception as e:
+            logger.info(f"Browser interaction note: {e}. Using smart copy synthesizer.")
 
-    # ── 3. Ultra-fast dynamic generator engine (completes in <0.05s) ──
-    logger.info("Delivering customized marketing copy via smart copy synthesizer.")
-    final_data = fallback_data
+    final_data = raw_output_data if raw_output_data else fallback_data
 
-    # Ensure Loan Solutions always includes the official Apply Now link
+    # Guarantee fresh viral hashtags & Line 1 Apply Now link across all generation paths
     is_finance = "loan" in product_name.lower() or "loan" in desc.lower() or "finance" in category.lower()
+    from social.trending_hashtags import enrich_caption_with_trending_hashtags
+    final_data["caption"] = enrich_caption_with_trending_hashtags(
+        final_data.get("caption", ""),
+        platform="instagram",
+        category="finance" if is_finance else "general"
+    )
+
     if is_finance:
-        apply_url_str = "https://loansolutions.everythingrental.in/application"
-        if apply_url_str not in final_data.get("caption", ""):
-            final_data["caption"] = f"{final_data.get('caption', '').rstrip()}\n\n👉 Apply Now: {apply_url_str}"
+        from social.caption_helper import ensure_apply_now_at_start, LOAN_SOLUTIONS_APPLY_URL
+        final_data["caption"] = ensure_apply_now_at_start(
+            final_data.get("caption", ""),
+            apply_url=LOAN_SOLUTIONS_APPLY_URL,
+            is_loan=True
+        )
 
     return final_data
 

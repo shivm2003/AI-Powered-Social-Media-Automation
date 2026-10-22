@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import FacebookAcceptDeck from "@/components/growth/FacebookAcceptDeck";
 import InstagramUnfollowDeck from "@/components/growth/InstagramUnfollowDeck";
+import FriendsGroupDeck from "@/components/growth/FriendsGroupDeck";
 
 const PRESET_LOCATIONS = [
   "New Delhi",
@@ -17,6 +18,7 @@ const PRESET_LOCATIONS = [
 
 export default function GrowthPage() {
   const [platform, setPlatform] = useState("both"); // 'facebook', 'instagram', 'both'
+  const [strategyMode, setStrategyMode] = useState("suggestions"); // 'suggestions', 'random', 'location'
   const [location, setLocation] = useState("New Delhi");
   const [targetCount, setTargetCount] = useState(10);
   const [safetyDelay, setSafetyDelay] = useState(15);
@@ -67,10 +69,17 @@ export default function GrowthPage() {
   }, [activeCampaign, fetchCampaigns]);
 
   const handleStartCampaign = async () => {
-    if (!location.trim()) {
+    if (strategyMode === "location" && !location.trim()) {
       alert("Please specify a target location.");
       return;
     }
+
+    const effectiveLocation =
+      strategyMode === "suggestions"
+        ? "Algorithmic Suggestions"
+        : strategyMode === "random"
+        ? "Random Discovery"
+        : location.trim();
 
     setLoading(true);
     try {
@@ -79,7 +88,8 @@ export default function GrowthPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           platform,
-          location: location.trim(),
+          mode: strategyMode,
+          location: effectiveLocation,
           targetCount: parseInt(targetCount, 10),
           safetyDelay: parseInt(safetyDelay, 10),
         }),
@@ -90,7 +100,8 @@ export default function GrowthPage() {
         setActiveCampaign({
           id: data.campaignId,
           platform,
-          location,
+          mode: strategyMode,
+          location: effectiveLocation,
           target_count: targetCount,
           fb_sent_count: 0,
           ig_sent_count: 0,
@@ -200,6 +211,17 @@ export default function GrowthPage() {
           </span>
         </button>
         <button
+          id="btn-tab-groups"
+          onClick={() => setActiveTab("groups")}
+          className={`btn ${activeTab === "groups" ? "btn-primary" : "btn-secondary"}`}
+          style={{ padding: "0.6rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}
+        >
+          <span>👨‍👩‍👧‍👦 Group All Friends</span>
+          <span style={{ background: "rgba(124, 92, 252, 0.25)", color: "#a78bfa", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 700 }}>
+            FB & IG
+          </span>
+        </button>
+        <button
           id="btn-tab-launcher"
           onClick={() => setActiveTab("launcher")}
           className={`btn ${activeTab === "launcher" ? "btn-primary" : "btn-secondary"}`}
@@ -223,6 +245,10 @@ export default function GrowthPage() {
 
       {activeTab === "unfollow" && (
         <InstagramUnfollowDeck />
+      )}
+
+      {activeTab === "groups" && (
+        <FriendsGroupDeck />
       )}
 
       {activeTab === "launcher" ? (
@@ -268,70 +294,230 @@ export default function GrowthPage() {
               </div>
             </div>
 
-            {/* Location Targeting */}
+            {/* Discovery & Outreach Strategy */}
             <div style={{ marginBottom: "var(--space-6)" }}>
-              <label htmlFor="input-target-location" style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "var(--space-2)" }}>
-                TARGET GEOGRAPHIC LOCATION
+              <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "var(--space-3)" }}>
+                DISCOVERY STRATEGY
               </label>
-              <input
-                id="input-target-location"
-                type="text"
-                className="input"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. New Delhi, Mumbai, New York, London..."
-                style={{ width: "100%", padding: "0.75rem 1rem", fontSize: "1rem", borderRadius: "var(--radius-md)" }}
-              />
-
-              {/* Preset Chips */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
-                {PRESET_LOCATIONS.map((loc) => (
-                  <button
-                    key={loc}
-                    type="button"
-                    onClick={() => setLocation(loc)}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "var(--space-3)" }}>
+                {[
+                  {
+                    id: "suggestions",
+                    icon: "🌟",
+                    name: "Algorithmic Suggestions",
+                    badge: "Recommended",
+                    desc: "Facebook People You May Know & Instagram Suggested for You (High acceptance)",
+                  },
+                  {
+                    id: "random",
+                    icon: "🎲",
+                    name: "Random Discovery",
+                    badge: "Explore Feed",
+                    desc: "Organic explore posts & randomized candidate shuffling for wide discovery",
+                  },
+                  {
+                    id: "location",
+                    icon: "📍",
+                    name: "Location Target",
+                    badge: "Geo Specific",
+                    desc: "Filter friends and people by specific city or geographic location",
+                  },
+                ].map((m) => (
+                  <div
+                    key={m.id}
+                    id={`strategy-${m.id}`}
+                    onClick={() => setStrategyMode(m.id)}
                     style={{
-                      padding: "0.25rem 0.65rem",
-                      fontSize: "0.75rem",
-                      borderRadius: "9999px",
-                      background: location === loc ? "var(--accent-primary)" : "var(--bg-tertiary)",
-                      color: location === loc ? "#fff" : "var(--text-secondary)",
-                      border: "none",
+                      padding: "var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      border: strategyMode === m.id ? "2px solid #38bdf8" : "1px solid var(--border-color)",
+                      background: strategyMode === m.id ? "rgba(56, 189, 248, 0.12)" : "var(--bg-secondary)",
                       cursor: "pointer",
-                      transition: "all 0.15s ease",
+                      transition: "all 0.2s ease",
+                      position: "relative",
                     }}
                   >
-                    📍 {loc}
-                  </button>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "1.1rem" }}>{m.icon}</span>
+                      <span
+                        style={{
+                          fontSize: "0.68rem",
+                          fontWeight: "700",
+                          padding: "0.15rem 0.45rem",
+                          borderRadius: "9999px",
+                          background: strategyMode === m.id ? "rgba(56, 189, 248, 0.25)" : "var(--bg-tertiary)",
+                          color: strategyMode === m.id ? "#38bdf8" : "var(--text-muted)",
+                        }}
+                      >
+                        {m.badge}
+                      </span>
+                    </div>
+                    <div style={{ fontWeight: "600", color: strategyMode === m.id ? "#38bdf8" : "var(--text-primary)", fontSize: "0.92rem" }}>
+                      {m.name}
+                    </div>
+                    <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "4px", lineHeight: "1.3" }}>
+                      {m.desc}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
+
+            {/* Location Targeting (Conditionally rendered for Location mode) */}
+            {strategyMode === "location" ? (
+              <div style={{ marginBottom: "var(--space-6)" }}>
+                <label htmlFor="input-target-location" style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "var(--space-2)" }}>
+                  TARGET GEOGRAPHIC LOCATION
+                </label>
+                <input
+                  id="input-target-location"
+                  type="text"
+                  className="input"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="e.g. New Delhi, Mumbai, New York, London..."
+                  style={{ width: "100%", padding: "0.75rem 1rem", fontSize: "1rem", borderRadius: "var(--radius-md)" }}
+                />
+
+                {/* Preset Chips */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
+                  {PRESET_LOCATIONS.map((loc) => (
+                    <button
+                      key={loc}
+                      type="button"
+                      onClick={() => setLocation(loc)}
+                      style={{
+                        padding: "0.25rem 0.65rem",
+                        fontSize: "0.75rem",
+                        borderRadius: "9999px",
+                        background: location === loc ? "var(--accent-primary)" : "var(--bg-tertiary)",
+                        color: location === loc ? "#fff" : "var(--text-secondary)",
+                        border: "none",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      📍 {loc}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : strategyMode === "suggestions" ? (
+              <div
+                style={{
+                  marginBottom: "var(--space-6)",
+                  padding: "var(--space-3) var(--space-4)",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(56, 189, 248, 0.08)",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-3)",
+                }}
+              >
+                <span style={{ fontSize: "1.5rem" }}>🌟</span>
+                <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                  <strong style={{ color: "#38bdf8" }}>Algorithmic Suggestions Feed:</strong> The bot will harvest friend requests directly from Facebook's <b>People You May Know</b> (<code>/friends/suggestions</code>) and Instagram's <b>Suggested for You</b> (<code>/explore/people/</code>). No city filter needed.
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  marginBottom: "var(--space-6)",
+                  padding: "var(--space-3) var(--space-4)",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(168, 85, 247, 0.08)",
+                  border: "1px solid rgba(168, 85, 247, 0.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-3)",
+                }}
+              >
+                <span style={{ fontSize: "1.5rem" }}>🎲</span>
+                <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                  <strong style={{ color: "#c084fc" }}>Random Discovery Mode:</strong> Randomizes friend candidate shuffling on Facebook and browses active Instagram explore feeds to follow creators organically across varied niches.
+                </div>
+              </div>
+            )}
 
             {/* Target Quantity */}
             <div style={{ marginBottom: "var(--space-6)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
                 <label htmlFor="range-target-count" style={{ fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)" }}>
-                  REQUESTS PER PLATFORM
+                  REQUESTS PER PLATFORM (MAX 1,000)
                 </label>
-                <span className="badge badge-info" style={{ fontSize: "0.9rem", fontWeight: "700" }}>
-                  {targetCount} Requests {platform === "both" && `(${targetCount * 2} Total)`}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    value={targetCount}
+                    onChange={(e) => setTargetCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                    style={{
+                      width: "80px",
+                      padding: "4px 8px",
+                      borderRadius: "var(--radius-sm)",
+                      border: "1px solid var(--border-color)",
+                      background: "var(--bg-secondary)",
+                      color: "var(--text-primary)",
+                      fontWeight: "700",
+                      textAlign: "center",
+                      fontSize: "0.875rem",
+                    }}
+                  />
+                  <span className="badge badge-info" style={{ fontSize: "0.85rem", fontWeight: "700" }}>
+                    {targetCount} {platform === "both" ? `(${targetCount * 2} Total)` : "Reqs"}
+                  </span>
+                </div>
               </div>
               <input
                 id="range-target-count"
                 type="range"
                 min="1"
-                max="50"
+                max="1000"
                 value={targetCount}
                 onChange={(e) => setTargetCount(parseInt(e.target.value, 10))}
                 style={{ width: "100%", accentColor: "var(--accent-primary)", cursor: "pointer" }}
               />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                <span>1 (Test run)</span>
-                <span>10 (Recommended)</span>
-                <span>25 (Standard)</span>
-                <span>50 (High velocity)</span>
+              <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
+                {[10, 50, 100, 250, 500, 1000].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setTargetCount(num)}
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "var(--radius-full)",
+                      fontSize: "0.75rem",
+                      fontWeight: targetCount === num ? "700" : "500",
+                      background: targetCount === num ? "var(--accent-primary)" : "var(--bg-secondary)",
+                      color: targetCount === num ? "#fff" : "var(--text-secondary)",
+                      border: "1px solid var(--border-color)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {num === 1000 ? "🚀 1000 (Max)" : num === 250 ? "250 (Milestone)" : `${num}`}
+                  </button>
+                ))}
               </div>
+              {targetCount > 250 && (
+                <div style={{
+                  marginTop: "8px",
+                  padding: "6px 10px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "rgba(255, 179, 71, 0.12)",
+                  border: "1px solid rgba(255, 179, 71, 0.3)",
+                  color: "#FFB347",
+                  fontSize: "0.75rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}>
+                  <span>☕</span>
+                  <span><strong>Safety Notice:</strong> Target exceeds 250. The engine will automatically pause for <strong>2 minutes</strong> after every 250 requests to preserve account safety.</span>
+                </div>
+              )}
             </div>
 
             {/* Safety Delay */}
@@ -404,8 +590,38 @@ export default function GrowthPage() {
 
               {/* Progress Bar & Counters */}
               <div style={{ marginBottom: "var(--space-5)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "var(--space-2)" }}>
-                  <span>Target: <b>{activeCampaign.location}</b></span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "var(--space-2)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span>Target: <b>{activeCampaign.location}</b></span>
+                    {activeCampaign.mode && (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          padding: "2px 8px",
+                          borderRadius: "9999px",
+                          background:
+                            activeCampaign.mode === "suggestions"
+                              ? "rgba(56, 189, 248, 0.2)"
+                              : activeCampaign.mode === "random"
+                              ? "rgba(168, 85, 247, 0.2)"
+                              : "rgba(34, 197, 94, 0.2)",
+                          color:
+                            activeCampaign.mode === "suggestions"
+                              ? "#38bdf8"
+                              : activeCampaign.mode === "random"
+                              ? "#c084fc"
+                              : "#4ade80",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {activeCampaign.mode === "suggestions"
+                          ? "🌟 Suggestions"
+                          : activeCampaign.mode === "random"
+                          ? "🎲 Random"
+                          : "📍 Location"}
+                      </span>
+                    )}
+                  </div>
                   <span><b>{totalSent} / {totalTarget}</b> completed ({progressPercent}%)</span>
                 </div>
                 <div style={{ width: "100%", height: "10px", background: "var(--bg-tertiary)", borderRadius: "9999px", overflow: "hidden" }}>
@@ -495,7 +711,15 @@ export default function GrowthPage() {
                       <td style={{ padding: "var(--space-3)", fontWeight: "600" }}>
                         {c.platform === "both" ? "⚡ Dual (FB + IG)" : c.platform === "facebook" ? "📘 Facebook" : "📸 Instagram"}
                       </td>
-                      <td style={{ padding: "var(--space-3)" }}>📍 {c.location}</td>
+                      <td style={{ padding: "var(--space-3)" }}>
+                        {c.mode === "suggestions" ? (
+                          <span style={{ color: "#38bdf8", fontWeight: "600", fontSize: "0.85rem" }}>🌟 Suggestions</span>
+                        ) : c.mode === "random" ? (
+                          <span style={{ color: "#c084fc", fontWeight: "600", fontSize: "0.85rem" }}>🎲 Random</span>
+                        ) : (
+                          <span>📍 {c.location}</span>
+                        )}
+                      </td>
                       <td style={{ padding: "var(--space-3)" }}>
                         <b>{(c.fb_sent_count || 0) + (c.ig_sent_count || 0)}</b> / {c.platform === "both" ? c.target_count * 2 : c.target_count}
                         <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginLeft: "6px" }}>

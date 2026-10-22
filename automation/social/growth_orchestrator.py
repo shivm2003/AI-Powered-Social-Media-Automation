@@ -151,20 +151,23 @@ def update_db_campaign_status(campaign_id: str, fb_sent: int, ig_sent: int, stat
 def run_growth_campaign(
     campaign_id: str,
     platform: str,
-    location: str,
+    location: str = "Global",
     target_count: int = 10,
     safety_delay: int = 15,
     tg_chat_id: str = None,
     tg_message_id: int = None,
     telegram_chat_id: str = None,
     telegram_message_id: int = None,
+    mode: str = "location",
     **kwargs
 ) -> dict:
     """
-    Executes a complete growth outreach campaign (Facebook, Instagram, or Both simultaneously).
+    Executes a complete growth outreach campaign (Facebook, Instagram, or Both simultaneously)
+    supporting Location, Suggestions, and Random Discovery strategies.
     """
     tg_chat_id = tg_chat_id or telegram_chat_id or kwargs.get("chat_id")
     tg_message_id = tg_message_id or telegram_message_id or kwargs.get("message_id")
+    mode = (mode or kwargs.get("mode") or "location").lower().strip()
 
     stop_event = threading.Event()
     with ACTIVE_TASKS_LOCK:
@@ -172,6 +175,7 @@ def run_growth_campaign(
             "stop_event": stop_event,
             "platform": platform,
             "location": location,
+            "mode": mode,
             "target_count": target_count,
             "started_at": time.time(),
         }
@@ -194,16 +198,25 @@ def run_growth_campaign(
 
     clean_platform = (platform or "both").lower().strip()
     location = (location or "Global").strip()
-    target_count = max(1, min(250, int(target_count)))
+    target_count = max(1, min(1000, int(target_count)))
     safety_delay = max(5, int(safety_delay))
 
-    logger.info(f"=== Launching Growth Campaign {campaign_id}: {clean_platform.upper()} in '{location}' (Target: {target_count}) ===")
+    mode_badges = {
+        "suggestions": "🌟 Algorithmic Suggestions (PYMK & Recommendations)",
+        "random": "🎲 Random Discovery (Explore Feed Creators)",
+        "location": f"📍 Location / Keyword: {location}",
+    }
+    mode_title = mode_badges.get(mode, f"📍 Location Target: {location}")
+
+    logger.info(f"=== Launching Growth Campaign {campaign_id}: {clean_platform.upper()} | {mode_title} (Target: {target_count}) ===")
 
     state = {
         "fb_sent": 0,
         "ig_sent": 0,
         "total_sent": 0,
         "last_tg_update": 0,
+        "is_cooldown": False,
+        "cooldown_msg": "",
         "logs": [],
     }
 
@@ -222,8 +235,8 @@ def run_growth_campaign(
         
         status_header = (
             f"🚀 <b>Outreach & Growth in Progress</b>\n\n"
-            f"📍 <b>Location:</b> {location}\n"
-            f"🎯 <b>Target:</b> {total_target} total requests\n\n"
+            f"🎯 <b>Strategy:</b> {mode_title}\n"
+            f"🔢 <b>Target:</b> {total_target} total actions\n\n"
             f"📊 <b>Progress:</b> {progress_str} <b>{state['total_sent']}/{total_target}</b>\n"
         )
 
@@ -232,7 +245,10 @@ def run_growth_campaign(
         if clean_platform in ["instagram", "both"]:
             status_header += f"📸 <b>Instagram Follows:</b> {state['ig_sent']}/{target_count}\n"
 
-        status_header += f"⏱️ <i>Human Safety Pacing: ~{safety_delay}s cooldown</i>\n"
+        if state.get("is_cooldown"):
+            status_header += f"\n☕ <b>Safety Break:</b> {state.get('cooldown_msg', '2-minute break in progress')}...\n"
+        else:
+            status_header += f"⏱️ <i>Human Safety Pacing: ~{safety_delay}s cooldown</i>\n"
 
         stop_keyboard = {
             "inline_keyboard": [
@@ -251,6 +267,15 @@ def run_growth_campaign(
     def on_fb_progress(sent, target, details):
         state["fb_sent"] = sent
         state["total_sent"] = state["fb_sent"] + state["ig_sent"]
+        if details.get("cooldown"):
+            state["is_cooldown"] = True
+            state["cooldown_msg"] = details.get("message", "2-minute cooldown active")
+            state["logs"].append(f"[Facebook] {state['cooldown_msg']}")
+            update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "cooldown", state["logs"])
+            send_tg_live_update(force=True)
+            return
+
+        state["is_cooldown"] = False
         u_name = details.get("user", "User")
         state["logs"].append(f"[Facebook] Sent friend request #{sent} to {u_name}")
         update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "running", state["logs"])
@@ -259,6 +284,15 @@ def run_growth_campaign(
     def on_ig_progress(sent, target, details):
         state["ig_sent"] = sent
         state["total_sent"] = state["fb_sent"] + state["ig_sent"]
+        if details.get("cooldown"):
+            state["is_cooldown"] = True
+            state["cooldown_msg"] = details.get("message", "2-minute cooldown active")
+            state["logs"].append(f"[Instagram] {state['cooldown_msg']}")
+            update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "cooldown", state["logs"])
+            send_tg_live_update(force=True)
+            return
+
+        state["is_cooldown"] = False
         u_name = details.get("user", "User")
         state["logs"].append(f"[Instagram] Followed #{sent}: @{u_name}")
         update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "running", state["logs"])
@@ -279,7 +313,8 @@ def run_growth_campaign(
                 target_count=target_count,
                 safety_delay=safety_delay,
                 on_progress=on_fb_progress,
-                stop_event=stop_event
+                stop_event=stop_event,
+                mode=mode
             )
             state["fb_sent"] = fb_result.get("sent", 0)
 
@@ -289,12 +324,14 @@ def run_growth_campaign(
                 target_count=target_count,
                 safety_delay=safety_delay,
                 on_progress=on_ig_progress,
-                stop_event=stop_event
+                stop_event=stop_event,
+                mode=mode
             )
             state["ig_sent"] = ig_result.get("sent", 0)
 
         elif clean_platform == "both":
-            # Execute alternating batches for natural human browsing stability
+            # Execute alternating batches for natural human browsing stability with thread-safe tab isolation
+            from browser.driver import browser
             batch_size = 2
             fb_done = 0
             ig_done = 0
@@ -302,24 +339,28 @@ def run_growth_campaign(
             while (fb_done < target_count or ig_done < target_count) and not stop_event.is_set():
                 if fb_done < target_count and not stop_event.is_set():
                     to_send = min(batch_size, target_count - fb_done)
+                    browser.switch_to_platform_tab("facebook")
                     sub_fb = send_facebook_friend_requests(
                         location=location,
                         target_count=to_send,
                         safety_delay=safety_delay,
                         on_progress=on_fb_progress,
-                        stop_event=stop_event
+                        stop_event=stop_event,
+                        mode=mode
                     )
                     fb_done += sub_fb.get("sent", 0)
                     time.sleep(random.uniform(4.0, 7.0))
 
                 if ig_done < target_count and not stop_event.is_set():
                     to_send = min(batch_size, target_count - ig_done)
+                    browser.switch_to_platform_tab("instagram")
                     sub_ig = send_instagram_follow_requests(
                         location=location,
                         target_count=to_send,
                         safety_delay=safety_delay,
                         on_progress=on_ig_progress,
-                        stop_event=stop_event
+                        stop_event=stop_event,
+                        mode=mode
                     )
                     ig_done += sub_ig.get("sent", 0)
                     time.sleep(random.uniform(4.0, 7.0))
@@ -340,7 +381,7 @@ def run_growth_campaign(
     if tg_chat_id:
         finish_text = (
             f"🎉 <b>Outreach Campaign {final_status.capitalize()}!</b>\n\n"
-            f"📍 <b>Location:</b> {location}\n"
+            f"🎯 <b>Strategy:</b> {mode_title}\n"
             f"📊 <b>Results Summary:</b>\n"
             f"• 📘 <b>Facebook Friend Requests Sent:</b> {state['fb_sent']}/{target_count if clean_platform in ['facebook', 'both'] else 0}\n"
             f"• 📸 <b>Instagram Follow Requests Sent:</b> {state['ig_sent']}/{target_count if clean_platform in ['instagram', 'both'] else 0}\n"

@@ -180,13 +180,14 @@ def send_preview_to_telegram(
 
     target_apply_url = apply_url or LOAN_SOLUTIONS_APPLY_URL
 
-    # If Loan Solutions, ensure caption always includes the mandatory Apply Now link
-    if is_loan_solutions and target_apply_url not in caption:
-        if "#" in caption:
-            parts = caption.split("#", 1)
-            caption = f"{parts[0].rstrip()}\n\n👉 Apply Now: {target_apply_url}\n\n#{parts[1]}"
-        else:
-            caption = f"{caption.rstrip()}\n\n👉 Apply Now: {target_apply_url}"
+    # If Loan Solutions, ensure caption strictly begins with the mandatory Apply Now link at Line 1
+    if is_loan_solutions:
+        try:
+            from social.caption_helper import ensure_apply_now_at_start
+            caption = ensure_apply_now_at_start(caption, apply_url=target_apply_url, is_loan=True)
+        except Exception:
+            if target_apply_url not in caption:
+                caption = f"👉 Apply Now: {target_apply_url}\n\n{caption.strip()}"
 
     import html
     safe_caption = html.escape(caption)
@@ -686,7 +687,13 @@ def send_root_choice_menu(chat_id: str, message_id: int = None) -> dict:
                 {"text": "👥 2. Outreach (Follow & Friend Requests)", "callback_data": "root:outreach"}
             ],
             [
-                {"text": "💻 3. Remote Prompt / Antigravity Assistant", "callback_data": "root:antigravity"}
+                {"text": "👨‍👩‍👧‍👦 3. Group Friends (Facebook & Instagram)", "callback_data": "root:friends_group"}
+            ],
+            [
+                {"text": "💻 4. Remote Prompt / Antigravity Assistant", "callback_data": "root:antigravity"}
+            ],
+            [
+                {"text": "⚡ 5. Live Tasks & Queue Dashboard", "callback_data": "root:queue"}
             ],
             [
                 {"text": "ℹ️ How It Works", "callback_data": "info:how_it_works"},
@@ -733,6 +740,7 @@ def send_outreach_platform_menu(chat_id: str, message_id: int = None) -> dict:
 
     keyboard = {
         "inline_keyboard": [
+            [{"text": "👨‍👩‍👧‍👦 Group All Friends (Facebook & Instagram)", "callback_data": "root:friends_group"}],
             [{"text": "🤝 Accept Pending Friend Requests (FB)", "callback_data": "outreach:fb_accept_menu"}],
             [{"text": "📉 Prune / Unfollow Accounts (Instagram)", "callback_data": "outreach:ig_unfollow_menu"}],
             [{"text": "⚡ Both Simultaneously (FB + IG)", "callback_data": "outreach:plat:both"}],
@@ -741,6 +749,55 @@ def send_outreach_platform_menu(chat_id: str, message_id: int = None) -> dict:
                 {"text": "📸 Instagram (Follows)", "callback_data": "outreach:plat:instagram"}
             ],
             [{"text": "🔙 Back to Main Menu", "callback_data": "root:main"}]
+        ]
+    }
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_friends_group_menu(chat_id: str, message_id: int = None) -> dict:
+    """Outreach: Social Friends Group Creator Menu."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    text = (
+        "👨‍👩‍👧‍👦 <b>Social Friends Group Creator</b>\n\n"
+        "Assemble your friends on Facebook and Instagram into groups and group chats with automated member invitations.\n\n"
+        "🎯 <b>Select group type to create:</b>"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "📘 FB Community Group", "callback_data": "grp:type:facebook:community_group"},
+                {"text": "💬 FB Messenger Chat", "callback_data": "grp:type:facebook:messenger_chat"}
+            ],
+            [
+                {"text": "📸 Instagram Direct Group (Batch 30)", "callback_data": "grp:type:instagram:ig_direct_group"}
+            ],
+            [
+                {"text": "⚡ Dual Platform (All 3 Groups)", "callback_data": "grp:type:both:all"}
+            ],
+            [
+                {"text": "🔙 Back to Outreach", "callback_data": "root:outreach"},
+                {"text": "📋 Main Menu", "callback_data": "root:main"}
+            ]
         ]
     }
 
@@ -943,39 +1000,32 @@ def send_facebook_accept_menu(chat_id: str, message_id: int = None) -> dict:
     return {"status": "success" if res.get("ok") else "error", "response": res}
 
 
-def send_outreach_location_menu(chat_id: str, platform: str, message_id: int = None) -> dict:
-    """Outreach Step 2: Target Location Selection."""
+def send_outreach_strategy_menu(chat_id: str, platform: str, message_id: int = None) -> dict:
+    """Outreach Step 2: Discovery Strategy Selection."""
     bot_token, _ = get_telegram_credentials()
     if not bot_token:
         return {"status": "error"}
 
     plat_label = {
-        "both": "⚡ Dual (FB + IG)",
+        "both": "⚡ Dual (Facebook + Instagram)",
         "facebook": "📘 Facebook",
         "instagram": "📸 Instagram"
     }.get(platform, platform.capitalize())
 
     text = (
         f"👥 <b>Platform:</b> {plat_label}\n\n"
-        "📍 <b>Outreach Step 2 of 3: Target Location</b>\n"
-        "Select your target location from presets or type any city name directly in this chat:"
+        "🎯 <b>Outreach Step 2 of 3: Choose Strategy</b>\n\n"
+        "How would you like to discover accounts to send friend requests / follows to?\n\n"
+        "• 🌟 <b>Algorithmic Suggestions:</b> Targets Facebook's 'People You May Know' & Instagram's 'Suggested for You' (highest acceptance rate).\n"
+        "• 🎲 <b>Random Discovery:</b> Organic diversified exploration from explore feeds & shuffled suggestions (natural browsing footprint).\n"
+        "• 📍 <b>Target Specific Location:</b> Searches for people by city or regional keyword."
     )
 
     keyboard = {
         "inline_keyboard": [
-            [
-                {"text": "📍 New Delhi", "callback_data": f"outreach:loc:{platform}:New Delhi"},
-                {"text": "📍 Mumbai", "callback_data": f"outreach:loc:{platform}:Mumbai"}
-            ],
-            [
-                {"text": "📍 Bangalore", "callback_data": f"outreach:loc:{platform}:Bangalore"},
-                {"text": "📍 New York", "callback_data": f"outreach:loc:{platform}:New York"}
-            ],
-            [
-                {"text": "📍 London", "callback_data": f"outreach:loc:{platform}:London"},
-                {"text": "📍 Dubai", "callback_data": f"outreach:loc:{platform}:Dubai"}
-            ],
-            [{"text": "✏️ Type Custom City Name", "callback_data": f"outreach:loc_custom:{platform}"}],
+            [{"text": "🌟 Algorithmic Suggestions (Recommended)", "callback_data": f"outreach:strat:{platform}:suggestions"}],
+            [{"text": "🎲 Random Discovery (Explore Grid)", "callback_data": f"outreach:strat:{platform}:random"}],
+            [{"text": "📍 Target Specific City / Location", "callback_data": f"outreach:strat:{platform}:location"}],
             [{"text": "🔙 Change Platform", "callback_data": "root:outreach"}]
         ]
     }
@@ -998,7 +1048,62 @@ def send_outreach_location_menu(chat_id: str, platform: str, message_id: int = N
     return {"status": "success" if res.get("ok") else "error", "response": res}
 
 
-def send_outreach_count_menu(chat_id: str, platform: str, location: str, message_id: int = None) -> dict:
+def send_outreach_location_menu(chat_id: str, platform: str, message_id: int = None) -> dict:
+    """Outreach Step 2 (Optional): Target Location Selection."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    plat_label = {
+        "both": "⚡ Dual (FB + IG)",
+        "facebook": "📘 Facebook",
+        "instagram": "📸 Instagram"
+    }.get(platform, platform.capitalize())
+
+    text = (
+        f"👥 <b>Platform:</b> {plat_label}\n\n"
+        "📍 <b>Select Target Location</b>\n"
+        "Select your target location from presets or type any city name directly in this chat:"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "📍 New Delhi", "callback_data": f"outreach:loc:{platform}:New Delhi"},
+                {"text": "📍 Mumbai", "callback_data": f"outreach:loc:{platform}:Mumbai"}
+            ],
+            [
+                {"text": "📍 Bangalore", "callback_data": f"outreach:loc:{platform}:Bangalore"},
+                {"text": "📍 New York", "callback_data": f"outreach:loc:{platform}:New York"}
+            ],
+            [
+                {"text": "📍 London", "callback_data": f"outreach:loc:{platform}:London"},
+                {"text": "📍 Dubai", "callback_data": f"outreach:loc:{platform}:Dubai"}
+            ],
+            [{"text": "✏️ Type Custom City Name", "callback_data": f"outreach:loc_custom:{platform}"}],
+            [{"text": "🔙 Change Strategy", "callback_data": f"outreach:plat:{platform}"}]
+        ]
+    }
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_outreach_count_menu(chat_id: str, platform: str, location: str, mode: str = "location", message_id: int = None) -> dict:
     """Outreach Step 3: Request Count Selection."""
     bot_token, _ = get_telegram_credentials()
     if not bot_token:
@@ -1010,27 +1115,41 @@ def send_outreach_count_menu(chat_id: str, platform: str, location: str, message
         "instagram": "📸 Instagram Follows"
     }.get(platform, platform.capitalize())
 
+    strat_label = {
+        "suggestions": "🌟 Algorithmic Suggestions",
+        "random": "🎲 Random Discovery",
+        "location": f"📍 Location: {location}"
+    }.get(mode, f"📍 Location: {location}")
+
     text = (
         f"👥 <b>Platform:</b> {plat_label}\n"
-        f"📍 <b>Location:</b> {location}\n\n"
-        "🎯 <b>Outreach Step 3 of 3: Request Count</b>\n"
-        "Select a preset below or tap <b>✏️ Enter Custom Number</b> to enter any specific quantity:"
+        f"🎯 <b>Strategy:</b> {strat_label}\n\n"
+        "🔢 <b>Outreach Step 3 of 3: Request Count</b>\n"
+        "Select a preset below (up to 1,000) or tap <b>✏️ Enter Custom Number</b>:\n"
+        "<i>(Note: A 2-minute safety cooldown automatically pauses after every 250 requests)</i>"
     )
 
     keyboard = {
         "inline_keyboard": [
             [
-                {"text": "5 Requests (Test)", "callback_data": f"outreach:run:{platform}:{location}:5"},
-                {"text": "10 Requests (Recommended)", "callback_data": f"outreach:run:{platform}:{location}:10"}
+                {"text": "10 Requests (Quick)", "callback_data": f"outreach:run:{platform}:{mode}:{location}:10"},
+                {"text": "25 Requests", "callback_data": f"outreach:run:{platform}:{mode}:{location}:25"}
             ],
             [
-                {"text": "25 Requests", "callback_data": f"outreach:run:{platform}:{location}:25"},
-                {"text": "50 Requests", "callback_data": f"outreach:run:{platform}:{location}:50"}
+                {"text": "50 Requests", "callback_data": f"outreach:run:{platform}:{mode}:{location}:50"},
+                {"text": "100 Requests", "callback_data": f"outreach:run:{platform}:{mode}:{location}:100"}
             ],
             [
-                {"text": "✏️ Enter Custom Number", "callback_data": f"outreach:count_custom:{platform}:{location}"}
+                {"text": "250 Requests", "callback_data": f"outreach:run:{platform}:{mode}:{location}:250"},
+                {"text": "500 Requests (2 Breaks)", "callback_data": f"outreach:run:{platform}:{mode}:{location}:500"}
             ],
-            [{"text": "🔙 Change Location", "callback_data": f"outreach:plat:{platform}"}]
+            [
+                {"text": "🚀 1,000 Requests (Max)", "callback_data": f"outreach:run:{platform}:{mode}:{location}:1000"}
+            ],
+            [
+                {"text": "✏️ Enter Custom Number (1-1000)", "callback_data": f"outreach:count_custom:{platform}:{mode}:{location}"}
+            ],
+            [{"text": "🔙 Change Strategy", "callback_data": f"outreach:plat:{platform}"}]
         ]
     }
 
@@ -1231,6 +1350,123 @@ def send_task_completion_message(chat_id: str, task_id: str, prompt: str, window
         }
     )
     return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_queue_dashboard(chat_id: str, message_id: int = None) -> dict:
+    """Renders real-time multitasking status, active workers, and queued tasks."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    try:
+        from core.task_orchestrator import orchestrator
+        snapshot = orchestrator.get_snapshot()
+    except Exception as e:
+        snapshot = {"active_workers_count": 0, "max_worker_slots": 6, "queued_tasks_count": 0, "active_tasks": [], "queued_tasks": []}
+
+    active_cnt = snapshot.get("active_workers_count", 0)
+    max_slots = snapshot.get("max_worker_slots", 6)
+    queued_cnt = snapshot.get("queued_tasks_count", 0)
+    active_tasks = snapshot.get("active_tasks", [])
+    queued_tasks = snapshot.get("queued_tasks", [])
+
+    text_parts = [
+        "⚡ <b>MANVXI AI MULTITASKING & QUEUE DASHBOARD</b>\n"
+        f"<i>Capacity: {active_cnt}/{max_slots} Active Worker Slots</i>\n"
+        "────────────────────────────────────\n"
+    ]
+
+    if active_tasks:
+        text_parts.append(f"🟢 <b>ACTIVE WORKERS ({len(active_tasks)} Running Simultaneously):</b>\n")
+        for idx, t in enumerate(active_tasks, 1):
+            plat_icon = {"facebook": "📘", "instagram": "📸", "linkedin": "💼", "whatsapp": "💬"}.get(t.get("platform", ""), "⚡")
+            text_parts.append(
+                f"{idx}. {plat_icon} <b>{t.get('name', 'Task')}</b>\n"
+                f"   • <b>Lock:</b> <code>{t.get('lock_key')}</code> | <b>Elapsed:</b> {t.get('elapsed_seconds', 0)}s\n"
+                f"   • <b>Progress:</b> <code>{t.get('progress', 'In progress')}</code>\n"
+            )
+    else:
+        text_parts.append("🟢 <b>ACTIVE WORKERS:</b> None active (Workers idle & ready!)\n")
+
+    text_parts.append("────────────────────────────────────\n")
+
+    if queued_tasks:
+        text_parts.append(f"⏳ <b>QUEUED TASKS ({len(queued_tasks)} Waiting Sequentially):</b>\n")
+        for q in queued_tasks:
+            text_parts.append(
+                f"• <b>Position #{q.get('position')}:</b> {q.get('name')}\n"
+                f"  <i>Waiting for active task on <code>{q.get('lock_key')}</code> to release.</i>\n"
+            )
+    else:
+        text_parts.append("⏳ <b>QUEUED TASKS:</b> Queue is empty.\n")
+
+    inline_kb = []
+    # Add stop buttons for running tasks
+    for t in active_tasks[:4]:
+        t_id = t.get("task_id", "")
+        t_name = t.get("name", "Task")[:16]
+        inline_kb.append([{"text": f"🛑 Stop {t_name}", "callback_data": f"task:stop:{t_id}"}])
+
+    inline_kb.append([
+        {"text": "🔄 Refresh Status", "callback_data": "root:queue"},
+        {"text": "📋 Main Menu", "callback_data": "root:main"}
+    ])
+
+    keyboard = {"inline_keyboard": inline_kb}
+    full_text = "".join(text_parts)
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, full_text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": full_text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_queue_collision_notice(chat_id: str, task_name: str, lock_key: str, position: int, active_ahead: str = None) -> dict:
+    """Dispatches a notification when a task collides with an active account and is queued."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    text = (
+        f"⏳ <b>Task Placed in Sequential Queue (Position #{position})</b>\n\n"
+        f"🎯 <b>Task:</b> <code>{task_name}</code>\n"
+        f"🔒 <b>Account Lock:</b> <code>{lock_key}</code>\n"
+        f"⚠️ <b>Collision Guard:</b> Another task is currently active on this social account.\n\n"
+        f"⚡ <i>Your task is queued in FIFO order and will start automatically as soon as the current task finishes!</i>\n\n"
+        f"Tap below to view live multitasking progress:"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "⚡ View Queue & Active Tasks", "callback_data": "root:queue"}],
+            [{"text": "📋 Main Menu", "callback_data": "root:main"}]
+        ]
+    }
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
 
 
 

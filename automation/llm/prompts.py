@@ -19,8 +19,8 @@ def build_social_prompt(
     platforms_str = ", ".join(platforms) if isinstance(platforms, list) else str(platforms)
 
     is_loan = "loan" in product_name.lower() or "loan" in description.lower() or category.lower() == "finance"
-    loan_rule = "\n4. Mandatory Apply Link: The caption MUST include this exact application link at the end: '👉 Apply Now: https://loansolutions.everythingrental.in/application'" if is_loan else ""
-    caption_desc = "The complete engaging caption with hook, value propositions, Indian Rupee benefits, line breaks, emojis, and mandatory link: 👉 Apply Now: https://loansolutions.everythingrental.in/application" if is_loan else "The complete engaging caption tailored for an Indian audience with hook, value propositions, Indian Rupee benefits, line breaks, emojis, and call to action"
+    loan_rule = "\n4. Mandatory Apply Link: The caption MUST start with this exact application link at the very beginning (Line 1): '👉 Apply Now: https://loansolutions.everythingrental.in/application'" if is_loan else ""
+    caption_desc = "The complete engaging caption starting with Line 1: '👉 Apply Now: https://loansolutions.everythingrental.in/application', followed by hook, value propositions, Indian Rupee benefits, line breaks, emojis, and hashtags" if is_loan else "The complete engaging caption tailored for an Indian audience with hook, value propositions, Indian Rupee benefits, line breaks, emojis, and call to action"
 
     prompt = f"""You are an elite creative director and social media copywriter specialized in high-converting Indian market campaigns.
 Generate high-converting, viral social media content strictly adhering to Indian standards (Indian middle-class families, Indian Rupee ₹ currency, authentic domestic aspirations):
@@ -46,7 +46,7 @@ Please provide your response strictly in the following JSON structure without ex
 {{
   "caption": "{caption_desc}",
   "short_caption": "A concise 1-2 sentence version in Indian Rupee standards suitable for Twitter or WhatsApp status",
-  "hashtags": ["#Tag1", "#Tag2", "#Tag3", "#Tag4", "#Tag5"],
+  "hashtags": ["#ViralReels", "#ExplorePage", "#LoanSolutions", "#PersonalLoan", "#HomeLoanIndia", "#LowEMI", "#ApnaGhar", "#TrendingNow"],
   "headline": "A punchy 4-7 word headline to put directly on the image/video graphic",
   "subheadline": "A compelling 1-line subtext for the visual banner",
   "visual_prompt": "A detailed visual description for AI image generation featuring authentic Indian middle-class subjects, Indian Rupee (₹) accents, warm lighting, and clean composition",

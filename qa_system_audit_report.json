@@ -1,60 +1,51 @@
 {
   "total": 14,
-  "passed": 14,
-  "failed": 0,
-  "pass_rate": 100.0,
+  "passed": 9,
+  "failed": 5,
+  "pass_rate": 64.28571428571429,
   "results": [
     {
       "id": "TC-WEB-01",
       "name": "Next.js Web Server Liveness (Port 3000)",
       "module": "Frontend",
-      "status": "PASSED",
-      "duration": 0.25449132919311523,
-      "error": null,
-      "details": {
-        "http_code": 200,
-        "html_length": 13818
-      }
+      "status": "FAILED",
+      "duration": 4.045764446258545,
+      "error": "Next.js web server unreachable: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>",
+      "details": {}
     },
     {
       "id": "TC-WEB-02",
       "name": "Campaigns REST API Endpoint (/api/campaigns)",
       "module": "API",
-      "status": "PASSED",
-      "duration": 0.22065043449401855,
-      "error": null,
-      "details": {
-        "record_count": 13
-      }
+      "status": "FAILED",
+      "duration": 4.06728196144104,
+      "error": "API /api/campaigns failed: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>",
+      "details": {}
     },
     {
       "id": "TC-WEB-03",
       "name": "Growth Outreach API Endpoint (/api/growth)",
       "module": "API",
-      "status": "PASSED",
-      "duration": 0.11350345611572266,
-      "error": null,
-      "details": {
-        "status": "ok"
-      }
+      "status": "FAILED",
+      "duration": 4.0489091873168945,
+      "error": "API /api/growth failed: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>",
+      "details": {}
     },
     {
       "id": "TC-WEB-04",
       "name": "Accounts API Endpoint (/api/accounts)",
       "module": "API",
-      "status": "PASSED",
-      "duration": 0.10522890090942383,
-      "error": null,
-      "details": {
-        "accounts_found": 6
-      }
+      "status": "FAILED",
+      "duration": 4.067241430282593,
+      "error": "API /api/accounts failed: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>",
+      "details": {}
     },
     {
       "id": "TC-DB-01",
       "name": "SQLite Campaigns & Accounts Table Integrity",
       "module": "Database",
       "status": "PASSED",
-      "duration": 0.028123140335083008,
+      "duration": 0.019839048385620117,
       "error": null,
       "details": {
         "db_file": "database.sqlite",
@@ -74,7 +65,7 @@
       "name": "Telegram Configuration & Token Audit",
       "module": "Telegram",
       "status": "PASSED",
-      "duration": 0.01662731170654297,
+      "duration": 0.01040196418762207,
       "error": null,
       "details": {
         "chat_id": "6543226262",
@@ -97,7 +88,7 @@
       "name": "Telegram Outreach Custom Friend Request Counter",
       "module": "Telegram",
       "status": "PASSED",
-      "duration": 0.0,
+      "duration": 0.002568960189819336,
       "error": null,
       "details": {
         "custom_counter_supported": true
@@ -122,7 +113,7 @@
       "name": "Gemini Image Download Pipeline Integrity",
       "module": "AI",
       "status": "PASSED",
-      "duration": 0.0,
+      "duration": 0.0009922981262207031,
       "error": null,
       "details": {
         "scripts_present": true
@@ -133,10 +124,10 @@
       "name": "Chrome Remote Debugging (Port 9222) Attachment",
       "module": "Browser",
       "status": "PASSED",
-      "duration": 1.6037096977233887,
+      "duration": 2.6370761394500732,
       "error": null,
       "details": {
-        "window_title": "Loan Solutions",
+        "window_title": "New Tab",
         "port": 9222
       }
     },
@@ -145,7 +136,7 @@
       "name": "Tab-Safe Navigation (navigate() without trapping)",
       "module": "Browser",
       "status": "PASSED",
-      "duration": 10.441639184951782,
+      "duration": 6.275651216506958,
       "error": null,
       "details": {
         "current_url": "https://www.instagram.com/"
@@ -156,7 +147,7 @@
       "name": "Facebook Post Engine Syntax & Link Attachment",
       "module": "Facebook",
       "status": "PASSED",
-      "duration": 0.0022819042205810547,
+      "duration": 0.0,
       "error": null,
       "details": {
         "file_size_bytes": 14918
@@ -166,16 +157,13 @@
       "id": "TC-IG-01",
       "name": "End-to-End Instagram Media Post with Fitted Caption & Link",
       "module": "Instagram",
-      "status": "PASSED",
-      "duration": 30.44645047187805,
-      "error": null,
+      "status": "FAILED",
+      "duration": 3.9462335109710693,
+      "error": "Could not find Instagram Create (+ / New post) button on sidebar.",
       "details": {
-        "status": "success",
+        "status": "error",
         "platform": "instagram",
-        "message": "Posted to Instagram successfully with complete caption and media.",
-        "caption_length": 359,
-        "media_path": "C:\\Users\\shivam\\Desktop\\For marketing\\AI-Powered-Social-Media-Automation\\Loan Solutions.png",
-        "confirmed": true
+        "message": "Could not find Instagram Create (+ / New post) button on sidebar."
       }
     }
   ]

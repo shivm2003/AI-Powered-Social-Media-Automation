@@ -343,25 +343,25 @@ export default function CampaignsPage() {
                       )}
                       {((campaign.product_name || "").toLowerCase().includes("loan") ||
                         (campaign.generated_caption || "").toLowerCase().includes("loan")) && (
-                        <a
-                          href="https://loansolutions.everythingrental.in/application"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-sm"
-                          style={{
-                            background: "linear-gradient(135deg, #10B981, #059669)",
-                            color: "#fff",
-                            border: "none",
-                            fontWeight: 600,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                          title="Open official Loan Solutions application page"
-                        >
-                          📝 Apply Now 🔗
-                        </a>
-                      )}
+                          <a
+                            href="https://loansolutions.everythingrental.in/application"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm"
+                            style={{
+                              background: "linear-gradient(135deg, #10B981, #059669)",
+                              color: "#fff",
+                              border: "none",
+                              fontWeight: 600,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Open official Loan Solutions application page"
+                          >
+                            📝 Apply Now 🔗
+                          </a>
+                        )}
                       {campaign.status !== "posted" && (
                         <button
                           className="btn btn-sm btn-primary"
@@ -716,21 +716,20 @@ export default function CampaignsPage() {
                     postingStatus === "posting"
                       ? "rgba(59, 130, 246, 0.12)"
                       : postingStatus === "success"
-                      ? "rgba(16, 185, 129, 0.12)"
-                      : "rgba(239, 68, 68, 0.12)",
-                  border: `1px solid ${
-                    postingStatus === "posting"
+                        ? "rgba(16, 185, 129, 0.12)"
+                        : "rgba(239, 68, 68, 0.12)",
+                  border: `1px solid ${postingStatus === "posting"
                       ? "rgba(59, 130, 246, 0.3)"
                       : postingStatus === "success"
-                      ? "rgba(16, 185, 129, 0.3)"
-                      : "rgba(239, 68, 68, 0.3)"
-                  }`,
+                        ? "rgba(16, 185, 129, 0.3)"
+                        : "rgba(239, 68, 68, 0.3)"
+                    }`,
                   color:
                     postingStatus === "posting"
                       ? "#93C5FD"
                       : postingStatus === "success"
-                      ? "var(--success)"
-                      : "var(--danger)",
+                        ? "var(--success)"
+                        : "var(--danger)",
                   display: "flex",
                   alignItems: "center",
                   gap: "var(--space-3)",

@@ -34,6 +34,10 @@ for env_name in [".env.local", ".env"]:
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
+# Multi-Brand Telegram Bot Account Tokens
+MANVXI_AI_BOT_TOKEN = os.environ.get("MANVXI_AI_BOT_TOKEN", TELEGRAM_BOT_TOKEN)
+LOAN_SOLUTIONS_BOT_TOKEN = os.environ.get("LOAN_SOLUTIONS_BOT_TOKEN", TELEGRAM_BOT_TOKEN)
+
 # Chrome profiles directory
 CHROME_PROFILES_DIR = BASE_DIR / "chrome_profiles"
 
