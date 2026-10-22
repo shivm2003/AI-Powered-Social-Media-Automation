@@ -1479,19 +1479,38 @@ def execute_human_generation_and_telegram_flow(
             {"text": "Limited Time Access", "visual": "Transform your daily workflow today!"}
         ]
         try:
-            from media.video_generator import generate_promo_video
-            video_out = generate_promo_video(
+            from media.gemini_video_engine import gemini_video_engine
+            logger.info("Using 24-second 3-clip Gemini video engine (Indian Standard)...")
+            res_24s = gemini_video_engine.run_full_24s_pipeline(
+                prompt=prompt,
                 product_name=product_name,
-                slides=slides,
-                brand_colors=brand_colors,
-                duration=15,
-                aspect_ratio="9:16",
-                logo_path=resolved_logo
+                product_category=category,
+                platforms=platforms,
+                send_to_telegram=False
             )
-            media_file_path = str(video_out)
-            logs.append(f"✅ Step 4 Complete: High-converting video reel ready ({os.path.basename(media_file_path)}).")
-        except Exception as e_vid:
-            logger.warning(f"Video generator notice: {e_vid}")
+            media_file_path = res_24s.get("master_video")
+            s_data = res_24s.get("script", {})
+            if s_data.get("caption"):
+                content_data["caption"] = s_data["caption"]
+            if s_data.get("hashtags"):
+                content_data["hashtags"] = s_data["hashtags"]
+            logs.append(f"✅ Step 4 Complete: 24-Second Indian Standard 3-Clip Video Reel ready ({os.path.basename(media_file_path)}).")
+        except Exception as e_24s:
+            logger.warning(f"24s video engine note: {e_24s}. Falling back to standard video generator.")
+            try:
+                from media.video_generator import generate_promo_video
+                video_out = generate_promo_video(
+                    product_name=product_name,
+                    slides=slides,
+                    brand_colors=brand_colors,
+                    duration=15,
+                    aspect_ratio="9:16",
+                    logo_path=resolved_logo
+                )
+                media_file_path = str(video_out)
+                logs.append(f"✅ Step 4 Complete: High-converting video reel ready ({os.path.basename(media_file_path)}).")
+            except Exception as e_vid:
+                logger.warning(f"Video generator notice: {e_vid}")
 
     if not media_file_path:
         # Fallback to high-res branded design engine if image wasn't downloaded

@@ -1855,6 +1855,47 @@ def handle_text_message(message: dict):
         send_root_choice_menu(chat_id)
         return
 
+    # Direct 24s Video Command: /video [prompt]
+    if clean_text.startswith("/video") or clean_text.startswith("video:") or clean_text == "video":
+        prompt_val = text
+        for pfx in ["/video", "video:"]:
+            if prompt_val.lower().startswith(pfx):
+                prompt_val = prompt_val[len(pfx):].strip()
+                break
+        if not prompt_val:
+            prompt_val = "Loan Solutions Instant Personal & Business Finance in Indian Rupees"
+        if chat_id in chat_sessions:
+            del chat_sessions[chat_id]
+
+        send_text_message(
+            chat_id,
+            f"🎬 <b>Generating 24-Second Gemini AI Video (Indian Standard)...</b>\n\n"
+            f"📝 <b>Prompt:</b> <i>\"{prompt_val}\"</i>\n\n"
+            "⚙️ <b>Pipeline Stages:</b>\n"
+            "• Clip 1 (0-8s): Relatable Indian Hook & Problem\n"
+            "• Clip 2 (8-16s): Fast Digital Solution (₹ Amounts & Paperless KYC)\n"
+            "• Clip 3 (16-24s): Climax & Apply Now CTA\n"
+            "• Sequential Stitching to 24s Reel (9:16)\n\n"
+            "⏳ <i>Please wait ~30-45 seconds! Complete preview with approval buttons will arrive here.</i>"
+        )
+        import threading
+        def _run_24s_cmd():
+            try:
+                from media.gemini_video_engine import gemini_video_engine
+                gemini_video_engine.run_full_24s_pipeline(
+                    prompt=prompt_val,
+                    product_name="Loan Solutions",
+                    product_category="Finance",
+                    platforms=["facebook", "instagram"],
+                    send_to_telegram=True
+                )
+            except Exception as e_v:
+                logger.error(f"Error generating 24s video from command: {e_v}")
+                send_text_message(chat_id, f"⚠️ Video generation notice: {e_v}")
+
+        threading.Thread(target=_run_24s_cmd, daemon=True).start()
+        return
+
     # Direct Follow Commands: /follow @user or follow @user
     import re
     if clean_text.startswith("/follow") or clean_text.startswith("follow @") or clean_text.startswith("follow "):

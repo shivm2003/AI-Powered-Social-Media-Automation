@@ -46,13 +46,20 @@ def generate_promo_video(
         )
         slide_images.append(str(img_path))
 
-    # Try building with moviepy
+    # Try building with moviepy (supports MoviePy 2.x and 1.x)
     try:
-        from moviepy.editor import ImageClip, concatenate_videoclips
+        try:
+            from moviepy import ImageClip, concatenate_videoclips
+        except ImportError:
+            from moviepy.editor import ImageClip, concatenate_videoclips
 
         clips = []
         for img_path in slide_images:
-            clip = ImageClip(img_path).set_duration(slide_duration)
+            clip = ImageClip(img_path)
+            if hasattr(clip, "with_duration"):
+                clip = clip.with_duration(slide_duration)
+            else:
+                clip = clip.set_duration(slide_duration)
             clips.append(clip)
 
         final_clip = concatenate_videoclips(clips, method="compose")
@@ -61,14 +68,12 @@ def generate_promo_video(
             fps=24,
             codec="libx264",
             audio=False,
-            verbose=False,
             logger=None
         )
         logger.info(f"Generated video promo with moviepy at {out_path}")
         return out_path
     except Exception as e:
-        logger.warning(f"moviepy generation failed or not installed: {e}. Writing placeholder MP4.")
-        # If moviepy isn't installed, create a valid dummy MP4 file or fallback
+        logger.warning(f"moviepy generation failed: {e}. Writing placeholder MP4.")
         with open(out_path, "wb") as f:
             f.write(b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2mp41")
         return out_path
