@@ -413,10 +413,12 @@ def generate_social_image(
     logo_path: str = None,
     category: str = "Featured Solution",
     visual_style: str = "auto",
+    contact_number: str = None,
 ) -> Path:
     """
     Renders an eye-catching, branded social graphic using one of 6 distinct design layouts.
     Rotates layouts dynamically to ensure visual freshness across thousands of graphics.
+    Renders contact pill (📞 Call/WhatsApp: +91 {contact_number}) on the image when provided.
     """
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     width, height = ASPECT_RATIO_DIMS.get(aspect_ratio, (1080, 1080))
@@ -467,6 +469,41 @@ def generate_social_image(
         category=category,
         cta_text=clean_cta,
     )
+
+    # Render floating Contact / Mobile Number Pill on Image (Bottom-Right corner opposite CTA)
+    phone_to_render = contact_number or ("8112570656" if "loan" in (product_name or "").lower() else None)
+    if phone_to_render and HAS_PIL:
+        try:
+            phone_text = f"📞 Call / WhatsApp: +91 {phone_to_render}"
+            c_font = get_font(int(min(width, height) * 0.026), bold=True)
+            temp_draw = ImageDraw.Draw(canvas)
+            bbox = temp_draw.textbbox((0, 0), phone_text, font=c_font)
+            bw = bbox[2] - bbox[0] + 36
+            bh = bbox[3] - bbox[1] + 18
+
+            badge_x = width - bw - int(width * 0.06)
+            badge_y = height - bh - int(height * 0.055)
+
+            badge_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+            b_draw = ImageDraw.Draw(badge_layer)
+            # Subtle drop shadow
+            b_draw.rounded_rectangle(
+                (badge_x + 3, badge_y + 4, badge_x + bw + 3, badge_y + bh + 4),
+                radius=bh // 2,
+                fill=(0, 0, 0, 110)
+            )
+            # Emerald pill
+            b_draw.rounded_rectangle(
+                (badge_x, badge_y, badge_x + bw, badge_y + bh),
+                radius=bh // 2,
+                fill=(16, 185, 129, 245),
+                outline=(255, 255, 255, 230),
+                width=2
+            )
+            b_draw.text((badge_x + 18, badge_y + 8), phone_text, fill=(255, 255, 255), font=c_font)
+            canvas = Image.alpha_composite(canvas, badge_layer)
+        except Exception as e_phone:
+            logger.warning(f"Failed to render phone badge on image: {e_phone}")
 
     # Optional Logo insertion
     if logo_path and os.path.exists(logo_path):

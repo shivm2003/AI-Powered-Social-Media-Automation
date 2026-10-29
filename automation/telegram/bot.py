@@ -128,6 +128,9 @@ def make_telegram_request(token: str, method: str, data: dict = None, files: dic
         if "message is not modified" in err_body:
             logger.debug(f"Telegram notice: message content unchanged ({method})")
             return {"ok": True, "description": "message not modified"}
+        if getattr(e, "code", None) == 409 or "409" in str(e):
+            logger.warning(f"Telegram 409 Conflict ({method}): Another bot instance is polling with this token.")
+            return {"ok": False, "error_code": 409, "description": err_body or "Conflict: duplicate bot instance"}
         logger.error(f"Telegram API request failed ({method}): {e} {err_body}")
         return {"ok": False, "description": err_body or str(e)}
     except Exception as e:
@@ -498,6 +501,76 @@ def edit_message_reply_markup(chat_id: str, message_id: int, keyboard: dict = No
     return make_telegram_request(bot_token, "editMessageReplyMarkup", data=data)
 
 
+def send_chrome_account_selection_menu(
+    chat_id: str,
+    content_type: str = "image",
+    llm_provider: str = "chatgpt",
+    product_id: str = "default",
+    message_id: int = None
+) -> dict:
+    """
+    Displays the interactive Google Chrome Account selector showing all 7 accounts
+    with their mapped Google Email/Name, Facebook Account/Page, and Instagram Username.
+    """
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error", "message": "Missing Telegram credentials."}
+
+    from db_campaigns import get_all_chrome_accounts
+    accounts = get_all_chrome_accounts() or []
+
+    text_parts = [
+        "🌐 <b>Select Google Chrome Account & Profile</b>\n",
+        "<i>Select which Google Chrome profile to run this campaign with. All 7 Google accounts are mapped with their Facebook and Instagram profiles:</i>\n\n"
+    ]
+
+    inline_kb = []
+    for idx, acc in enumerate(accounts):
+        email = acc.get("google_email") or acc.get("email") or "Unknown Email"
+        name = acc.get("google_name") or acc.get("name") or "User"
+        p_dir = acc.get("profile_dir") or acc.get("profile_directory") or f"Profile {idx}"
+        fb = acc.get("facebook_name") or "Linked Facebook"
+        ig = acc.get("instagram_username") or "Linked IG"
+        acc_id = acc.get("id")
+
+        text_parts.append(
+            f"<b>{idx+1}. {name}</b> (<code>{email}</code>)\n"
+            f"   📁 Chrome: <code>{p_dir}</code>\n"
+            f"   📘 FB: <b>{fb}</b> | 📸 IG: <b>@{ig}</b>\n\n"
+        )
+
+        btn_label = f"👤 {idx+1}. {email[:24]} ({p_dir})"
+        cb_data = f"flow:acc:{acc_id}:{content_type}:{llm_provider}:{product_id}"
+        inline_kb.append([{"text": btn_label, "callback_data": cb_data}])
+
+    back_cb = "root:outreach" if product_id == "outreach" else f"flow:llm:{llm_provider}:{content_type}"
+    back_text = "🔙 Back to Outreach Menu" if product_id == "outreach" else "🔙 Back to Product Selection"
+    inline_kb.append([
+        {"text": back_text, "callback_data": back_cb},
+        {"text": "📋 Main Menu", "callback_data": "root:main"}
+    ])
+
+    full_text = "".join(text_parts)
+    keyboard = {"inline_keyboard": inline_kb}
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, full_text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": full_text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
 def send_start_flow_menu(chat_id: str, message_id: int = None) -> dict:
     """
     Step 1: Asks user whether to generate Image or Video.
@@ -684,16 +757,19 @@ def send_root_choice_menu(chat_id: str, message_id: int = None) -> dict:
                 {"text": "🎨 1. Generate & Post Content", "callback_data": "root:content"}
             ],
             [
-                {"text": "👥 2. Outreach (Follow & Friend Requests)", "callback_data": "root:outreach"}
+                {"text": "🖼️ 2. Posted Content Gallery (Share to All)", "callback_data": "post_page:0"}
             ],
             [
-                {"text": "👨‍👩‍👧‍👦 3. Group Friends (Facebook & Instagram)", "callback_data": "root:friends_group"}
+                {"text": "👥 3. Outreach (Follow & Friend Requests)", "callback_data": "root:outreach"}
             ],
             [
-                {"text": "💻 4. Remote Prompt / Antigravity Assistant", "callback_data": "root:antigravity"}
+                {"text": "👨‍👩‍👧‍👦 4. Group Friends (Facebook & Instagram)", "callback_data": "root:friends_group"}
             ],
             [
-                {"text": "⚡ 5. Live Tasks & Queue Dashboard", "callback_data": "root:queue"}
+                {"text": "💻 5. Remote Prompt / Antigravity Assistant", "callback_data": "root:antigravity"}
+            ],
+            [
+                {"text": "⚡ 6. Live Tasks & Queue Dashboard", "callback_data": "root:queue"}
             ],
             [
                 {"text": "ℹ️ How It Works", "callback_data": "info:how_it_works"},
@@ -727,19 +803,34 @@ def send_start_dashboard(chat_id: str, products: list = None) -> dict:
     return send_root_choice_menu(chat_id)
 
 
-def send_outreach_platform_menu(chat_id: str, message_id: int = None) -> dict:
+def send_outreach_platform_menu(chat_id: str, message_id: int = None, account_id: str = None) -> dict:
     """Outreach Step 1: Platform Selection."""
     bot_token, _ = get_telegram_credentials()
     if not bot_token:
         return {"status": "error"}
 
+    from db_campaigns import get_chrome_account
+    acc = get_chrome_account(account_id) or {}
+    acc_name = acc.get("google_name") or acc.get("name", "Shivam Mishra")
+    acc_email = acc.get("google_email") or acc.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc.get("profile_dir") or acc.get("profile_directory", "Default")
+    acc_fb = acc.get("facebook_name", "Techie Shivam (Loan Solutions)")
+    acc_ig = acc.get("instagram_username", "loansolutions2026")
+
     text = (
         "👥 <b>Outreach & Growth Engine — Step 1: Platform</b>\n\n"
+        f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+        f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+        f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+        f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+        f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
         "Which platform would you like to send outreach requests on?"
     )
 
     keyboard = {
         "inline_keyboard": [
+            [{"text": f"👤 Profile: {acc_name} ({acc_pdir}) — Change", "callback_data": "outreach:account_select"}],
+            [{"text": "🖼️ View Posted Images & Videos (Share to All)", "callback_data": "post_page:0"}],
             [{"text": "👨‍👩‍👧‍👦 Group All Friends (Facebook & Instagram)", "callback_data": "root:friends_group"}],
             [{"text": "🤝 Accept Pending Friend Requests (FB)", "callback_data": "outreach:fb_accept_menu"}],
             [{"text": "📉 Prune / Unfollow Accounts (Instagram)", "callback_data": "outreach:ig_unfollow_menu"}],
@@ -829,20 +920,23 @@ def send_instagram_steps_menu(chat_id: str, message_id: int = None) -> dict:
         "📸 <b>Instagram Growth & Follow Engine — Guided Steps</b>\n"
         "<i>Connected to your authenticated Chrome browser on port 9222</i>\n\n"
         "👇 <b>Select an Instagram Step below:</b>\n\n"
-        "🎯 <b>Step 1: Follow Specific Account:</b>\n"
-        "Follow any target account by typing their <code>@username</code> (or multiple accounts comma-separated).\n\n"
-        "📍 <b>Step 2: Auto-Follow by Location / City:</b>\n"
-        "Discover & follow local active accounts in Lucknow, Delhi, Mumbai, etc. with human safety pacing.\n\n"
-        "📉 <b>Step 3: Prune / Unfollow Accounts:</b>\n"
+        "🎯 <b>Step 1: Enter User ID -> Save Followers & Follow:</b>\n"
+        "Input any Instagram User ID/username. Manvix AI navigates inside the ID, extracts & saves their exact follower count to the database, and dispatches the follow request!\n\n"
+        "📊 <b>Step 2: View Saved Follows & Lead Counters:</b>\n"
+        "Inspect all saved target profiles, extracted follower numbers, and cumulative follow metrics.\n\n"
+        "📍 <b>Step 3: Auto-Follow by Location / City:</b>\n"
+        "Discover & follow real local people in Lucknow, Delhi, Mumbai, etc. (strictly filters out channels, broadcast channels, & news pages) with human safety pacing.\n\n"
+        "📉 <b>Step 4: Prune / Unfollow Accounts:</b>\n"
         "Clean inactive followings and manage your follow ratio safely.\n\n"
         "💡 <i>Quick Tip: You can also type <code>/follow @username</code> directly in chat!</i>"
     )
 
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🎯 Step 1: Follow Specific Account (@username)", "callback_data": "outreach:ig_mode:username"}],
-            [{"text": "📍 Step 2: Auto-Follow by Location / City", "callback_data": "outreach:ig_mode:location"}],
-            [{"text": "📉 Step 3: Prune / Unfollow Accounts", "callback_data": "outreach:ig_unfollow_menu"}],
+            [{"text": "🎯 Step 1: Follow User ID & Save Followers", "callback_data": "outreach:ig_mode:username"}],
+            [{"text": "📊 Step 2: View Saved Follows & Stats", "callback_data": "outreach:ig_follow_stats"}],
+            [{"text": "📍 Step 3: Auto-Follow by Location / City", "callback_data": "outreach:ig_mode:location"}],
+            [{"text": "📉 Step 4: Prune / Unfollow Accounts", "callback_data": "outreach:ig_unfollow_menu"}],
             [{"text": "🔙 Back to Outreach Menu", "callback_data": "root:outreach"}]
         ]
     }
@@ -863,6 +957,258 @@ def send_instagram_steps_menu(chat_id: str, message_id: int = None) -> dict:
         }
     )
     return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_instagram_leads_stats_menu(chat_id: str, message_id: int = None) -> dict:
+    """Outreach: Displays cumulative statistics of all Instagram target accounts, follower counts, and follow actions."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    try:
+        from db_campaigns import get_instagram_leads_stats
+        data = get_instagram_leads_stats()
+    except Exception as e:
+        logger.warning(f"Error fetching leads stats: {e}")
+        data = {}
+
+    stats = data.get("stats", {})
+    recent = data.get("recent_leads", [])
+
+    lines = []
+    for lead in recent[:8]:
+        u = lead.get("username", "")
+        f_txt = lead.get("followers_text", "0")
+        st = lead.get("follow_status", "")
+        icon = "✅" if st == "success" else ("📨" if st == "requested" else ("ℹ️" if st == "already_following" else "🛡️"))
+        lines.append(f"• {icon} <b>@{u}</b>: <code>{f_txt}</code> followers ({st})")
+
+    leads_text = "\n".join(lines) if lines else "<i>No leads recorded yet. Use /follow to start!</i>"
+
+    text = (
+        "📊 <b>MANVIX AI — INSTAGRAM LEADS & FOLLOWER TRACKER</b>\n\n"
+        f"👥 <b>Total Target Profiles Scanned:</b> <code>{stats.get('total_scanned', 0)}</code>\n"
+        f"🏆 <b>Total Follows Dispatched:</b> <code>{stats.get('total_followed', 0)}</code>\n"
+        f"📨 <b>Total Private Requests Sent:</b> <code>{stats.get('total_requested', 0)}</code>\n"
+        f"👥 <b>Already Following Profiles:</b> <code>{stats.get('total_already_following', 0)}</code>\n\n"
+        f"📋 <b>Recent Target Accounts (with Extracted Followers):</b>\n"
+        f"{leads_text}\n\n"
+        "💾 <i>Data is persisted in SQLite (<code>instagram_target_leads</code>) & JSON tracker.</i>"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🎯 Follow New User ID", "callback_data": "outreach:ig_mode:username"}],
+            [{"text": "📸 Instagram Steps Menu", "callback_data": "outreach:ig_steps"}],
+            [{"text": "👥 Main Outreach Menu", "callback_data": "root:outreach"}]
+        ]
+    }
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+def send_posted_content_gallery(
+    chat_id: str,
+    page_index: int = 0,
+    platform: str = None,
+    message_id: int = None
+) -> dict:
+    """
+    Renders an interactive Post Gallery showing all published Instagram & Facebook images and videos.
+    Users can inspect post details, see who it was shared with, and click [🚀 Share to ALL Friends]
+    or share selectively to Instagram / Facebook friends.
+    """
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    from db_campaigns import get_all_published_posts
+    posts = get_all_published_posts(platform=platform, limit=30)
+
+    if not posts:
+        text = (
+            "🖼️ <b>Manvix AI — Posted Content Gallery</b>\n\n"
+            "⚠️ <i>No posted images or videos found yet in the system.</i>\n\n"
+            "Use /generate or publish a campaign to populate your gallery, then return here to share posts to all your friends!"
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "⚡ Generate New Content", "callback_data": "root:generate"}],
+                [{"text": "🔙 Back to Outreach Menu", "callback_data": "root:outreach"}]
+            ]
+        }
+        if message_id:
+            edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        else:
+            send_text_message(chat_id, text, reply_markup=keyboard)
+        return {"status": "empty"}
+
+    page_index = max(0, min(page_index, len(posts) - 1))
+    camp = posts[page_index]
+    camp_id = camp["id"]
+    media_path = camp.get("media_path") or ""
+    content_type = camp.get("content_type") or "image"
+    plats = [p.capitalize() for p in camp.get("platforms", ["Facebook", "Instagram"])]
+    caption = camp.get("caption") or ""
+    p_name = camp.get("product_name") or "Loan Solutions"
+    total_shares = camp.get("total_shares") or 0
+    updated_at = camp.get("updated_at") or "Recently"
+
+    import html
+    safe_cap = html.escape(caption.strip())
+    cap_preview = (safe_cap[:220] + "...") if len(safe_cap) > 220 else safe_cap
+
+    text = (
+        f"🖼️ <b>MANVIX AI — POSTED CONTENT VIEWER ({page_index + 1}/{len(posts)})</b>\n\n"
+        f"🏷️ <b>Product:</b> {p_name}\n"
+        f"📱 <b>Published On:</b> {' + '.join(plats)}\n"
+        f"📅 <b>Posted Date:</b> <code>{updated_at}</code>\n"
+        f"👥 <b>Friends Shared With:</b> <code>{total_shares} friends</code>\n\n"
+        f"📝 <b>Post Caption / Copy:</b>\n"
+        f"<i>\"{cap_preview}\"</i>\n\n"
+        f"👇 <b>Select an action to share this post to your friends:</b>"
+    )
+
+    prev_idx = (page_index - 1) % len(posts)
+    next_idx = (page_index + 1) % len(posts)
+
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🚀 Share to ALL Friends (Instagram + Facebook)", "callback_data": f"post_shr:all:{camp_id}"}],
+            [
+                {"text": "📸 Share to Instagram Friends", "callback_data": f"post_shr:ig:{camp_id}"},
+                {"text": "📘 Share to Facebook Friends", "callback_data": f"post_shr:fb:{camp_id}"}
+            ],
+            [
+                {"text": "⬅️ Prev", "callback_data": f"post_page:{prev_idx}"},
+                {"text": f"📍 {page_index + 1} / {len(posts)}", "callback_data": f"post_page:{page_index}"},
+                {"text": "Next ➡️", "callback_data": f"post_page:{next_idx}"}
+            ],
+            [
+                {"text": "📊 Overall Post Share Stats", "callback_data": "post_shr:stats"},
+                {"text": "🔙 Back to Outreach Menu", "callback_data": "root:outreach"}
+            ]
+        ]
+    }
+
+    # Send media (photo or video) if file exists
+    if media_path and os.path.exists(media_path):
+        fname = os.path.basename(media_path)
+        with open(media_path, "rb") as f:
+            file_bytes = f.read()
+
+        if content_type == "video" or fname.lower().endswith((".mp4", ".mov")):
+            res = make_telegram_request(
+                bot_token,
+                "sendVideo",
+                data={
+                    "chat_id": chat_id,
+                    "caption": text[:1024],
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps(keyboard),
+                },
+                files={"video": (fname, file_bytes, "video/mp4")}
+            )
+            return {"status": "success", "response": res}
+        else:
+            res = make_telegram_request(
+                bot_token,
+                "sendPhoto",
+                data={
+                    "chat_id": chat_id,
+                    "caption": text[:1024],
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps(keyboard),
+                },
+                files={"photo": (fname, file_bytes, "image/png")}
+            )
+            return {"status": "success", "response": res}
+
+    # Fallback to text message
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_post_shares_overall_stats_menu(chat_id: str, message_id: int = None) -> dict:
+    """Displays cumulative friend sharing statistics across all published posts."""
+    bot_token, _ = get_telegram_credentials()
+    if not bot_token:
+        return {"status": "error"}
+
+    from db_campaigns import get_post_shares_stats
+    stats = get_post_shares_stats()
+    recent = stats.get("recent_shares", [])
+
+    lines = []
+    for s in recent[:8]:
+        rec = s.get("recipient_name", "Friend")
+        plat = s.get("platform", "ig").capitalize()
+        dt = s.get("created_at", "")
+        lines.append(f"• 📤 <b>{rec}</b> via {plat} (<code>{dt}</code>)")
+
+    recent_text = "\n".join(lines) if lines else "<i>No shares recorded yet. Share a post to get started!</i>"
+
+    text = (
+        "📊 <b>MANVIX AI — POST SHARING TO FRIENDS DASHBOARD</b>\n\n"
+        f"🚀 <b>Total Friend Shares Dispatched:</b> <code>{stats.get('total_shares', 0)}</code>\n"
+        f"📸 <b>Instagram Direct Shares:</b> <code>{stats.get('instagram_shares', 0)}</code>\n"
+        f"📘 <b>Facebook Messenger Shares:</b> <code>{stats.get('facebook_shares', 0)}</code>\n\n"
+        f"📋 <b>Recent Friend Recipients:</b>\n"
+        f"{recent_text}\n\n"
+        "💾 <i>Logged in <code>post_shares_log</code> database table with human safety timestamps.</i>"
+    )
+
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🖼️ View Posted Images & Videos", "callback_data": "post_page:0"}],
+            [{"text": "👥 Back to Outreach Menu", "callback_data": "root:outreach"}]
+        ]
+    }
+
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard),
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
 
 
 def send_instagram_unfollow_menu(chat_id: str, message_id: int = None) -> dict:
@@ -1018,7 +1364,7 @@ def send_outreach_strategy_menu(chat_id: str, platform: str, message_id: int = N
         "How would you like to discover accounts to send friend requests / follows to?\n\n"
         "• 🌟 <b>Algorithmic Suggestions:</b> Targets Facebook's 'People You May Know' & Instagram's 'Suggested for You' (highest acceptance rate).\n"
         "• 🎲 <b>Random Discovery:</b> Organic diversified exploration from explore feeds & shuffled suggestions (natural browsing footprint).\n"
-        "• 📍 <b>Target Specific Location:</b> Searches for people by city or regional keyword."
+        "• 📍 <b>Target Specific Location:</b> Finds & follows real people in your target city (auto-filters out channels, broadcast channels & media pages)."
     )
 
     keyboard = {
@@ -1063,24 +1409,28 @@ def send_outreach_location_menu(chat_id: str, platform: str, message_id: int = N
     text = (
         f"👥 <b>Platform:</b> {plat_label}\n\n"
         "📍 <b>Select Target Location</b>\n"
+        "Finds & follows <b>real local residents</b> in your target city (auto-skips channels, broadcast channels, news, & media pages).\n\n"
         "Select your target location from presets or type any city name directly in this chat:"
     )
 
     keyboard = {
         "inline_keyboard": [
             [
-                {"text": "📍 New Delhi", "callback_data": f"outreach:loc:{platform}:New Delhi"},
-                {"text": "📍 Mumbai", "callback_data": f"outreach:loc:{platform}:Mumbai"}
+                {"text": "📍 Lucknow", "callback_data": f"outreach:loc:{platform}:Lucknow"},
+                {"text": "📍 New Delhi", "callback_data": f"outreach:loc:{platform}:New Delhi"}
             ],
             [
-                {"text": "📍 Bangalore", "callback_data": f"outreach:loc:{platform}:Bangalore"},
-                {"text": "📍 New York", "callback_data": f"outreach:loc:{platform}:New York"}
+                {"text": "📍 Mumbai", "callback_data": f"outreach:loc:{platform}:Mumbai"},
+                {"text": "📍 Bangalore", "callback_data": f"outreach:loc:{platform}:Bangalore"}
             ],
             [
-                {"text": "📍 London", "callback_data": f"outreach:loc:{platform}:London"},
-                {"text": "📍 Dubai", "callback_data": f"outreach:loc:{platform}:Dubai"}
+                {"text": "📍 New York", "callback_data": f"outreach:loc:{platform}:New York"},
+                {"text": "📍 London", "callback_data": f"outreach:loc:{platform}:London"}
             ],
-            [{"text": "✏️ Type Custom City Name", "callback_data": f"outreach:loc_custom:{platform}"}],
+            [
+                {"text": "📍 Dubai", "callback_data": f"outreach:loc:{platform}:Dubai"},
+                {"text": "✏️ Type Custom City Name", "callback_data": f"outreach:loc_custom:{platform}"}
+            ],
             [{"text": "🔙 Change Strategy", "callback_data": f"outreach:plat:{platform}"}]
         ]
     }
@@ -1380,11 +1730,21 @@ def send_queue_dashboard(chat_id: str, message_id: int = None) -> dict:
         text_parts.append(f"🟢 <b>ACTIVE WORKERS ({len(active_tasks)} Running Simultaneously):</b>\n")
         for idx, t in enumerate(active_tasks, 1):
             plat_icon = {"facebook": "📘", "instagram": "📸", "linkedin": "💼", "whatsapp": "💬"}.get(t.get("platform", ""), "⚡")
-            text_parts.append(
+            curr_act = t.get("current_activity") or "Working in background..."
+            recent_acts = t.get("recent_activities") or []
+            skipped_cnt = t.get("skipped_count", 0)
+
+            worker_block = (
                 f"{idx}. {plat_icon} <b>{t.get('name', 'Task')}</b>\n"
                 f"   • <b>Lock:</b> <code>{t.get('lock_key')}</code> | <b>Elapsed:</b> {t.get('elapsed_seconds', 0)}s\n"
                 f"   • <b>Progress:</b> <code>{t.get('progress', 'In progress')}</code>\n"
             )
+            if skipped_cnt > 0:
+                worker_block += f"   • 🛡️ <b>Skipped Channels/Pages:</b> {skipped_cnt}\n"
+            worker_block += f"   • ⚡ <b>Current Activity:</b> <code>{curr_act}</code>\n"
+            if recent_acts:
+                worker_block += f"   • 📜 <b>Recent:</b> <i>{recent_acts[-1]}</i>\n"
+            text_parts.append(worker_block)
     else:
         text_parts.append("🟢 <b>ACTIVE WORKERS:</b> None active (Workers idle & ready!)\n")
 
@@ -1466,6 +1826,145 @@ def send_queue_collision_notice(chat_id: str, task_name: str, lock_key: str, pos
         }
     )
     return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_task_start_notification(
+    account: dict = None,
+    product_name: str = "Loan Solutions",
+    platforms: list = None,
+    llm_provider: str = "ChatGPT",
+    campaign_id: str = None,
+    chat_id: str = None
+) -> dict:
+    """
+    Dispatches a real-time notification to Telegram when a campaign / generation task starts.
+    Includes active Google Chrome profile and mapped Facebook & Instagram IDs.
+    """
+    bot_token, default_chat_id = get_telegram_credentials()
+    target_chat = chat_id or default_chat_id
+    if not bot_token or not target_chat:
+        return {"status": "error", "message": "Missing Telegram credentials."}
+
+    acc = account or {}
+    email = acc.get("google_email") or acc.get("email") or "2003shivam1990@gmail.com"
+    name = acc.get("google_name") or acc.get("name") or "Shivam Mishra"
+    p_dir = acc.get("profile_dir") or acc.get("profile_directory") or "Default"
+    fb = acc.get("facebook_name") or "Techie Shivam (Loan Solutions)"
+    fb_id = acc.get("facebook_id") or "techieshivam"
+    ig = acc.get("instagram_username") or "loansolutions2026"
+
+    plats = platforms or ["Facebook", "Instagram"]
+    plat_str = ", ".join([p.capitalize() for p in plats])
+    now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    text = (
+        "🚀 <b>CAMPAIGN TASK STARTED!</b>\n\n"
+        f"👤 <b>Google Account:</b> {name}\n"
+        f"📧 <b>Google Email:</b> <code>{email}</code>\n"
+        f"📁 <b>Chrome Profile:</b> <code>{p_dir}</code>\n"
+        f"📘 <b>Linked Facebook:</b> <b>{fb}</b> (ID: <code>{fb_id}</code>)\n"
+        f"📸 <b>Linked Instagram:</b> <b>@{ig}</b>\n\n"
+        f"🎯 <b>Campaign / Product:</b> <code>{product_name}</code>\n"
+        f"🌐 <b>Target Platforms:</b> {plat_str}\n"
+        f"🤖 <b>AI Provider:</b> {llm_provider.upper()}\n"
+        f"🕒 <b>Started At:</b> {now_str}\n\n"
+        "⚡ <i>Launching Google Chrome with isolated profile session. AI generating viral marketing copy & branded graphic...</i>"
+    )
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data={
+            "chat_id": target_chat,
+            "text": text,
+            "parse_mode": "HTML",
+        }
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
+def send_task_completed_notification(
+    account: dict = None,
+    product_name: str = "Loan Solutions",
+    campaign_id: str = None,
+    results: list = None,
+    platforms: list = None,
+    chat_id: str = None
+) -> dict:
+    """
+    Dispatches a real-time notification to Telegram when a campaign task completes and is published.
+    Includes active Google Chrome profile, mapped Facebook & Instagram IDs, and live post URLs.
+    """
+    bot_token, default_chat_id = get_telegram_credentials()
+    target_chat = chat_id or default_chat_id
+    if not bot_token or not target_chat:
+        return {"status": "error", "message": "Missing Telegram credentials."}
+
+    acc = account or {}
+    email = acc.get("google_email") or acc.get("email") or "2003shivam1990@gmail.com"
+    name = acc.get("google_name") or acc.get("name") or "Shivam Mishra"
+    p_dir = acc.get("profile_dir") or acc.get("profile_directory") or "Default"
+    fb = acc.get("facebook_name") or "Techie Shivam (Loan Solutions)"
+    ig = acc.get("instagram_username") or "loansolutions2026"
+
+    now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    res_items = results or []
+    link_rows = []
+    for r in res_items:
+        p_name = r.get("name") or r.get("platform", "Platform").capitalize()
+        url = r.get("url")
+        verified = r.get("verified", True)
+        v_badge = "Verified Live ✅" if verified else "Published ✅"
+        if url:
+            link_rows.append(f"• <b>{p_name}:</b> {v_badge} — <a href=\"{url}\">View Live Post</a>")
+        else:
+            link_rows.append(f"• <b>{p_name}:</b> {v_badge}")
+
+    links_text = "\n".join(link_rows) if link_rows else "• Verified live across social channels ✅"
+
+    text = (
+        "🎉 <b>CAMPAIGN TASK COMPLETED & PUBLICLY PUBLISHED!</b>\n\n"
+        f"👤 <b>Google Account:</b> {name} (<code>{email}</code>)\n"
+        f"📁 <b>Chrome Profile:</b> <code>{p_dir}</code>\n"
+        f"📘 <b>Facebook Page:</b> {fb}\n"
+        f"📸 <b>Instagram Account:</b> @{ig}\n"
+        f"🎯 <b>Campaign:</b> {product_name}\n"
+        f"🕒 <b>Completed At:</b> {now_str}\n\n"
+        "🔗 <b>Public Post Links:</b>\n"
+        f"{links_text}\n\n"
+        "🚀 <i>All posts verified live on public social media feeds!</i>"
+    )
+
+    buttons = []
+    for r in res_items:
+        u = r.get("url")
+        p = r.get("platform", "").lower()
+        if u:
+            if "instagram" in p or "instagr.am" in u:
+                buttons.append([{"text": "📸 View on Instagram ↗️", "url": u}])
+            elif "facebook" in p or "facebook.com" in u:
+                buttons.append([{"text": "📘 View on Facebook ↗️", "url": u}])
+            else:
+                buttons.append([{"text": f"🌐 View on {p.capitalize()} ↗️", "url": u}])
+
+    keyboard = {"inline_keyboard": buttons} if buttons else None
+
+    req_data = {
+        "chat_id": target_chat,
+        "text": text,
+        "parse_mode": "HTML",
+    }
+    if keyboard:
+        req_data["reply_markup"] = json.dumps(keyboard)
+
+    res = make_telegram_request(
+        bot_token,
+        "sendMessage",
+        data=req_data
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
 
 
 

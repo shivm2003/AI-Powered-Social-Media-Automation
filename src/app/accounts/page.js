@@ -133,15 +133,19 @@ export default function AccountsPage() {
     setHumanError(null);
     setHumanResult(null);
     setHumanCurrentStep(1);
+    const activeProf = chromeProfiles.find((p) => p.id === selectedChromeProfile) || {
+      name: "Shivam Mishra",
+      email: "2003shivam1990@gmail.com",
+    };
     setHumanLogs([
-      "Step 1: Clicking & launching Google Chrome tab like a human from the app...",
+      `Step 1: Clicking & launching Google Chrome tab like a human for ${activeProf.name} (${selectedChromeProfile || "Default"})...`,
     ]);
 
     const step2Timer = setTimeout(() => {
       setHumanCurrentStep(2);
       setHumanLogs((prev) => [
         ...prev,
-        "Step 2: Selecting 2003shivam1990@gmail.com (Shivam Mishra) account like a human...",
+        `Step 2: Selecting ${activeProf.email || activeProf.name} account like a human...`,
       ]);
     }, 2800);
 
@@ -160,6 +164,7 @@ export default function AccountsPage() {
         body: JSON.stringify({
           platform: humanAiPlatform,
           query: humanQuery,
+          profileDir: selectedChromeProfile || "Default",
         }),
       });
 
@@ -231,7 +236,9 @@ export default function AccountsPage() {
       const platforms = [];
       const accountState = {};
       data.forEach((acc) => {
-        platforms.push(acc.platform);
+        if (acc.platform && !platforms.includes(acc.platform)) {
+          platforms.push(acc.platform);
+        }
         accountState[acc.platform] = {
           username: acc.username || "",
           password: "",
@@ -239,7 +246,7 @@ export default function AccountsPage() {
           ...acc.extra_fields,
         };
       });
-      setSelectedPlatforms(platforms);
+      setSelectedPlatforms([...new Set(platforms)]);
       setAccounts(accountState);
     } catch (error) {
       console.error("Failed to fetch accounts:", error);
@@ -585,7 +592,7 @@ export default function AccountsPage() {
                   </span>
                 </div>
                 <p style={{ fontSize: "var(--font-xs)", color: "var(--text-secondary)", marginTop: "4px" }}>
-                  Clicks Chrome tab from app ➜ Selects account <strong>2003shivam1990@gmail.com (Shivam Mishra)</strong> ➜ Searches Gemini, Claude, or ChatGPT with human typing.
+                  Clicks Chrome tab from app ➜ Selects account <strong>{selectedProfileDetails?.name || "Shivam Mishra"} ({selectedProfileDetails?.email || "2003shivam1990@gmail.com"})</strong> ➜ Searches Gemini, Claude, or ChatGPT with human typing.
                 </p>
               </div>
             </div>
@@ -605,7 +612,7 @@ export default function AccountsPage() {
                 }}
               >
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#34D399", display: "inline-block" }} />
-                Target: Shivam Mishra (2003shivam1990@gmail.com)
+                Target: {selectedProfileDetails?.name || "Shivam Mishra"} ({selectedProfileDetails?.email || "2003shivam1990@gmail.com"})
               </span>
             </div>
           </div>
@@ -673,10 +680,10 @@ export default function AccountsPage() {
               </span>
             </div>
             <div style={{ fontWeight: 600, fontSize: "var(--font-sm)" }}>
-              👤 Select Shivam Mishra
+              👤 Select {selectedProfileDetails?.name || "Shivam Mishra"}
             </div>
             <div style={{ fontSize: "var(--font-xs)", color: "var(--text-secondary)", marginTop: "2px" }}>
-              Selects 2003shivam1990@gmail.com
+              Selects {selectedProfileDetails?.email || "2003shivam1990@gmail.com"}
             </div>
           </div>
 
@@ -711,8 +718,55 @@ export default function AccountsPage() {
           </div>
         </div>
 
-        {/* ── Controls: AI Choice & Requirement Prompt ── */}
+        {/* ── Controls: Profile Choice, AI Choice & Requirement Prompt ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+          {/* Chrome Profile Selector */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+              <label style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                Target Chrome Profile:
+              </label>
+              <span style={{ fontSize: "var(--font-xs)", color: "var(--text-tertiary)" }}>
+                Selected: <strong>{selectedProfileDetails?.name || "Shivam Mishra"}</strong> ({selectedProfileDetails?.email || selectedChromeProfile})
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+              {chromeProfiles.map((p) => {
+                const isSelected = selectedChromeProfile === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedChromeProfile(p.id)}
+                    style={{
+                      flex: "1 1 180px",
+                      padding: "8px 12px",
+                      borderRadius: "var(--radius-md)",
+                      border: isSelected ? "2px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                      background: isSelected ? "var(--accent-primary-muted)" : "var(--bg-tertiary)",
+                      color: isSelected ? "#fff" : "var(--text-secondary)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontWeight: isSelected ? 600 : 500,
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <span style={{ fontSize: "1.1rem" }}>👤</span>
+                    <div style={{ textAlign: "left", overflow: "hidden" }}>
+                      <div style={{ fontSize: "var(--font-xs)", fontWeight: 600, whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                        {p.name} {p.isDefault && <span style={{ color: "var(--accent-secondary)", fontSize: "0.7rem" }}>(Default)</span>}
+                      </div>
+                      <div style={{ fontSize: "0.68rem", opacity: 0.7, whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                        {p.email || p.id}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {/* AI Selector Buttons */}
           <div>
             <label style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "6px", display: "block" }}>
@@ -823,7 +877,7 @@ export default function AccountsPage() {
                   Executing Step {humanCurrentStep} of 3...
                 </>
               ) : (
-                `🚀 Execute Human Flow: Click Chrome ➜ Select Shivam ➜ Search ${humanAiPlatform.toUpperCase()}`
+                `🚀 Execute Human Flow: Click Chrome ➜ Select ${selectedProfileDetails?.name || "Shivam"} ➜ Search ${humanAiPlatform.toUpperCase()}`
               )}
             </button>
 
@@ -1371,7 +1425,7 @@ export default function AccountsPage() {
       {/* Dynamic Credential Fields */}
       {selectedPlatforms.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-          {selectedPlatforms.map((platformKey) => {
+          {[...new Set(selectedPlatforms)].map((platformKey, idx) => {
             const platform = getPlatformConfig(platformKey);
             const platformData = accounts[platformKey] || {};
             const savedAccount = savedAccounts.find((a) => a.platform === platformKey);
@@ -1380,7 +1434,7 @@ export default function AccountsPage() {
             return (
               <div
                 className="card"
-                key={platformKey}
+                key={`platform-card-${platformKey}-${idx}`}
                 style={{
                   borderLeft: `3px solid ${platform?.color || "var(--accent-primary)"}`,
                 }}

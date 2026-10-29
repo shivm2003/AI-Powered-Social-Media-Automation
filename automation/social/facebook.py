@@ -293,7 +293,64 @@ def post_to_facebook(media_path: str = None, caption: str = "", password_callbac
         else:
             logger.info("Post trigger not immediately found; attempting direct composer click...")
 
-        # 3. Upload media if file input is available
+        # Helper to dismiss Facebook informational / audience merge dialogs
+        def dismiss_facebook_overlays():
+            try:
+                for d_xpath in [
+                    "//div[@role='dialog']//span[text()='Done']/ancestor::div[@role='button']",
+                    "//div[@role='dialog']//span[text()='Save']/ancestor::div[@role='button']",
+                    "//div[@role='dialog']//span[text()='Got it']/ancestor::div[@role='button']",
+                    "//div[@role='dialog']//span[text()='Not Now']/ancestor::div[@role='button']",
+                    "//div[@role='dialog']//div[@aria-label='Close' and @role='button']",
+                ]:
+                    for btn in driver.find_elements(By.XPATH, d_xpath):
+                        if btn.is_displayed():
+                            try:
+                                btn.click()
+                                time.sleep(1)
+                                break
+                            except Exception:
+                                driver.execute_script("arguments[0].click();", btn)
+                                time.sleep(1)
+                                break
+            except Exception:
+                pass
+
+        # 3. Type caption into modal editor FIRST before attaching media (prevents overlay obstruction)
+        logger.info(f"Injecting caption ({len(caption)} chars) into Facebook editor...")
+        caption_injected = False
+        try:
+            for _ in range(15):
+                editors = driver.find_elements(By.XPATH, "//div[@role='textbox' and @contenteditable='true']")
+                editor = next((ed for ed in editors if ed.is_displayed()), None)
+                if editor:
+                    try:
+                        editor.click()
+                    except Exception:
+                        driver.execute_script("arguments[0].focus();", editor)
+                    time.sleep(0.3)
+                    try:
+                        pyperclip.copy(caption)
+                        time.sleep(0.2)
+                        ActionChains(driver).key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
+                        time.sleep(1.0)
+                        logger.info("Pasted caption into Facebook editor via OS Clipboard.")
+                        caption_injected = True
+                    except Exception as e_clip:
+                        logger.warning(f"Clipboard paste note: {e_clip}")
+                        driver.execute_script("""
+                            const ed = arguments[0];
+                            const text = arguments[1];
+                            ed.focus();
+                            document.execCommand('insertText', false, text);
+                        """, editor, caption)
+                        caption_injected = True
+                    break
+                time.sleep(0.5)
+        except Exception as e_text:
+            logger.warning(f"Could not enter text into Facebook editor initially: {e_text}")
+
+        # 4. Attach media file (Image or Video)
         if media_path and os.path.exists(media_path):
             abs_media_path = os.path.abspath(media_path)
             logger.info(f"Uploading media file to Facebook: {abs_media_path}")
@@ -318,67 +375,82 @@ def post_to_facebook(media_path: str = None, caption: str = "", password_callbac
                 try:
                     file_inputs[-1].send_keys(abs_media_path)
                     logger.info("Successfully attached media to Facebook composer!")
-                    time.sleep(3)
+                    time.sleep(3.5)
                 except Exception as e_up:
                     logger.warning(f"File upload notice: {e_up}")
 
-        # 4. Type caption into modal editor via OS Clipboard paste (pyperclip + Ctrl+V)
-        try:
-            editors = driver.find_elements(By.XPATH, "//div[@role='textbox' and @contenteditable='true']")
-            editor = next((ed for ed in editors if ed.is_displayed()), None)
-            if editor:
-                editor.click()
-                time.sleep(0.3)
-                try:
-                    pyperclip.copy(caption)
-                    time.sleep(0.2)
-                    ActionChains(driver).key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
-                    time.sleep(1.0)
-                    logger.info("Pasted caption into Facebook editor via OS Clipboard.")
-                except Exception as e_clip:
-                    logger.warning(f"Clipboard paste note: {e_clip}")
+        # Check if any format merge or reel audience popup appeared and dismiss it
+        dismiss_facebook_overlays()
+
+        # If caption wasn't entered earlier, retry now
+        if not caption_injected:
+            try:
+                editors = driver.find_elements(By.XPATH, "//div[@role='textbox' and @contenteditable='true']")
+                editor = next((ed for ed in editors if ed.is_displayed()), None)
+                if editor:
                     driver.execute_script("""
                         const ed = arguments[0];
-                        const text = arguments[1];
                         ed.focus();
-                        document.execCommand('insertText', false, text);
+                        document.execCommand('insertText', false, arguments[1]);
                     """, editor, caption)
-                time.sleep(1.5)
-                logger.info("Injected post caption and hashtags into Facebook editor.")
-        except Exception as e_text:
-            logger.warning(f"Could not enter text into Facebook editor: {e_text}")
+                    time.sleep(1.0)
+            except Exception as e_retry:
+                logger.debug(f"Caption retry note: {e_retry}")
 
-        # 5. Click Post button
+        # 5. Click Post button (with active polling for video processing & aria-disabled state)
         post_selectors = [
             "//div[@aria-label='Post' and @role='button']",
             "//span[text()='Post']/ancestor::div[@role='button']",
             "//div[@role='button' and .//span[text()='Post']]",
         ]
 
+        logger.info("Waiting for Facebook Post button to be active and ready...")
         post_clicked = False
-        for post_btn_xpath in post_selectors:
-            try:
+        target_btn = None
+
+        # Poll up to 40 seconds (especially for video encoding)
+        for _ in range(40):
+            dismiss_facebook_overlays()
+            for post_btn_xpath in post_selectors:
+                try:
+                    for btn in driver.find_elements(By.XPATH, post_btn_xpath):
+                        if btn.is_displayed():
+                            aria_disabled = btn.get_attribute("aria-disabled")
+                            if aria_disabled != "true":
+                                target_btn = btn
+                                break
+                    if target_btn:
+                        break
+                except Exception:
+                    pass
+            if target_btn:
+                break
+            time.sleep(1.0)
+
+        if not target_btn:
+            # Fallback to any visible Post button
+            for post_btn_xpath in post_selectors:
                 for btn in driver.find_elements(By.XPATH, post_btn_xpath):
                     if btn.is_displayed():
-                        # Check if disabled
-                        aria_disabled = btn.get_attribute("aria-disabled")
-                        if aria_disabled == "true":
-                            time.sleep(1.5)
-                        btn.click()
-                        post_clicked = True
-                        logger.info("Successfully clicked Post on Facebook!")
+                        target_btn = btn
                         break
-                if post_clicked:
+                if target_btn:
                     break
-            except Exception:
-                continue
 
-        if not post_clicked:
+        if target_btn:
+            try:
+                target_btn.click()
+                post_clicked = True
+            except Exception:
+                driver.execute_script("arguments[0].click();", target_btn)
+                post_clicked = True
+            logger.info("Successfully clicked Post on Facebook!")
+        else:
             raise RuntimeError("Could not find or click Post button on Facebook composer.")
 
         # Wait for composer modal to dismiss after submission
         logger.info("Waiting for Facebook composer modal to finish submission...")
-        for _ in range(20):
+        for _ in range(25):
             time.sleep(1.0)
             modals = driver.find_elements(By.XPATH, "//div[@role='dialog' and (.//span[contains(text(), 'Create post')] or .//div[@aria-label='Create a post'])]")
             if not modals or not any(m.is_displayed() for m in modals):

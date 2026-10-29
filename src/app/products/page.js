@@ -21,6 +21,7 @@ export default function ProductsPage() {
     tone: "professional",
     disclaimer: "",
     custom_prompt: "",
+    contact_number: "",
     campaign_objectives: [],
   };
 
@@ -94,6 +95,7 @@ export default function ProductsPage() {
       tone: product.tone || "professional",
       disclaimer: product.disclaimer || "",
       custom_prompt: product.custom_prompt || "",
+      contact_number: product.contact_number || (product.name?.toLowerCase().includes("loan") ? "8112570656" : ""),
       campaign_objectives: product.campaign_objectives || [],
     });
     setEditingProduct(product);
@@ -200,7 +202,7 @@ export default function ProductsPage() {
                 />
               </div>
 
-              {/* Website & Tone */}
+              {/* Website, Helpline & Tone */}
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Website URL</label>
@@ -210,6 +212,16 @@ export default function ProductsPage() {
                     value={form.website_url}
                     onChange={(e) => setForm({ ...form, website_url: e.target.value })}
                     placeholder="https://example.com"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">📞 Helpline / Mobile Number</label>
+                  <input
+                    className="form-input"
+                    type="tel"
+                    value={form.contact_number}
+                    onChange={(e) => setForm({ ...form, contact_number: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    placeholder="8112570656"
                   />
                 </div>
                 <div className="form-group">
@@ -399,10 +411,15 @@ export default function ProductsPage() {
                 </div>
               )}
 
-              {/* Tone badge */}
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
+              {/* Tone and Helpline badges */}
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
                 <span style={{ fontSize: "var(--font-xs)", color: "var(--text-tertiary)" }}>Tone:</span>
                 <span className="tag tag-default" style={{ textTransform: "capitalize" }}>{product.tone}</span>
+                {(product.contact_number || product.name?.toLowerCase().includes("loan")) && (
+                  <span className="tag tag-success" style={{ fontWeight: 600 }}>
+                    📞 +91 {product.contact_number || "8112570656"}
+                  </span>
+                )}
               </div>
 
               {/* Actions */}

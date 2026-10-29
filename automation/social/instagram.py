@@ -87,6 +87,17 @@ def post_to_instagram(media_path: str = None, caption: str = "") -> dict:
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.common.action_chains import ActionChains
+
+        # ── Pre-flight Login Assertion ──
+        cur_u = (driver.current_url or "").lower()
+        if "accounts/login" in cur_u or len(driver.find_elements(By.NAME, "password")) > 0:
+            logger.error(f"Instagram requires login! Current URL: {driver.current_url}")
+            return {
+                "status": "error",
+                "platform": "instagram",
+                "message": "Instagram account is not logged in. Please launch Chrome on Port 9222 and log in to Instagram."
+            }
 
         # ── 1. Locate and Open "Create new post" Modal ──
         logger.info("Opening Instagram Create post dialog...")
@@ -105,66 +116,103 @@ def post_to_instagram(media_path: str = None, caption: str = "") -> dict:
             time.sleep(1.2)
         except Exception:
             pass
+        # 1. Click Create (+) on sidebar if upload modal / file input isn't already open
+        modal_already_open = driver.execute_script("""
+            const dialog = document.querySelector('div[role="dialog"]');
+            const fi = document.querySelector('input[type="file"]');
+            return !!(dialog || fi);
+        """)
 
-        # Atomic JS query and click for official Create (+ / New post) button
-        opened = False
-        try:
-            opened = driver.execute_script("""
-                const btn = document.querySelector('svg[aria-label="New post"]')?.closest('a, div[role="button"]') ||
-                            document.querySelector('svg[aria-label="Create"]')?.closest('a, div[role="button"]');
-                if (btn) {
-                    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                    try { btn.click(); } catch(e) {}
-                    return true;
-                }
-                return false;
-            """)
-        except Exception:
-            pass
+        if modal_already_open:
+            logger.info("Instagram create modal or file input already open!")
+        else:
+            logger.info("Opening Instagram Create post dialog...")
+            opened = False
+            try:
+                opened = driver.execute_script("""
+                    const svgs = Array.from(document.querySelectorAll('svg'));
+                    const createSvg = svgs.find(s => {
+                        const l = (s.getAttribute('aria-label') || '').toLowerCase();
+                        return l === 'new post' || l === 'create';
+                    });
+                    if (createSvg) {
+                        const btn = createSvg.closest('a, div[role="button"], button') || createSvg.parentElement;
+                        if (btn) {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                    const btn = document.querySelector('svg[aria-label="New post" i]')?.closest('a, div[role="button"], button') ||
+                                document.querySelector('svg[aria-label="Create" i]')?.closest('a, div[role="button"], button');
+                    if (btn) {
+                        btn.click();
+                        return true;
+                    }
+                    return false;
+                """)
+            except Exception:
+                pass
 
-        # Fallback Selenium find & click
-        if not opened:
-            for xp in [
-                "//a[.//svg[@aria-label='New post'] or .//svg[@aria-label='Create']]",
-                "//div[@role='button'][.//svg[@aria-label='New post'] or .//svg[@aria-label='Create']]",
-                "//span[text()='Create']/ancestor::*[self::a or @role='button'][1]",
-                "//svg[@aria-label='New post']/ancestor::*[self::a or @role='button'][1]",
-            ]:
-                try:
-                    for cand in driver.find_elements(By.XPATH, xp):
-                        if cand.is_displayed():
-                            try:
-                                ActionChains(driver).move_to_element(cand).click().perform()
-                                opened = True
-                                break
-                            except Exception:
-                                driver.execute_script("arguments[0].click();", cand)
-                                opened = True
-                                break
-                    if opened:
-                        break
-                except Exception:
-                    continue
+            # Fallback Selenium find & click for Create button
+            if not opened:
+                for xp in [
+                    "//a[.//svg[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'new post') or contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'create')]]",
+                    "//div[@role='button'][.//svg[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'new post') or contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'create')]]",
+                    "//a[@href='#' and .//svg]",
+                    "//span[text()='Create']/ancestor::*[self::a or @role='button'][1]",
+                    "//svg[@aria-label='New post']/ancestor::*[self::a or @role='button'][1]",
+                ]:
+                    try:
+                        for cand in driver.find_elements(By.XPATH, xp):
+                            if cand.is_displayed():
+                                try:
+                                    ActionChains(driver).move_to_element(cand).click().perform()
+                                    opened = True
+                                    break
+                                except Exception:
+                                    driver.execute_script("arguments[0].click();", cand)
+                                    opened = True
+                                    break
+                        if opened:
+                            break
+                    except Exception:
+                        continue
 
-        if not opened:
-            raise RuntimeError("Could not find or click Instagram Create (+ / New post) button on sidebar.")
-
-        time.sleep(2.0)
-
-        # Check if popover submenu appears (e.g. 'Post' / 'Live video')
-        try:
-            submenus = driver.find_elements(By.XPATH, "//div[@role='dialog']//span[text()='Post'] | //div[contains(@class, 'x1n2onr6')]//span[text()='Post']")
-            for sm in submenus:
-                if sm.is_displayed():
-                    sm.click()
-                    time.sleep(1.5)
+            # Wait and click 'Post' from the popover submenu (poll up to 8s)
+            logger.info("Checking for 'Post' in popover submenu...")
+            for _ in range(16):
+                sub_clicked = driver.execute_script("""
+                    const anchors = Array.from(document.querySelectorAll('a')).filter(a => (a.innerText || '').trim() === 'Post');
+                    if (anchors.length > 0) {
+                        anchors[0].click();
+                        return true;
+                    }
+                    const buttons = Array.from(document.querySelectorAll('div[role="button"], button, span')).filter(el => (el.innerText || '').trim() === 'Post');
+                    if (buttons.length > 0) {
+                        const target = buttons[0].closest('a, div[role="button"], button') || buttons[0];
+                        target.click();
+                        return true;
+                    }
+                    return false;
+                """)
+                if sub_clicked:
+                    logger.info("Successfully clicked 'Post' in Instagram popover submenu!")
+                    time.sleep(2.0)
                     break
-        except Exception:
-            pass
+                has_file_input = driver.execute_script("return !!document.querySelector('input[type=\"file\"]');")
+                if has_file_input:
+                    logger.info("File input detected directly!")
+                    break
+                time.sleep(0.5)
 
-        # Wait for file input
+        # Wait for file input (<input type='file'>) inside the modal
         file_input = None
-        for _ in range(15):
+        for _ in range(30):
+            # Try JS direct query
+            fi_el = driver.execute_script("return document.querySelector('input[type=\"file\"]');")
+            if fi_el:
+                file_input = fi_el
+                break
             fis = driver.find_elements(By.XPATH, "//input[@type='file']")
             if fis:
                 file_input = fis[0]
@@ -229,7 +277,36 @@ def post_to_instagram(media_path: str = None, caption: str = "") -> dict:
                 return false;
             """, target_label)
 
-        # ── 3. Step 1 (Crop View) ➜ Advance to Filters ──
+        # Dismiss "Video posts are now shared as reels" notice if uploading video
+        is_video_file = media_path and str(media_path).lower().endswith(('.mp4', '.mov', '.avi'))
+        if is_video_file:
+            logger.info("Video file detected: checking for Reels announcement popup...")
+            for _ in range(8):
+                dismissed = driver.execute_script("""
+                    const dialogs = document.querySelectorAll('div[role="dialog"]');
+                    for (const d of dialogs) {
+                        const txt = (d.innerText || '').toLowerCase();
+                        if (txt.includes('reels') || txt.includes('shared as reels') || txt.includes('video posts')) {
+                            const btns = Array.from(d.querySelectorAll('button, div[role="button"]'));
+                            const okBtn = btns.find(b => {
+                                const t = (b.innerText || '').trim().toLowerCase();
+                                return t === 'ok' || t === 'continue' || t === 'got it';
+                            });
+                            if (okBtn) {
+                                okBtn.click();
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                """)
+                if dismissed:
+                    logger.info("Dismissed 'Video posts are now shared as reels' modal.")
+                    time.sleep(1.0)
+                    break
+                time.sleep(0.5)
+
+        # ── 3. Step 1 (Crop View) ➜ Advance to Filters / Cover Photo ──
         logger.info("Step 1 (Crop): Waiting for Crop screen and advancing...")
         for _ in range(15):
             if click_modal_button("Next"):
@@ -237,7 +314,7 @@ def post_to_instagram(media_path: str = None, caption: str = "") -> dict:
                 break
             time.sleep(1)
 
-        # Wait for transition from Crop -> Filters/Edit
+        # Wait for transition from Crop -> Filters / Cover Photo
         time.sleep(2.5)
 
         # ── 4. Step 2 (Filters/Edit View) ➜ Advance to Details ──
@@ -489,16 +566,17 @@ def post_to_instagram(media_path: str = None, caption: str = "") -> dict:
         logger.info("Waiting for Instagram publication confirmation...")
         confirmed = False
         poll_start = time.time()
-        while time.time() - poll_start < 30:
+        max_poll_time = 75 if is_video_file else 35
+        while time.time() - poll_start < max_poll_time:
             time.sleep(2)
             conf_text = driver.execute_script("""
                 const dialog = document.querySelector('div[role="dialog"]');
                 if (dialog) {
                     const text = (dialog.innerText || '').toLowerCase();
-                    if (text.includes('shared') || text.includes('your post has been shared')) return 'SHARED_CONFIRMED';
+                    if (text.includes('shared') || text.includes('your post has been shared') || text.includes('your reel has been shared')) return 'SHARED_CONFIRMED';
                 }
                 const url = window.location.href;
-                if (!url.includes('/create/') && (url.includes('/p/') || url.includes('/loansolutions') || url === 'https://www.instagram.com/')) {
+                if (!url.includes('/create/') && (url.includes('/p/') || url.includes('/loansolutions') || url.includes('/reel/') || url === 'https://www.instagram.com/')) {
                     return 'SHARED_CONFIRMED';
                 }
                 return 'PENDING';

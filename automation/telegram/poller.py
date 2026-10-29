@@ -58,6 +58,11 @@ try:
         send_friends_group_menu,
         send_queue_dashboard,
         send_queue_collision_notice,
+        send_chrome_account_selection_menu,
+        send_task_start_notification,
+        send_task_completed_notification,
+        send_posted_content_gallery,
+        send_post_shares_overall_stats_menu,
     )
 except (ImportError, ModuleNotFoundError):
     from telegram.bot import (
@@ -90,6 +95,11 @@ except (ImportError, ModuleNotFoundError):
         send_friends_group_menu,
         send_queue_dashboard,
         send_queue_collision_notice,
+        send_chrome_account_selection_menu,
+        send_task_start_notification,
+        send_task_completed_notification,
+        send_posted_content_gallery,
+        send_post_shares_overall_stats_menu,
     )
 from social.facebook import is_facebook_login_needed, submit_facebook_login, post_to_facebook
 from social.instagram import post_to_instagram
@@ -105,6 +115,7 @@ from core.task_orchestrator import orchestrator, AutomationTask, TaskState
 
 logger = logging.getLogger("automation.telegram.poller")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
 
 # In-memory session state per chat_id
 chat_sessions = {}
@@ -342,10 +353,23 @@ def update_campaign_status_db(
         return False
     try:
         from db_campaigns import save_or_update_campaign
+        plat_list = None
+        if platform:
+            if isinstance(platform, str):
+                plat_list = [p.strip() for p in platform.split(",") if p.strip()]
+            elif isinstance(platform, list):
+                plat_list = []
+                for p in platform:
+                    if isinstance(p, str) and "," in p:
+                        plat_list.extend([x.strip() for x in p.split(",") if x.strip()])
+                    elif isinstance(p, str) and p.strip():
+                        plat_list.append(p.strip())
+            else:
+                plat_list = [str(platform)]
         return save_or_update_campaign(
             campaign_id=campaign_id,
             status=status,
-            platforms=[platform] if platform else None,
+            platforms=plat_list,
             media_path=media_path,
             caption=caption,
             posted_at_now=(status == "posted")
@@ -355,9 +379,21 @@ def update_campaign_status_db(
         return False
 
 
-def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_count: int, mode: str = "location", message_id: int = None):
-    """Executes outreach campaign and manages live progress display in Telegram."""
+def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_count: int, mode: str = "location", message_id: int = None, account_id: str = None):
+    """Executes outreach campaign and manages live progress display in Telegram with active Chrome profile details."""
     campaign_id = str(uuid.uuid4())[:8]
+
+    if not account_id:
+        account_id = chat_sessions.get(chat_id, {}).get("selected_account_id")
+
+    from db_campaigns import get_chrome_account
+    acc_info = get_chrome_account(account_id) or {}
+    acc_name = acc_info.get("google_name") or acc_info.get("name", "Shivam Mishra")
+    acc_email = acc_info.get("google_email") or acc_info.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc_info.get("profile_dir") or acc_info.get("profile_directory", "Default")
+    acc_fb = acc_info.get("facebook_name", "Techie Shivam (Loan Solutions)")
+    acc_ig = acc_info.get("instagram_username", "loansolutions2026")
+    acc_id = str(acc_info.get("id") or account_id or "1")
 
     plat_title = {
         "both": "⚡ Facebook + Instagram Simultaneously",
@@ -368,17 +404,22 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
     mode_badges = {
         "suggestions": "🌟 Algorithmic Suggestions (PYMK & Recommendations)",
         "random": "🎲 Random Discovery (Explore Feed)",
-        "location": f"📍 Location Target: <code>{location}</code>"
+        "location": f"📍 Location Target: <code>{location}</code> (Real Residents | Channels Excluded)"
     }
-    mode_text = mode_badges.get(mode, f"📍 Location: <code>{location}</code>")
+    mode_text = mode_badges.get(mode, f"📍 Location: <code>{location}</code> (Real Residents | Channels Excluded)")
 
     init_text = (
         f"👥 <b>Growth Outreach Initiated!</b>\n\n"
+        f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+        f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+        f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+        f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+        f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
         f"🎯 <b>Target:</b> {plat_title}\n"
         f"🔍 <b>Strategy:</b> {mode_text}\n"
         f"🔢 <b>Count:</b> {target_count} requests\n"
         f"🆔 <b>Campaign ID:</b> <code>{campaign_id}</code>\n\n"
-        f"⏳ <b>Status:</b> Initializing browser sessions & preparing search filters..."
+        f"⏳ <b>Status:</b> Initializing browser session with profile <code>{acc_pdir}</code> & preparing search filters..."
     )
 
     stop_keyboard = {
@@ -401,7 +442,7 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
         if res_msg.get("response", {}).get("result"):
             sent_msg_id = res_msg["response"]["result"].get("message_id")
 
-    def _exec_growth():
+    def _exec_growth(t_obj):
         try:
             run_growth_campaign(
                 campaign_id=campaign_id,
@@ -411,7 +452,11 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
                 target_count=target_count,
                 safety_delay=15,
                 telegram_chat_id=chat_id,
-                telegram_message_id=sent_msg_id
+                telegram_message_id=sent_msg_id,
+                account_id=acc_id,
+                profile_dir=acc_pdir,
+                account_info=acc_info,
+                task_obj=t_obj
             )
         except Exception as e_growth:
             logger.error(f"Error in growth campaign thread: {e_growth}")
@@ -422,11 +467,11 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
         name=f"{platform.capitalize()} {mode.capitalize()} ({target_count} targets)",
         task_type="growth",
         platform=platform,
-        account_id="manvxi_ai",
+        account_id=acc_id,
         progress_total=target_count,
         tg_chat_id=chat_id,
         tg_message_id=sent_msg_id,
-        run_fn=lambda t: _exec_growth()
+        run_fn=lambda t: _exec_growth(t)
     )
     submit_res = orchestrator.submit_task(task_obj)
     if submit_res.get("status") == "queued":
@@ -439,9 +484,21 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
         )
 
 
-def launch_social_group_creation(chat_id: str, platform: str, group_type: str, group_name: str, message_id: int = None):
-    """Executes social group creation and manages live progress in Telegram."""
+def launch_social_group_creation(chat_id: str, platform: str, group_type: str, group_name: str, message_id: int = None, account_id: str = None):
+    """Executes social group creation and manages live progress in Telegram with active Chrome profile details."""
     task_id = str(uuid.uuid4())[:8]
+
+    if not account_id:
+        account_id = chat_sessions.get(chat_id, {}).get("selected_account_id")
+
+    from db_campaigns import get_chrome_account
+    acc_info = get_chrome_account(account_id) or {}
+    acc_name = acc_info.get("google_name") or acc_info.get("name", "Shivam Mishra")
+    acc_email = acc_info.get("google_email") or acc_info.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc_info.get("profile_dir") or acc_info.get("profile_directory", "Default")
+    acc_fb = acc_info.get("facebook_name", "Techie Shivam (Loan Solutions)")
+    acc_ig = acc_info.get("instagram_username", "loansolutions2026")
+    acc_id = str(acc_info.get("id") or account_id or "1")
 
     plat_title = {
         "facebook": "📘 Facebook",
@@ -458,11 +515,16 @@ def launch_social_group_creation(chat_id: str, platform: str, group_type: str, g
 
     init_text = (
         f"👨‍👩‍👧‍👦 <b>Social Friends Group Creation Initiated!</b>\n\n"
+        f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+        f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+        f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+        f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+        f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
         f"🏷️ <b>Group Name:</b> <code>{group_name}</code>\n"
         f"📱 <b>Platform:</b> {plat_title}\n"
         f"🎯 <b>Type:</b> {type_title}\n"
         f"🆔 <b>Task ID:</b> <code>{task_id}</code>\n\n"
-        f"⏳ <b>Status:</b> Initializing Chrome profile (Port 9222) and opening group creator..."
+        f"⏳ <b>Status:</b> Initializing Chrome profile <code>{acc_pdir}</code> and opening group creator..."
     )
 
     stop_keyboard = {
@@ -521,10 +583,22 @@ def launch_social_group_creation(chat_id: str, platform: str, group_type: str, g
         )
 
 
-def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, message_id: int = None):
-    """Executes Facebook Friend Request Acceptor and manages live progress in Telegram."""
+def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, message_id: int = None, account_id: str = None):
+    """Executes Facebook Friend Request Acceptor and manages live progress in Telegram with active Chrome profile details."""
     import threading
     import uuid
+
+    if not account_id:
+        account_id = chat_sessions.get(chat_id, {}).get("selected_account_id")
+
+    from db_campaigns import get_chrome_account
+    acc_info = get_chrome_account(account_id) or {}
+    acc_name = acc_info.get("google_name") or acc_info.get("name", "Shivam Mishra")
+    acc_email = acc_info.get("google_email") or acc_info.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc_info.get("profile_dir") or acc_info.get("profile_directory", "Default")
+    acc_fb = acc_info.get("facebook_name", "Techie Shivam (Loan Solutions)")
+    acc_ig = acc_info.get("instagram_username", "loansolutions2026")
+    acc_id = str(acc_info.get("id") or account_id or "1")
 
     job_id = str(uuid.uuid4())[:8]
     target_label = "All Pending Requests" if target_count == 0 else f"First {target_count} Requests"
@@ -532,11 +606,15 @@ def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, me
 
     init_text = (
         f"🤝 <b>Facebook Accept Sequence Started!</b>\n\n"
+        f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+        f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+        f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+        f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+        f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
         f"🎯 <b>Target:</b> {target_label}\n"
         f"👍 <b>Auto-Like Recent Post:</b> {like_label}\n"
-        f"🌐 <b>Browser:</b> Chrome Port 9222 (Shivam Mishra)\n"
         f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n\n"
-        f"⏳ <b>Status:</b> Connecting to Facebook Friend Requests page..."
+        f"⏳ <b>Status:</b> Connecting to Facebook Friend Requests page with profile <code>{acc_pdir}</code>..."
     )
 
     stop_keyboard = {
@@ -570,11 +648,13 @@ def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, me
                     last_edit_time[0] = time.time()
                     update_text = (
                         f"⏳ <b>Accepting Facebook Friend Requests...</b>\n\n"
+                        f"👤 <b>Google Chrome Account:</b> {acc_name} (<code>{acc_pdir}</code>)\n"
+                        f"📘 <b>Facebook Page:</b> {acc_fb}\n\n"
                         f"✅ <b>Accepted:</b> <code>{accepted}</code>"
                         f"{f' / {target}' if target else ''}\n"
                         f"👤 <b>Latest:</b> <i>{name}</i>\n"
                         f"👍 <b>Auto-Like:</b> {like_label}\n\n"
-                        "<i>Accepting in browser on port 9222...</i>"
+                        f"<i>Accepting in browser with profile <code>{acc_pdir}</code>...</i>"
                     )
                     if sent_msg_id:
                         edit_message_text(chat_id, sent_msg_id, update_text, keyboard=stop_keyboard)
@@ -608,10 +688,15 @@ def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, me
 
             final_text = (
                 f"🎉 <b>Facebook Friend Requests Processed!</b>\n\n"
+                f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+                f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+                f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+                f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+                f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
                 f"✅ <b>Total Accepted:</b> <code>{acc_count}</code>\n"
                 f"👍 <b>Posts Liked:</b> <code>{liked_count}</code>\n"
                 f"{people_list}\n"
-                f"<i>Execution finished via Chrome on port 9222.</i>"
+                f"<i>Execution finished via Chrome profile <code>{acc_pdir}</code>.</i>"
             )
 
             if sent_msg_id:
@@ -642,20 +727,36 @@ def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, me
         )
 
 
-def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = None):
-    """Executes Instagram Unfollow and manages live throttled progress in Telegram."""
+def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = None, account_id: str = None):
+    """Executes Instagram Unfollow and manages live throttled progress in Telegram with active Chrome profile details."""
     import threading
     import uuid
+
+    if not account_id:
+        account_id = chat_sessions.get(chat_id, {}).get("selected_account_id")
+
+    from db_campaigns import get_chrome_account
+    acc_info = get_chrome_account(account_id) or {}
+    acc_name = acc_info.get("google_name") or acc_info.get("name", "Shivam Mishra")
+    acc_email = acc_info.get("google_email") or acc_info.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc_info.get("profile_dir") or acc_info.get("profile_directory", "Default")
+    acc_fb = acc_info.get("facebook_name", "Techie Shivam (Loan Solutions)")
+    acc_ig = acc_info.get("instagram_username", "loansolutions2026")
+    acc_id = str(acc_info.get("id") or account_id or "1")
 
     job_id = str(uuid.uuid4())[:8]
     target_label = "All Followed Accounts" if target_count == 0 else f"{target_count} Accounts"
 
     init_text = (
         f"📉 <b>Instagram Unfollow Sequence Initiated!</b>\n\n"
+        f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+        f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+        f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+        f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+        f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
         f"🎯 <b>Target:</b> {target_label}\n"
-        f"🌐 <b>Browser:</b> Chrome Port 9222 (loansolutions2026)\n"
         f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n\n"
-        f"⏳ <b>Status:</b> Connecting to Instagram following dialog..."
+        f"⏳ <b>Status:</b> Connecting to Instagram following dialog with profile <code>{acc_pdir}</code>..."
     )
 
     stop_keyboard = {
@@ -690,6 +791,8 @@ def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = N
                     u_user = details.get("user", "")
                     update_text = (
                         f"⏳ <b>Pruning Instagram Following...</b>\n\n"
+                        f"👤 <b>Google Chrome Account:</b> {acc_name} (<code>{acc_pdir}</code>)\n"
+                        f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
                         f"📉 <b>Unfollowed:</b> <code>{unfollowed}</code>"
                         f"{f' / {target}' if target and target != 9999 else ''}\n"
                         f"👤 <b>Recent:</b> <i>@{u_user}</i>\n"
@@ -725,9 +828,14 @@ def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = N
 
             final_text = (
                 f"🎉 <b>Instagram Pruning Finished!</b>\n\n"
+                f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+                f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+                f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+                f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+                f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
                 f"📉 <b>Total Accounts Unfollowed:</b> <code>{unf_count}</code>\n"
                 f"{people_list}\n"
-                f"<i>Execution finished via Chrome on port 9222.</i>"
+                f"<i>Execution finished via Chrome profile <code>{acc_pdir}</code>.</i>"
             )
 
             if sent_msg_id:
@@ -742,10 +850,10 @@ def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = N
     threading.Thread(target=_exec_unfollow, daemon=True).start()
 
 
-def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int = None):
+def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int = None, account_id: str = None):
     """
     Executes Instagram following on specific accounts in Chrome on port 9222.
-    Streams real-time status and interactive feedback to Telegram.
+    Streams real-time status and interactive feedback to Telegram with active Chrome profile details.
     """
     import random
     from social.instagram_follow import clean_instagram_username, follow_specific_instagram_user
@@ -760,21 +868,37 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
         send_text_message(
             chat_id,
             "⚠️ <b>No valid Instagram usernames detected.</b>\n"
-            "Please provide a valid @username (e.g. <code>@lucknowi_vibes_</code>) or use /cancel."
+            "Please provide a valid @username (e.g. <code>@rahul_verma</code>) or use /cancel."
         )
         return
+
+    if not account_id:
+        account_id = chat_sessions.get(chat_id, {}).get("selected_account_id")
+
+    from db_campaigns import get_chrome_account
+    acc_info = get_chrome_account(account_id) or {}
+    acc_name = acc_info.get("google_name") or acc_info.get("name", "Shivam Mishra")
+    acc_email = acc_info.get("google_email") or acc_info.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc_info.get("profile_dir") or acc_info.get("profile_directory", "Default")
+    acc_fb = acc_info.get("facebook_name", "Techie Shivam (Loan Solutions)")
+    acc_ig = acc_info.get("instagram_username", "loansolutions2026")
+    acc_id = str(acc_info.get("id") or account_id or "1")
 
     job_id = str(uuid.uuid4())[:8]
     stop_flag = BASE_DIR / "data" / f"stop_{job_id}.flag"
 
     init_text = (
         f"📸 <b>Instagram Follow Sequence Initiated!</b>\n\n"
+        f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+        f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+        f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+        f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+        f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
         f"🎯 <b>Target Accounts ({len(clean_list)}):</b>\n"
         + "\n".join([f"• <b>@{u}</b>" for u in clean_list[:6]])
         + (f"\n<i>...and {len(clean_list)-6} more</i>" if len(clean_list) > 6 else "") + "\n\n"
-        f"🌐 <b>Browser:</b> Chrome Port 9222 (loansolutions2026)\n"
         f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n\n"
-        f"⏳ <b>Status:</b> Connecting to Instagram user profiles..."
+        f"⏳ <b>Status:</b> Connecting to Instagram with profile <code>{acc_pdir}</code>..."
     )
 
     stop_keyboard = {
@@ -803,6 +927,7 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
             sent_count = 0
             already_count = 0
             req_count = 0
+            skipped_count = 0
             failed_count = 0
 
             for i, u in enumerate(clean_list):
@@ -814,7 +939,7 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
                         pass
                     break
 
-                res = follow_specific_instagram_user(u)
+                res = follow_specific_instagram_user(u, skip_if_channel=True)
                 results.append(res)
                 st = res.get("status")
 
@@ -827,17 +952,30 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
                 elif st == "requested":
                     req_count += 1
                     icon = "📨"
+                elif st == "skipped":
+                    skipped_count += 1
+                    icon = "🛡️"
                 else:
                     failed_count += 1
                     icon = "⚠️"
 
+                f_text = res.get("followers_text") or "0"
+                f_cnt = res.get("followers_count") or 0
+                fn = res.get("full_name") or ""
+                fn_str = f" ({fn})" if fn else ""
+
                 update_text = (
-                    f"📸 <b>Instagram Following in Progress...</b>\n\n"
-                    f"👤 <b>Account ({i+1}/{len(clean_list)}):</b> @{u}\n"
-                    f"📊 <b>Result:</b> {icon} <i>{res.get('message', '')}</i>\n"
-                    f"🎯 <b>Followed:</b> <code>{sent_count}</code> | "
-                    f"<b>Already Following:</b> <code>{already_count}</code>\n\n"
-                    f"🛡️ <i>Human safety pauses active to protect your account.</i>"
+                    f"📸 <b>Instagram Profile Intelligence & Follow in Progress...</b>\n\n"
+                    f"👤 <b>Google Chrome Account:</b> {acc_name} (<code>{acc_pdir}</code>)\n"
+                    f"📸 <b>Active Account:</b> @{acc_ig}\n\n"
+                    f"🎯 <b>Target Profile ({i+1}/{len(clean_list)}):</b> @{u}{fn_str}\n"
+                    f"👥 <b>Followers Extracted:</b> <code>{f_text}</code> ({f_cnt:,}) — <i>💾 Saved to Database</i>\n"
+                    f"📈 <b>Following:</b> <code>{res.get('following_count', 0)}</code> | <b>Posts:</b> <code>{res.get('posts_count', 0)}</code>\n"
+                    f"📊 <b>Follow Status:</b> {icon} <i>{res.get('message', '')}</i>\n\n"
+                    f"🏆 <b>New Follows:</b> <code>{sent_count}</code> | "
+                    f"<b>Requested:</b> <code>{req_count}</code> | "
+                    f"<b>Already Following:</b> <code>{already_count}</code>\n"
+                    f"💾 <i>Data recorded in SQLite (<code>instagram_target_leads</code>) & JSON tracker.</i>"
                 )
 
                 if sent_msg_id:
@@ -855,34 +993,45 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
             for r in results:
                 st = r.get("status")
                 u_tag = f"@{r.get('username')}"
+                f_txt = r.get("followers_text") or "0"
+                fn = r.get("full_name") or ""
+                fn_lbl = f" ({fn})" if fn else ""
                 if st == "success":
-                    lines.append(f"• ✅ <b>{u_tag}:</b> Followed successfully!")
+                    lines.append(f"• ✅ <b>{u_tag}</b>{fn_lbl}: <code>{f_txt}</code> followers — <b>Followed!</b> 💾")
                 elif st == "already_following":
-                    lines.append(f"• ℹ️ <b>{u_tag}:</b> Already following")
+                    lines.append(f"• ℹ️ <b>{u_tag}</b>{fn_lbl}: <code>{f_txt}</code> followers — Already following 💾")
                 elif st == "requested":
-                    lines.append(f"• 📨 <b>{u_tag}:</b> Request sent (Private)")
+                    lines.append(f"• 📨 <b>{u_tag}</b>{fn_lbl}: <code>{f_txt}</code> followers — Request sent (Private) 💾")
                 elif st == "not_found":
-                    lines.append(f"• ❌ <b>{u_tag}:</b> Account not found")
+                    lines.append(f"• ❌ <b>{u_tag}</b>: Account unavailable / not found")
+                elif st == "skipped":
+                    lines.append(f"• 🛡️ <b>{u_tag}</b>: {r.get('message', 'Skipped')}")
                 else:
-                    lines.append(f"• ⚠️ <b>{u_tag}:</b> {r.get('message', 'Failed')}")
+                    lines.append(f"• ⚠️ <b>{u_tag}</b>: {r.get('message', 'Failed')}")
 
             done_keyboard = {
                 "inline_keyboard": [
-                    [{"text": "🎯 Follow Another Account", "callback_data": "outreach:ig_mode:username"}],
+                    [{"text": "🎯 Follow Another User ID", "callback_data": "outreach:ig_mode:username"}],
+                    [{"text": "📊 View Leads & Follow Stats", "callback_data": "outreach:ig_follow_stats"}],
                     [{"text": "📸 Instagram Steps Menu", "callback_data": "outreach:plat:instagram"}],
                     [{"text": "👥 Outreach Menu", "callback_data": "root:outreach"}]
                 ]
             }
 
             final_text = (
-                f"🎉 <b>Instagram Follow Sequence Finished!</b>\n\n"
-                f"📊 <b>Summary:</b>\n"
-                + "\n".join(lines[:10])
-                + (f"\n<i>...and {len(lines)-10} more</i>" if len(lines) > 10 else "") + "\n\n"
-                f"🏆 <b>New Follows:</b> <code>{sent_count}</code>\n"
-                f"👥 <b>Already Following:</b> <code>{already_count}</code>\n"
-                f"📨 <b>Requested (Private):</b> <code>{req_count}</code>\n\n"
-                f"<i>Executed safely via Chrome on port 9222.</i>"
+                f"🎉 <b>Instagram Follow & Intelligence Finished!</b>\n\n"
+                f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+                f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+                f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+                f"📸 <b>Active Account:</b> @{acc_ig}\n\n"
+                f"📊 <b>Summary of Extracted Profiles:</b>\n"
+                + "\n".join(lines[:12])
+                + (f"\n<i>...and {len(lines)-12} more</i>" if len(lines) > 12 else "") + "\n\n"
+                f"👥 <b>Total Target Profiles Scanned:</b> <code>{len(clean_list)}</code>\n"
+                f"🏆 <b>New Follow Requests Sent:</b> <code>{sent_count}</code>\n"
+                f"📨 <b>Private Account Requests:</b> <code>{req_count}</code>\n"
+                f"👥 <b>Already Following:</b> <code>{already_count}</code>\n\n"
+                f"💾 <i>All user profiles, follower counts, and timestamps are permanently saved in SQLite (<code>instagram_target_leads</code>) and <code>data/instagram_leads_tracker.json</code>.</i>"
             )
 
             if sent_msg_id:
@@ -901,10 +1050,179 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
         name=f"Instagram Follow ({len(usernames)} users)",
         task_type="growth",
         platform="instagram",
-        account_id="manvxi_ai",
+        account_id=acc_id,
         tg_chat_id=chat_id,
         tg_message_id=sent_msg_id,
         run_fn=lambda t: _exec_follow_users()
+    )
+    submit_res = orchestrator.submit_task(task_obj)
+    if submit_res.get("status") == "queued":
+        send_queue_collision_notice(
+            chat_id=chat_id,
+            task_name=task_obj.name,
+            lock_key=task_obj.lock_key,
+            position=submit_res.get("position", 1),
+            active_ahead=submit_res.get("active_ahead_name")
+        )
+
+
+def launch_post_share_task(
+    chat_id: str,
+    campaign_id: str,
+    platform: str = "both",
+    share_all: bool = True,
+    target_count: int = 25,
+    message_id: int = None
+):
+    """
+    Launches asynchronous post sharing to friends across Instagram and Facebook
+    with human-like safety pacing, interactive telemetry, and instant cancellation.
+    """
+    import threading
+    import uuid
+    from db_campaigns import get_campaign_from_db
+    from social.post_sharer import share_post_to_all_platforms, share_instagram_post_to_friends, share_facebook_post_to_friends
+
+    camp = get_campaign_from_db(campaign_id) if campaign_id else {}
+    p_name = camp.get("product_name") or "Marketing Post"
+
+    job_id = str(uuid.uuid4())[:8]
+    stop_flag = BASE_DIR / "data" / f"stop_shr_{job_id}.flag"
+    stop_event = threading.Event()
+
+    mode_label = "🚀 Share to ALL Friends" if share_all else f"Share up to {target_count} Friends"
+    plat_label = {
+        "instagram": "📸 Instagram Direct",
+        "facebook": "📘 Facebook Messenger",
+        "both": "⚡ Instagram + Facebook"
+    }.get(platform.lower(), platform.upper())
+
+    init_text = (
+        f"🚀 <b>Post Sharing to Friends Initiated!</b>\n\n"
+        f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code> ({p_name})\n"
+        f"📱 <b>Target Platforms:</b> {plat_label}\n"
+        f"🎯 <b>Mode:</b> {mode_label}\n"
+        f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n"
+        f"⏳ <b>Pacing:</b> Human-like anti-spam delays (6–12s)\n\n"
+        f"Connecting to Chrome on port 9222 and preparing post content..."
+    )
+
+    stop_keyboard = {
+        "inline_keyboard": [
+            [{"text": "🛑 Stop Sharing Task", "callback_data": f"post_shr:stop:{job_id}"}]
+        ]
+    }
+
+    sent_msg_id = None
+    if message_id:
+        try:
+            res = edit_message_text(chat_id, message_id, init_text, keyboard=stop_keyboard)
+            if res.get("ok"):
+                sent_msg_id = message_id
+        except Exception:
+            pass
+
+    if not sent_msg_id:
+        res_msg = send_text_message(chat_id, init_text, reply_markup=stop_keyboard)
+        if res_msg.get("response", {}).get("result"):
+            sent_msg_id = res_msg["response"]["result"].get("message_id")
+
+    def _exec_share():
+        try:
+            def _progress_cb(sent_cnt, total_cnt, details):
+                if stop_flag.exists():
+                    stop_event.set()
+                friend_name = details.get("friend") or "friend"
+                plat = (details.get("platform") or platform).capitalize()
+                update_text = (
+                    f"📤 <b>Sharing Post to Friends in Progress...</b>\n\n"
+                    f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code>\n"
+                    f"📱 <b>Platform:</b> {plat}\n"
+                    f"👥 <b>Progress:</b> <code>{sent_cnt}</code> / <code>{total_cnt}</code> friends\n"
+                    f"👤 <b>Last Selected:</b> <i>{friend_name}</i>\n"
+                    f"⏱️ <i>Human safety pauses active to comply with Meta anti-spam rules.</i>"
+                )
+                if sent_msg_id:
+                    try:
+                        edit_message_text(chat_id, sent_msg_id, update_text, keyboard=stop_keyboard)
+                    except Exception:
+                        pass
+
+            if platform.lower() == "instagram":
+                res = share_instagram_post_to_friends(
+                    campaign_id=campaign_id,
+                    share_all=share_all,
+                    target_count=target_count,
+                    on_progress=_progress_cb,
+                    stop_event=stop_event
+                )
+            elif platform.lower() == "facebook":
+                res = share_facebook_post_to_friends(
+                    campaign_id=campaign_id,
+                    share_all=share_all,
+                    target_count=target_count,
+                    on_progress=_progress_cb,
+                    stop_event=stop_event
+                )
+            else:
+                res = share_post_to_all_platforms(
+                    campaign_id=campaign_id,
+                    share_all=share_all,
+                    target_count=target_count,
+                    on_progress=_progress_cb,
+                    stop_event=stop_event
+                )
+
+            # Cleanup stop flag
+            if stop_flag.exists():
+                try:
+                    stop_flag.unlink()
+                except Exception:
+                    pass
+
+            total_shares = res.get("total_shares") or res.get("sent_count") or 0
+            recipients = res.get("all_recipients") or res.get("recipients") or []
+            rec_sample = ", ".join(recipients[:8]) if recipients else "Friends & Connections"
+            if len(recipients) > 8:
+                rec_sample += f" ...and {len(recipients) - 8} more"
+
+            done_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "🖼️ View Post Gallery", "callback_data": "post_page:0"}],
+                    [{"text": "📊 Overall Share Stats", "callback_data": "post_shr:stats"}],
+                    [{"text": "👥 Back to Outreach Menu", "callback_data": "root:outreach"}]
+                ]
+            }
+
+            final_text = (
+                f"🎉 <b>Post Sharing to Friends Completed!</b>\n\n"
+                f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code>\n"
+                f"📱 <b>Platforms:</b> {plat_label}\n"
+                f"🚀 <b>Total Friends Shared:</b> <code>{total_shares}</code>\n"
+                f"👥 <b>Recipients:</b> <i>{rec_sample}</i>\n\n"
+                f"💾 <i>Every share is permanently logged in <code>post_shares_log</code> database table.</i>"
+            )
+
+            if sent_msg_id:
+                try:
+                    edit_message_text(chat_id, sent_msg_id, final_text, keyboard=done_keyboard)
+                except Exception:
+                    send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+            else:
+                send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+
+        except Exception as e_shr:
+            logger.error(f"Error in post share background thread: {e_shr}", exc_info=True)
+            send_text_message(chat_id, f"⚠️ Post sharing notice: {e_shr}")
+
+    task_obj = AutomationTask(
+        name=f"Share Post {campaign_id[:8]} ({plat_label})",
+        task_type="share",
+        platform=platform,
+        account_id="manvxi_ai",
+        tg_chat_id=chat_id,
+        tg_message_id=sent_msg_id,
+        run_fn=lambda t: _exec_share()
     )
     submit_res = orchestrator.submit_task(task_obj)
     if submit_res.get("status") == "queued":
@@ -925,6 +1243,7 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
     import threading
 
     def _exec():
+        nonlocal platforms
         try:
             from social.caption_helper import ensure_apply_now_at_start, LOAN_SOLUTIONS_APPLY_URL
             from social.trending_hashtags import enrich_caption_with_trending_hashtags
@@ -933,6 +1252,17 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
             raw_caption = campaign_data.get("caption", "")
             # Guarantee Apply Now link is strictly at the start of caption
             caption = ensure_apply_now_at_start(raw_caption, apply_url=LOAN_SOLUTIONS_APPLY_URL, is_loan=True)
+
+            # Flatten and clean platforms list (handling any comma-separated strings like ["facebook,instagram"])
+            clean_platforms = []
+            for p in (platforms or []):
+                if isinstance(p, str) and "," in p:
+                    clean_platforms.extend([x.strip().lower() for x in p.split(",") if x.strip()])
+                elif isinstance(p, str) and p.strip():
+                    clean_platforms.append(p.strip().lower())
+            seen_p = set()
+            clean_platforms = [x for x in clean_platforms if not (x in seen_p or seen_p.add(x))]
+            platforms = clean_platforms if clean_platforms else ["facebook"]
 
             plat_names = [p.capitalize() for p in platforms]
             init_text = (
@@ -1103,6 +1433,24 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
                 summary_text,
                 reply_markup={"inline_keyboard": confirm_buttons}
             )
+
+            # Send formal task completed notification with account mapping & live links
+            try:
+                from db_campaigns import get_campaign_from_db, get_chrome_account
+                camp_rec = get_campaign_from_db(campaign_id) or {}
+                c_acc_id = camp_rec.get("account_id") or "acc_default"
+                c_acc = get_chrome_account(c_acc_id) or get_chrome_account("Default")
+                c_prod_name = (camp_rec.get("product") or {}).get("name") or "Loan Solutions"
+                send_task_completed_notification(
+                    account=c_acc,
+                    product_name=c_prod_name,
+                    campaign_id=campaign_id,
+                    results=successful_platforms,
+                    platforms=[p["platform"] for p in successful_platforms],
+                    chat_id=chat_id
+                )
+            except Exception as e_notif_done:
+                logger.warning(f"Could not dispatch task completed notification: {e_notif_done}")
 
         except Exception as e_main:
             logger.error(f"Error in multi-platform execution: {e_main}")
@@ -1354,12 +1702,80 @@ def handle_callback_query(callback: dict):
             message_id=message_id
         )
 
-    # 9. Flow Step 4: Product Selected -> Run Generation with selected format & LLM
+    # 9. Flow Step 4: Product Selected -> Ask for Google Chrome Account if not yet selected
     elif callback_data.startswith("flow:run:"):
         parts = callback_data.split(":")
         content_type = parts[2].lower() if len(parts) > 2 else "image"
         llm_provider = parts[3].lower() if len(parts) > 3 else "gemini"
         prod_id = parts[4] if len(parts) > 4 else ""
+
+        saved_session = chat_sessions.get(chat_id, {})
+        saved_acc_id = saved_session.get("selected_account_id")
+
+        if not saved_acc_id:
+            if callback_id:
+                answer_callback_query(callback_id, text="Select Google Chrome Account...")
+            send_chrome_account_selection_menu(
+                chat_id=chat_id,
+                content_type=content_type,
+                llm_provider=llm_provider,
+                product_id=prod_id,
+                message_id=message_id
+            )
+            return
+
+        # If already selected, redirect to flow:acc
+        callback_data = f"flow:acc:{saved_acc_id}:{content_type}:{llm_provider}:{prod_id}"
+
+    # 9b. Chrome Account Selected -> Launch Generation with this Profile
+    if callback_data.startswith("flow:acc:"):
+        parts = callback_data.split(":")
+        acc_id = parts[2] if len(parts) > 2 else "1"
+        content_type = parts[3].lower() if len(parts) > 3 else "image"
+        llm_provider = parts[4].lower() if len(parts) > 4 else "chatgpt"
+        prod_id = parts[5] if len(parts) > 5 else "default"
+
+        if chat_id not in chat_sessions:
+            chat_sessions[chat_id] = {}
+        chat_sessions[chat_id]["selected_account_id"] = acc_id
+
+        from db_campaigns import get_chrome_account
+        acc_info = get_chrome_account(acc_id) or {}
+        acc_name = acc_info.get("google_name") or acc_info.get("name", "Shivam Mishra")
+        acc_email = acc_info.get("google_email") or acc_info.get("email", "2003shivam1990@gmail.com")
+        acc_pdir = acc_info.get("profile_dir") or acc_info.get("profile_directory", "Default")
+        acc_fb = acc_info.get("facebook_name", "Techie Shivam (Loan Solutions)")
+        acc_ig = acc_info.get("instagram_username", "loansolutions2026")
+
+        # If came from root menu, proceed to Content Type selection with account confirmed
+        if prod_id == "default":
+            if callback_id:
+                answer_callback_query(callback_id, text=f"Account: {acc_name}")
+            send_text_message(
+                chat_id,
+                f"✅ <b>Active Profile Selected:</b>\n"
+                f"👤 <b>Google Account:</b> {acc_name} (<code>{acc_email}</code>)\n"
+                f"📁 <b>Chrome Profile:</b> <code>{acc_pdir}</code>\n"
+                f"📘 <b>Facebook Page:</b> <b>{acc_fb}</b>\n"
+                f"📸 <b>Instagram Account:</b> <b>@{acc_ig}</b>"
+            )
+            send_start_flow_menu(chat_id, message_id=message_id)
+            return
+
+        # If came from outreach menu, proceed to Outreach Platform selection with account confirmed
+        if prod_id == "outreach":
+            if callback_id:
+                answer_callback_query(callback_id, text=f"Profile: {acc_name}")
+            send_text_message(
+                chat_id,
+                f"✅ <b>Active Profile Selected for Outreach & Follow:</b>\n"
+                f"👤 <b>Google Account:</b> {acc_name} (<code>{acc_email}</code>)\n"
+                f"📁 <b>Chrome Profile:</b> <code>{acc_pdir}</code>\n"
+                f"📘 <b>Facebook Page:</b> <b>{acc_fb}</b>\n"
+                f"📸 <b>Instagram Account:</b> <b>@{acc_ig}</b>"
+            )
+            send_outreach_platform_menu(chat_id, message_id=message_id, account_id=acc_id)
+            return
 
         provider_title = {
             "gemini": "Gemini (Google AI)",
@@ -1370,7 +1786,7 @@ def handle_callback_query(callback: dict):
         format_title = "Video Reel (9:16)" if content_type == "video" else "Image Post"
 
         if callback_id:
-            answer_callback_query(callback_id, text=f"🚀 Generating {format_title} with {llm_provider.capitalize()}...")
+            answer_callback_query(callback_id, text=f"🚀 Launching Chrome ({acc_pdir})...")
 
         products = get_all_products()
         selected_prod = None
@@ -1383,15 +1799,37 @@ def handle_callback_query(callback: dict):
 
         prod_name = selected_prod.get("name", "Featured Product") if selected_prod else "Featured Product"
 
-        status_text = (
-            f"🚀 <b>Generation Initiated!</b>\n\n"
-            f"📦 <b>Product:</b> {prod_name}\n"
-            f"🎨 <b>Format:</b> {format_title}\n"
-            f"🤖 <b>AI Engine:</b> {provider_title}\n\n"
-            f"🤖 <b>Step 1 & 2:</b> Opening Chrome and prompting {llm_provider.capitalize()} like a human...\n"
-            f"🎨 <b>Step 3:</b> Generating custom {'promo video reel' if content_type == 'video' else 'visual graphic'} & viral copy...\n"
-            f"⏳ <i>Please wait ~35-50 seconds. The complete preview with approval buttons will arrive here!</i>"
-        )
+        if content_type == "video":
+            status_text = (
+                f"🚀 <b>Campaign Generation Initiated!</b>\n\n"
+                f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+                f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+                f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+                f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+                f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
+                f"📦 <b>Product:</b> {prod_name}\n"
+                f"🎨 <b>Format:</b> {format_title}\n"
+                f"🤖 <b>AI Engine:</b> {provider_title}\n\n"
+                f"⚡ <i>Step 1: Launching Chrome with profile <code>{acc_pdir}</code> & remote debugging...</i>\n"
+                f"⚡ <i>Step 2: AI generating policy-compliant 3-clip video script & Indian voiceover...</i>\n"
+                f"⚡ <i>Step 3: Rendering 3 sequential 8s clips & compiling master 24s video reel...</i>\n"
+                f"⏳ <b>Please wait at least 5 minutes (~5 to 6 minutes).</b> High-definition video generation (minimum 5 minutes per clip wait time), neural voiceover synthesis, and clip compilation take extra time to process!"
+            )
+        else:
+            status_text = (
+                f"🚀 <b>Campaign Generation Initiated!</b>\n\n"
+                f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+                f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+                f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+                f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+                f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
+                f"📦 <b>Product:</b> {prod_name}\n"
+                f"🎨 <b>Format:</b> {format_title}\n"
+                f"🤖 <b>AI Engine:</b> {provider_title}\n\n"
+                f"⚡ <i>Step 1: Launching Chrome with profile <code>{acc_pdir}</code> & remote debugging...</i>\n"
+                f"⚡ <i>Step 2: AI generating viral copy, hashtags & branded graphic...</i>\n"
+                f"⏳ <i>Please wait ~35-50s. The preview with approval buttons will arrive here!</i>"
+            )
 
         if message_id and chat_id:
             try:
@@ -1402,25 +1840,29 @@ def handle_callback_query(callback: dict):
             send_text_message(chat_id, status_text)
 
         import threading
-        def _run_flow():
+        def _run_account_flow():
             try:
                 from browser.human_operator import execute_human_generation_and_telegram_flow
                 logo_to_use = selected_prod.get("logo_path") if selected_prod else None
                 if not logo_to_use and os.path.exists(LOAN_SOLUTIONS_PATH):
                     logo_to_use = LOAN_SOLUTIONS_PATH
 
+                contact_num = selected_prod.get("contact_number") if selected_prod else None
                 execute_human_generation_and_telegram_flow(
                     platform=llm_provider,
-                    product=selected_prod or {"name": prod_name, "logo_path": logo_to_use},
+                    product=selected_prod or {"name": prod_name, "logo_path": logo_to_use, "contact_number": contact_num},
                     content_type=content_type,
                     skill_image_path=logo_to_use,
                     platforms=["facebook", "instagram"],
+                    contact_number=contact_num,
+                    account_id=acc_id,
+                    profile_dir=acc_pdir
                 )
             except Exception as e_run:
                 logger.error(f"Error during flow generation: {e_run}")
                 send_text_message(chat_id, f"⚠️ Generation notice: {e_run}")
 
-        threading.Thread(target=_run_flow, daemon=True).start()
+        threading.Thread(target=_run_account_flow, daemon=True).start()
 
     # Legacy fallback: User clicked [🚀 Generate: <Product>] from old message
     elif callback_data.startswith("gen_prod:"):
@@ -1455,11 +1897,13 @@ def handle_callback_query(callback: dict):
                 if not logo_to_use and os.path.exists(LOAN_SOLUTIONS_PATH):
                     logo_to_use = LOAN_SOLUTIONS_PATH
 
+                contact_num = selected_prod.get("contact_number") if selected_prod else None
                 execute_human_generation_and_telegram_flow(
                     platform="chatgpt",
-                    product=selected_prod or {"name": prod_name, "logo_path": logo_to_use},
+                    product=selected_prod or {"name": prod_name, "logo_path": logo_to_use, "contact_number": contact_num},
                     skill_image_path=logo_to_use,
                     platforms=["facebook", "instagram"],
+                    contact_number=contact_num
                 )
             except Exception as e_run:
                 logger.error(f"Error during Telegram triggered generation: {e_run}")
@@ -1499,17 +1943,24 @@ def handle_callback_query(callback: dict):
             answer_callback_query(callback_id)
         send_root_choice_menu(chat_id, message_id=message_id)
 
-    # 13. Root Choice 1: Content Generation Flow
+    # 13. Root Choice 1: Content Generation Flow -> Ask for Google Chrome Profile First
     elif callback_data == "root:content":
         if callback_id:
             answer_callback_query(callback_id)
-        send_start_flow_menu(chat_id, message_id=message_id)
+        send_chrome_account_selection_menu(chat_id, content_type="image", llm_provider="chatgpt", product_id="default", message_id=message_id)
 
     # 14. Root Choice 2: Growth & Outreach Flow -> Step 1: Select Platform
     elif callback_data == "root:outreach":
         if callback_id:
             answer_callback_query(callback_id)
-        send_outreach_platform_menu(chat_id, message_id=message_id)
+        cur_acc = chat_sessions.get(chat_id, {}).get("selected_account_id")
+        send_outreach_platform_menu(chat_id, message_id=message_id, account_id=cur_acc)
+
+    # 14a. Outreach Chrome Account Selector
+    elif callback_data == "outreach:account_select":
+        if callback_id:
+            answer_callback_query(callback_id, text="Select Google Chrome Profile for Outreach...")
+        send_chrome_account_selection_menu(chat_id, content_type="outreach", llm_provider="outreach", product_id="outreach", message_id=message_id)
 
     # 14b. Facebook Friend Requests Acceptor Menu
     elif callback_data == "outreach:fb_accept_menu":
@@ -1590,7 +2041,14 @@ def handle_callback_query(callback: dict):
             answer_callback_query(callback_id)
         send_instagram_steps_menu(chat_id, message_id=message_id)
 
-    # 15c. Instagram Mode: Specific Username
+    # 15b2. Instagram Saved Leads & Follow Stats
+    elif callback_data == "outreach:ig_follow_stats":
+        if callback_id:
+            answer_callback_query(callback_id)
+        from telegram.bot import send_instagram_leads_stats_menu
+        send_instagram_leads_stats_menu(chat_id, message_id=message_id)
+
+    # 15c. Instagram Mode: Specific Username / User ID
     elif callback_data == "outreach:ig_mode:username":
         if callback_id:
             answer_callback_query(callback_id)
@@ -1600,11 +2058,16 @@ def handle_callback_query(callback: dict):
         }
         send_text_message(
             chat_id,
-            "🎯 <b>Instagram Follow — Target Account(s)</b>\n\n"
-            "Please type the Instagram <code>@username</code> you want to follow:\n\n"
+            "🎯 <b>Instagram Follow & Follower Extraction Engine</b>\n\n"
+            "Please type the Instagram <code>User ID</code> or <code>@username</code> you want to target:\n\n"
+            "⚡ <b>Automated Workflow:</b>\n"
+            "1. Manvix AI enters inside the user ID profile\n"
+            "2. Extracts & saves their exact follower count to the leads database\n"
+            "3. Dispatches the follow request safely via authenticated Chrome\n"
+            "4. Tracks and tallies your cumulative follow counts!\n\n"
             "<i>Examples:</i>\n"
-            "• <code>@lucknowi_vibes_</code>\n"
-            "• <code>@lucknow_hearts, @lucknowi_view_</code>\n\n"
+            "• <code>@badshah_bhai__9186</code>\n"
+            "• <code>@rahul_verma, @priya_sharma</code>\n\n"
             "<i>(Type /cancel anytime to return to the menu)</i>"
         )
 
@@ -1637,7 +2100,8 @@ def handle_callback_query(callback: dict):
         send_text_message(
             chat_id,
             f"📍 <b>Custom Location for {platform.capitalize()} Outreach</b>\n\n"
-            "Please type the name of the target city or location (e.g. <code>New York</code>, <code>Mumbai</code>, <code>San Francisco</code>):\n\n"
+            "Please type the name of the target city or location (e.g. <code>Lucknow</code>, <code>Mumbai</code>, <code>New Delhi</code>):\n"
+            "<i>(Our smart engine targets real local people & auto-skips channels and media pages)</i>\n\n"
             "<i>(Type /cancel anytime to return to the menu)</i>"
         )
 
@@ -1823,6 +2287,68 @@ def handle_callback_query(callback: dict):
         send_text_message(chat_id, f"🛑 <b>Task {target_tid} cancelled.</b> If other tasks were queued behind it, the next task is now unblocked and active!")
         send_queue_dashboard(chat_id)
 
+    # 29. Stop Outreach Task from Live Card
+    elif callback_data.startswith("outreach:stop:"):
+        target_cid = callback_data.split(":", 2)[2] if ":" in callback_data else ""
+        if callback_id:
+            answer_callback_query(callback_id, text="🛑 Halting outreach task...")
+        orchestrator.cancel_task(target_cid)
+        stop_growth_campaign(target_cid)
+        send_text_message(chat_id, f"🛑 <b>Outreach campaign <code>{target_cid}</code> cancelled.</b>")
+        send_queue_dashboard(chat_id)
+
+    # 30. Refresh Status from Live Card
+    elif callback_data.startswith("outreach:status:"):
+        if callback_id:
+            answer_callback_query(callback_id, text="🔄 Live status refreshed!")
+        send_queue_dashboard(chat_id, message_id=message_id)
+
+    # 31. Posted Content Gallery Navigation
+    elif callback_data.startswith("post_page:"):
+        page_str = callback_data.split(":", 1)[1] if ":" in callback_data else "0"
+        try:
+            page_idx = int(page_str)
+        except ValueError:
+            page_idx = 0
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_posted_content_gallery(chat_id, page_index=page_idx, message_id=message_id)
+
+    # 32. Post Sharing Actions & Overall Stats
+    elif callback_data.startswith("post_shr:"):
+        parts = callback_data.split(":")
+        sub_action = parts[1] if len(parts) > 1 else ""
+
+        if sub_action == "stats":
+            if callback_id:
+                answer_callback_query(callback_id, text="📊 Loading post share stats...")
+            send_post_shares_overall_stats_menu(chat_id, message_id=message_id)
+
+        elif sub_action == "stop":
+            target_jid = parts[2] if len(parts) > 2 else ""
+            if callback_id:
+                answer_callback_query(callback_id, text="🛑 Halting post share task...")
+            stop_flag = BASE_DIR / "data" / f"stop_shr_{target_jid}.flag"
+            try:
+                stop_flag.write_text("STOP", encoding="utf-8")
+            except Exception:
+                pass
+            send_text_message(chat_id, f"🛑 <b>Post sharing stop signal sent</b> for job <code>{target_jid}</code>.")
+
+        elif sub_action in ["all", "ig", "fb"]:
+            camp_id = parts[2] if len(parts) > 2 else ""
+            plat_map = {"all": "both", "ig": "instagram", "fb": "facebook"}
+            plat_chosen = plat_map.get(sub_action, "both")
+            if callback_id:
+                answer_callback_query(callback_id, text="🚀 Launching friend sharing...")
+            launch_post_share_task(
+                chat_id=chat_id,
+                campaign_id=camp_id,
+                platform=plat_chosen,
+                share_all=True,
+                message_id=message_id
+            )
+
 
 def handle_text_message(message: dict):
     """Processes user text messages in Telegram (such as passwords, start commands, or revision feedback)."""
@@ -1833,8 +2359,30 @@ def handle_text_message(message: dict):
     logger.info(f"Received text message: '{text}' from chat {chat_id}")
 
     clean_text = text.lower().strip()
-    if clean_text in ["/queue", "queue", "/tasks", "tasks"]:
+    if clean_text in ["/queue", "queue", "/tasks", "tasks", "/status", "status", "/activity", "activity"]:
         send_queue_dashboard(chat_id)
+        return
+
+    if clean_text in ["/posts", "posts", "/myposts", "myposts", "/gallery", "gallery", "/posted"]:
+        send_posted_content_gallery(chat_id, page_index=0)
+        return
+
+    if clean_text in ["/sharestats", "sharestats", "/poststats"]:
+        send_post_shares_overall_stats_menu(chat_id)
+        return
+
+    if clean_text.startswith("/shareall") or clean_text.startswith("shareall"):
+        parts = text.split()
+        target_camp = parts[1] if len(parts) > 1 else None
+        if not target_camp:
+            from db_campaigns import get_all_published_posts
+            all_p = get_all_published_posts(limit=1)
+            if all_p:
+                target_camp = all_p[0]["id"]
+        if target_camp:
+            launch_post_share_task(chat_id=chat_id, campaign_id=target_camp, platform="both", share_all=True)
+        else:
+            send_text_message(chat_id, "⚠️ No published posts found to share. Publish a post first or check /posts.")
         return
 
     if clean_text in ["/start", "start", "/help", "help", "hi", "hello", "menu", "/menu"]:
@@ -1855,28 +2403,44 @@ def handle_text_message(message: dict):
         send_root_choice_menu(chat_id)
         return
 
-    # Direct 24s Video Command: /video [prompt]
-    if clean_text.startswith("/video") or clean_text.startswith("video:") or clean_text == "video":
+    if clean_text in ["/generate", "generate", "/create", "create", "/accounts", "accounts", "/profiles", "profiles"]:
+        send_chrome_account_selection_menu(chat_id)
+        return
+
+    # Direct 24s Video Command: /video [prompt], "generate video", "create video", etc.
+    is_video_cmd = (
+        clean_text.startswith("/video") or
+        clean_text.startswith("video:") or
+        clean_text == "video" or
+        "generate video" in clean_text or
+        "create video" in clean_text or
+        "make video" in clean_text or
+        "make a video" in clean_text or
+        "video generation" in clean_text or
+        "24s video" in clean_text or
+        "generate 24s" in clean_text
+    )
+    if is_video_cmd:
         prompt_val = text
-        for pfx in ["/video", "video:"]:
+        for pfx in ["/video", "video:", "generate video", "create video", "make video", "make a video", "video generation"]:
             if prompt_val.lower().startswith(pfx):
                 prompt_val = prompt_val[len(pfx):].strip()
                 break
-        if not prompt_val:
-            prompt_val = "Loan Solutions Instant Personal & Business Finance in Indian Rupees"
+        if not prompt_val or len(prompt_val) < 4:
+            prompt_val = "Loan Solutions Home Loans (Apna Ghar) & Loan Against Property (LAP) in Indian Rupees"
         if chat_id in chat_sessions:
             del chat_sessions[chat_id]
 
         send_text_message(
             chat_id,
-            f"🎬 <b>Generating 24-Second Gemini AI Video (Indian Standard)...</b>\n\n"
+            f"🎬 <b>Generating 24-Second Gemini AI Video (Home Loan & LAP Strategic Focus)...</b>\n\n"
             f"📝 <b>Prompt:</b> <i>\"{prompt_val}\"</i>\n\n"
             "⚙️ <b>Pipeline Stages:</b>\n"
-            "• Clip 1 (0-8s): Relatable Indian Hook & Problem\n"
-            "• Clip 2 (8-16s): Fast Digital Solution (₹ Amounts & Paperless KYC)\n"
-            "• Clip 3 (16-24s): Climax & Apply Now CTA\n"
-            "• Sequential Stitching to 24s Reel (9:16)\n\n"
-            "⏳ <i>Please wait ~30-45 seconds! Complete preview with approval buttons will arrive here.</i>"
+            "• Clip 1 (0-8s): 🏠 Home Loan - Dream of 'Apna Ghar' for Middle-Class Families\n"
+            "• Clip 2 (8-16s): 🏢 Loan Against Property (LAP) - High Capital for Business Growth\n"
+            "• Clip 3 (16-24s): 💼 Complete Solutions (Home, LAP, Personal & Business Loans) & Apply Online\n"
+            "• Sequential Stitching to 24s Reel (9:16) with Indian Voiceover & Branding\n\n"
+            "⏳ <b>Please wait at least 5 minutes (~5 to 6 minutes)!</b> High-definition AI video rendering (minimum 5 minutes per clip wait time), neural voiceover synthesis, and clip compilation take extra time. Complete preview with approval buttons will arrive here."
         )
         import threading
         def _run_24s_cmd():
@@ -1887,7 +2451,10 @@ def handle_text_message(message: dict):
                     product_name="Loan Solutions",
                     product_category="Finance",
                     platforms=["facebook", "instagram"],
-                    send_to_telegram=True
+                    send_to_telegram=True,
+                    send_individual_clips=True,
+                    logo_path=LOAN_SOLUTIONS_PATH if os.path.exists(LOAN_SOLUTIONS_PATH) else None,
+                    chat_id=chat_id
                 )
             except Exception as e_v:
                 logger.error(f"Error generating 24s video from command: {e_v}")
@@ -1896,11 +2463,21 @@ def handle_text_message(message: dict):
         threading.Thread(target=_run_24s_cmd, daemon=True).start()
         return
 
-    # Direct Follow Commands: /follow @user or follow @user
+    # Direct Follow Stats Commands: /followstats, /stats, /leads
+    if clean_text in ["/followstats", "/stats", "stats", "/leads", "/leadsstats"]:
+        from telegram.bot import send_instagram_leads_stats_menu
+        send_instagram_leads_stats_menu(chat_id)
+        return
+
+    # Direct Follow Commands: /follow @user, follow @user, /user @user, /profile @user
     import re
-    if clean_text.startswith("/follow") or clean_text.startswith("follow @") or clean_text.startswith("follow "):
+    is_follow_cmd = any(clean_text.startswith(p) for p in [
+        "/follow", "follow @", "follow ",
+        "/user ", "user ", "/profile ", "profile "
+    ])
+    if is_follow_cmd:
         raw_cmd = text
-        for prefix in ["/follow", "follow @", "follow"]:
+        for prefix in ["/follow", "follow @", "follow", "/user ", "user ", "/profile ", "profile "]:
             if raw_cmd.lower().startswith(prefix):
                 raw_cmd = raw_cmd[len(prefix):].strip()
                 break
@@ -1933,7 +2510,7 @@ def handle_text_message(message: dict):
         else:
             send_text_message(
                 chat_id,
-                "⚠️ <b>Invalid format.</b> Please specify an account with @username (e.g. <code>@lucknowi_vibes_</code>) or use /cancel."
+                "⚠️ <b>Invalid format.</b> Please specify an account with @username (e.g. <code>@rahul_verma</code>) or use /cancel."
             )
         return
 
@@ -2100,23 +2677,41 @@ def handle_text_message(message: dict):
     elif session.get("action") == "AWAITING_REVISION":
         campaign_id = session.get("campaign_id", "")
         del chat_sessions[chat_id]
+
+        from db_campaigns import get_campaign_from_db
+        existing_camp = get_campaign_from_db(campaign_id) if campaign_id else {}
+        db_rev = existing_camp.get("revision_count", 0)
+        rev_count = db_rev + 1
+        camp_platform = existing_camp.get("llm_provider") or "gemini"
+        camp_platforms = existing_camp.get("platforms") or ["facebook", "instagram"]
+        product_obj = existing_camp.get("product") or {}
+        prod_name = product_obj.get("name") or "Featured Product"
+
         send_text_message(
             chat_id,
-            f"🔄 <b>Revision note recorded:</b> <i>\"{text}\"</i>\n\n"
-            f"🤖 <b>Regenerating Content:</b> Opening Chrome and prompting ChatGPT with your feedback...\n"
-            f"🎨 Crafting new custom graphic & viral copy...\n"
-            f"⏳ <i>Please wait ~35-50 seconds. A new preview with approval buttons will be sent here!</i>"
+            f"🔄 <b>Revision #{rev_count} recorded for {prod_name}:</b>\n<i>\"{text}\"</i>\n\n"
+            f"🤖 <b>Regenerating Content:</b> Opening Chrome and prompting {camp_platform.upper()} with your revision feedback...\n"
+            f"🎨 Crafting new custom visual graphic & viral copy...\n"
+            f"⏳ <i>Please wait ~35-50 seconds. An updated preview card with approval buttons will be sent here!</i>"
         )
+
+        contact_num = existing_camp.get("contact_number") or (product_obj.get("contact_number") if product_obj else None)
+        phone_match = re.search(r"\b([6-9]\d{9})\b", text)
+        if phone_match:
+            contact_num = phone_match.group(1)
 
         import threading
         def _run_revision():
             try:
                 from browser.human_operator import execute_human_generation_and_telegram_flow
                 execute_human_generation_and_telegram_flow(
-                    platform="chatgpt",
-                    custom_instructions=f"User revision request: {text}",
+                    platform=camp_platform,
+                    product=product_obj,
+                    custom_instructions=f"REVISION #{rev_count} REQUEST: {text}. Incorporate these specific user requirements into both the visual image and marketing copy.",
                     campaign_id=campaign_id,
-                    platforms=["facebook", "instagram"]
+                    platforms=camp_platforms,
+                    revision_count=rev_count,
+                    contact_number=contact_num
                 )
             except Exception as e_rev:
                 logger.error(f"Error during Telegram revision generation: {e_rev}")
@@ -2202,8 +2797,39 @@ def handle_incoming_message(message: dict):
     handle_text_message(message)
 
 
+def ensure_single_poller_instance():
+    """
+    Ensures that only this process is polling Telegram.
+    Finds and terminates any other running python instances running poller.py.
+    """
+    try:
+        import psutil
+        my_pid = os.getpid()
+        killed = 0
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['pid'] == my_pid:
+                    continue
+                name = (proc.info.get('name') or '').lower()
+                if 'python' in name:
+                    cmdline = proc.info.get('cmdline') or []
+                    cmd_str = ' '.join(cmdline).lower()
+                    if 'poller.py' in cmd_str:
+                        logger.warning(f"Terminating duplicate Telegram poller process (PID {proc.info['pid']})...")
+                        proc.kill()
+                        killed += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        if killed > 0:
+            time.sleep(1.0)
+            logger.info(f"Cleaned up {killed} duplicate Telegram poller process(es).")
+    except Exception as e:
+        logger.debug(f"Poller singleton check notice: {e}")
+
+
 def start_polling():
     """Continuously long-polls Telegram for updates."""
+    ensure_single_poller_instance()
     bot_token, chat_id = get_telegram_credentials()
     if not bot_token:
         print("[ERROR] TELEGRAM_BOT_TOKEN not configured.", flush=True)
@@ -2237,7 +2863,12 @@ def start_polling():
                     elif "message" in update:
                         handle_incoming_message(update["message"])
 
-            time.sleep(1)
+            if res.get("error_code") == 409 or "409" in str(res.get("description", "")):
+                logger.warning("Telegram 409 Conflict: another instance called getUpdates. Enforcing singleton poller...")
+                ensure_single_poller_instance()
+                time.sleep(5)
+            else:
+                time.sleep(1)
 
         except KeyboardInterrupt:
             print("\nPoller stopped.", flush=True)

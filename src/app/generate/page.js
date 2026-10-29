@@ -13,20 +13,24 @@ import {
 } from "@/lib/constants";
 
 const STEPS = [
-  { number: 1, label: "Product" },
-  { number: 2, label: "AI Provider" },
-  { number: 3, label: "Platforms" },
-  { number: 4, label: "Settings" },
-  { number: 5, label: "Generate" },
+  { number: 1, label: "Account" },
+  { number: 2, label: "Product" },
+  { number: 3, label: "AI Provider" },
+  { number: 4, label: "Platforms" },
+  { number: 5, label: "Settings" },
+  { number: 6, label: "Generate" },
 ];
 
 export default function GeneratePage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [products, setProducts] = useState([]);
+  const [chromeAccounts, setChromeAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   const [config, setConfig] = useState({
+    accountId: "acc_default",
+    profileDir: "Default",
     selectedProducts: [],
     llmProvider: "chatgpt",
     selectedPlatforms: [],
@@ -39,6 +43,7 @@ export default function GeneratePage() {
     videoDuration: 15,
     visualStyle: "auto",
     customInstructions: "",
+    contactNumber: "",
     skillImagePath: "",
     skillImageUrl: "",
     skillImageName: "",
@@ -75,11 +80,39 @@ export default function GeneratePage() {
     }
   }
 
+  async function fetchChromeAccounts() {
+    try {
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setChromeAccounts(data);
+        const defAcc = data.find((a) => (a.profile_dir || a.profile_directory) === "Default" || a.is_default) || data[0];
+        const defPdir = defAcc?.profile_dir || defAcc?.profile_directory || "Default";
+        const defId = defAcc?.id || "acc_default";
+        setConfig((prev) => ({
+          ...prev,
+          accountId: prev.accountId && prev.accountId !== "1" ? prev.accountId : defId,
+          profileDir: prev.profileDir || defPdir,
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch Chrome accounts:", error);
+    }
+  }
+
   async function fetchProducts() {
     try {
       const res = await fetch("/api/products");
       const data = await res.json();
       setProducts(data);
+      if (Array.isArray(data) && data.length > 0) {
+        const loanProd = data.find((p) => p.name?.toLowerCase().includes("loan")) || data[0];
+        setConfig((prev) => ({
+          ...prev,
+          selectedProducts: prev.selectedProducts.length > 0 ? prev.selectedProducts : [loanProd.id],
+          contactNumber: prev.contactNumber || loanProd.contact_number || (loanProd.name?.toLowerCase().includes("loan") ? "8112570656" : ""),
+        }));
+      }
     } catch (error) {
       console.error("Failed to fetch products:", error);
     } finally {
@@ -89,15 +122,33 @@ export default function GeneratePage() {
 
   useEffect(() => {
     fetchProducts();
+    fetchChromeAccounts();
   }, []);
 
   function toggleProduct(id) {
-    setConfig((prev) => ({
-      ...prev,
-      selectedProducts: prev.selectedProducts.includes(id)
+    setConfig((prev) => {
+      const isSelected = prev.selectedProducts.includes(id);
+      const newSelected = isSelected
         ? prev.selectedProducts.filter((p) => p !== id)
-        : [...prev.selectedProducts, id],
-    }));
+        : [...prev.selectedProducts, id];
+
+      // Auto-suggest contact number from selected product
+      const newlySelectedProduct = products.find((p) => p.id === id);
+      let newContactNumber = prev.contactNumber;
+      if (!isSelected && newlySelectedProduct) {
+        if (newlySelectedProduct.contact_number) {
+          newContactNumber = newlySelectedProduct.contact_number;
+        } else if (newlySelectedProduct.name?.toLowerCase().includes("loan")) {
+          newContactNumber = "8112570656";
+        }
+      }
+
+      return {
+        ...prev,
+        selectedProducts: newSelected,
+        contactNumber: newContactNumber,
+      };
+    });
   }
 
   function togglePlatform(platform) {
@@ -111,10 +162,12 @@ export default function GeneratePage() {
 
   function canProceed() {
     switch (currentStep) {
-      case 1: return config.selectedProducts.length > 0;
-      case 2: return !!config.llmProvider;
-      case 3: return config.selectedPlatforms.length > 0;
-      case 4: return true;
+      case 1: return !!config.accountId;
+      case 2: return config.selectedProducts.length > 0;
+      case 3: return !!config.llmProvider;
+      case 4: return config.selectedPlatforms.length > 0;
+      case 5: return true;
+      case 6: return true;
       default: return true;
     }
   }
@@ -134,21 +187,24 @@ export default function GeneratePage() {
 
   async function handleDirectPublish(platToPost) {
     if (!generatedCampaign) return;
-    const plat = platToPost || directPostPlatform || "facebook";
+    const plats = Array.isArray(platToPost)
+      ? platToPost
+      : [platToPost || directPostPlatform || "facebook"];
     setDirectPosting(true);
     setDirectPostStatus("posting");
-    setDirectPostMessage(`Connecting to browser and publishing to ${plat.toUpperCase()}...`);
+    const label = plats.map((p) => p.toUpperCase()).join(" + ");
+    setDirectPostMessage(`Connecting to browser and publishing to ${label}...`);
 
     try {
       const res = await fetch(`/api/campaigns/${generatedCampaign.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", platform: plat }),
+        body: JSON.stringify({ action: "approve", platforms: plats }),
       });
       const data = await res.json();
       if (res.ok) {
         setDirectPostStatus("success");
-        setDirectPostMessage(data.message || `🎉 Successfully published to ${plat.toUpperCase()} and saved in campaigns!`);
+        setDirectPostMessage(data.message || `🎉 Successfully published to ${label} and saved in campaigns!`);
         setGeneratedCampaign((prev) => ({ ...prev, status: "posted" }));
       } else {
         setDirectPostStatus("error");
@@ -173,7 +229,10 @@ export default function GeneratePage() {
     setDirectPosting(false);
     setDirectPostStatus("idle");
     setDirectPostMessage("");
+    const defAcc = chromeAccounts.find((a) => (a.profile_dir || a.profile_directory) === "Default") || chromeAccounts[0];
     setConfig({
+      accountId: defAcc?.id || "acc_default",
+      profileDir: defAcc?.profile_dir || defAcc?.profile_directory || "Default",
       selectedProducts: products.length > 0 ? [products[0].id] : [],
       llmProvider: "chatgpt",
       selectedPlatforms: ["facebook", "instagram"],
@@ -186,6 +245,7 @@ export default function GeneratePage() {
       videoDuration: 15,
       visualStyle: "auto",
       customInstructions: "",
+      contactNumber: "8112570656",
       skillImagePath: "",
       skillImageUrl: "",
       skillImageName: "",
@@ -199,19 +259,23 @@ export default function GeneratePage() {
     setHumanCurrentStep(1);
 
     const providerLabel = LLM_PROVIDERS[config.llmProvider]?.name || config.llmProvider.toUpperCase();
+    const selAcc = chromeAccounts.find((a) => a.id === config.accountId || (a.profile_dir || a.profile_directory) === config.profileDir) || chromeAccounts[0];
+    const accName = selAcc?.google_name || selAcc?.name || "Shivam Mishra";
+    const accEmail = selAcc?.google_email || selAcc?.email || "2003shivam1990@gmail.com";
+    const accPdir = selAcc?.profile_dir || selAcc?.profile_directory || config.profileDir || "Default";
 
     setHumanLogs([
-      `🌐 Step 1: Launching Google Chrome like a human with Shivam Mishra's profile...`,
+      `🌐 Step 1: Launching Google Chrome like a human with ${accName}'s profile (${accPdir})...`,
     ]);
-    setGenerateStatus(`🌐 Step 1: Launching Chrome like a human with profile 2003shivam1990@gmail.com...`);
+    setGenerateStatus(`🌐 Step 1: Launching Chrome like a human with profile ${accPdir} (${accEmail})...`);
 
     const timer1 = setTimeout(() => {
       setHumanCurrentStep(2);
       setHumanLogs((prev) => [
         ...prev,
-        `👤 Step 2: Selecting / verifying account: Shivam Mishra (2003shivam1990@gmail.com)...`,
+        `👤 Step 2: Selecting / verifying account: ${accName} (${accEmail})...`,
       ]);
-      setGenerateStatus(`👤 Step 2: Selecting account: Shivam Mishra...`);
+      setGenerateStatus(`👤 Step 2: Selecting account: ${accName}...`);
     }, 2800);
 
     const timer2 = setTimeout(() => {
@@ -223,22 +287,36 @@ export default function GeneratePage() {
       setGenerateStatus(`💬 Step 3: Navigating to ${providerLabel} & human-typing prompt...`);
     }, 6500);
 
+    const isVideo = config.contentType === "video";
     const timer3 = setTimeout(() => {
       setHumanCurrentStep(4);
       setHumanLogs((prev) => [
         ...prev,
-        `🎨 Step 4: AI generating marketing copy & synthesizing branded graphic asset...`,
+        isVideo
+          ? `🎬 Step 4: AI rendering sequential 8s video clips & neural voiceover (Minimum 5 minutes waiting time / 300s per clip)...`
+          : `🎨 Step 4: AI generating marketing copy & synthesizing branded graphic asset...`,
       ]);
-      setGenerateStatus(`🎨 Step 4: Generating marketing copy & visual assets...`);
+      setGenerateStatus(
+        isVideo
+          ? `🎬 Step 4: Video generation in progress (Minimum 5 minutes wait time)...`
+          : `🎨 Step 4: Generating marketing copy & visual assets...`
+      );
     }, 13000);
 
     const timer4 = setTimeout(() => {
-      setHumanCurrentStep(5);
-      setHumanLogs((prev) => [
-        ...prev,
-        `📱 Step 5: Dispatching preview to Telegram bot for review & approval...`,
-      ]);
-      setGenerateStatus(`📱 Step 5: Dispatching preview to Telegram...`);
+      if (!isVideo) {
+        setHumanCurrentStep(5);
+        setHumanLogs((prev) => [
+          ...prev,
+          `📱 Step 5: Dispatching preview to Telegram bot for review & approval...`,
+        ]);
+        setGenerateStatus(`📱 Step 5: Dispatching preview to Telegram...`);
+      } else {
+        setHumanLogs((prev) => [
+          ...prev,
+          `⏳ Video pipeline active: Generating clips with Indian voiceover & branding (~5 to 6 minutes total)...`,
+        ]);
+      }
     }, 20000);
 
     try {
@@ -247,6 +325,8 @@ export default function GeneratePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...config,
+          accountId: selAcc?.id || config.accountId,
+          profileDir: accPdir,
           humanFlow: humanFlowActive,
         }),
       });
@@ -341,8 +421,122 @@ export default function GeneratePage() {
 
       {/* Step Content */}
       <div className="card animate-scaleIn" key={currentStep}>
-        {/* Step 1: Select Products */}
+        {/* Step 1: Select Google Chrome Account & Profile */}
         {currentStep === 1 && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "var(--font-xl)", fontWeight: 700 }}>
+                  🌐 Select Google Chrome Account & Profile
+                </h3>
+                <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginTop: "var(--space-1)" }}>
+                  Choose which Google Chrome account to run automation on. Each account is mapped with its social media identity (Facebook & Instagram):
+                </p>
+              </div>
+              <span className="tag tag-info" style={{ fontWeight: 600, padding: "4px 10px" }}>
+                7 Chrome Profiles Connected
+              </span>
+            </div>
+
+            <div className="grid-auto" style={{ gap: "var(--space-4)" }}>
+              {chromeAccounts.map((acc, idx) => {
+                const accName = acc.google_name || acc.name || `Account ${idx + 1}`;
+                const accEmail = acc.google_email || acc.email || "Google Account";
+                const accPdir = acc.profile_dir || acc.profile_directory || "Default";
+                const isSelected = config.accountId === acc.id || config.profileDir === accPdir;
+                return (
+                  <div
+                    key={acc.id}
+                    onClick={() => setConfig((prev) => ({ ...prev, accountId: acc.id, profileDir: accPdir }))}
+                    style={{
+                      padding: "var(--space-4) var(--space-5)",
+                      border: `2px solid ${isSelected ? "var(--accent-primary)" : "var(--border)"}`,
+                      borderRadius: "var(--radius-lg)",
+                      cursor: "pointer",
+                      background: isSelected ? "var(--accent-primary-muted)" : "var(--bg-tertiary)",
+                      boxShadow: isSelected ? "0 0 16px rgba(124, 92, 252, 0.25)" : "none",
+                      transition: "all var(--transition-fast)",
+                      position: "relative",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                        <div
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: "var(--radius-full)",
+                            background: isSelected ? "var(--accent-primary)" : "rgba(255,255,255,0.08)",
+                            color: "#fff",
+                            fontWeight: 700,
+                            fontSize: "var(--font-md)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {accName ? accName.charAt(0).toUpperCase() : idx + 1}
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: "var(--font-md)", fontWeight: 600 }}>{accName}</h4>
+                          <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-secondary)", fontFamily: "monospace" }}>
+                            {accEmail}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: "var(--radius-full)",
+                          border: `2px solid ${isSelected ? "var(--accent-primary)" : "var(--border)"}`,
+                          background: isSelected ? "var(--accent-primary)" : "transparent",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "var(--font-xs)",
+                          color: "white",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isSelected && "✓"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "var(--space-3)",
+                        paddingTop: "var(--space-3)",
+                        borderTop: "1px solid rgba(255,255,255,0.06)",
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "var(--space-2)",
+                        fontSize: "var(--font-xs)",
+                      }}
+                    >
+                      <div style={{ background: "rgba(24, 119, 242, 0.08)", padding: "6px 8px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(24, 119, 242, 0.2)" }}>
+                        <span style={{ color: "#1877F2", fontWeight: 700, display: "block" }}>📘 Facebook:</span>
+                        <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{acc.facebook_name || "Linked"}</span>
+                      </div>
+                      <div style={{ background: "rgba(225, 48, 108, 0.08)", padding: "6px 8px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(225, 48, 108, 0.2)" }}>
+                        <span style={{ color: "#E1306C", fontWeight: 700, display: "block" }}>📸 Instagram:</span>
+                        <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>@{acc.instagram_username || "profile"}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "var(--space-2)", fontSize: "11px", color: "var(--text-tertiary)" }}>
+                      📁 Chrome Profile: <code>{accPdir}</code>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Select Products */}
+        {currentStep === 2 && (
           <div>
             <h3 style={{ marginBottom: "var(--space-2)" }}>Select Product(s)</h3>
             <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-6)" }}>
@@ -406,8 +600,8 @@ export default function GeneratePage() {
           </div>
         )}
 
-        {/* Step 2: LLM Provider */}
-        {currentStep === 2 && (
+        {/* Step 3: LLM Provider */}
+        {currentStep === 3 && (
           <div>
             <h3 style={{ marginBottom: "var(--space-2)" }}>Choose AI Provider</h3>
             <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-6)" }}>
@@ -444,8 +638,8 @@ export default function GeneratePage() {
           </div>
         )}
 
-        {/* Step 3: Target Platforms */}
-        {currentStep === 3 && (
+        {/* Step 4: Target Platforms */}
+        {currentStep === 4 && (
           <div>
             <h3 style={{ marginBottom: "var(--space-2)" }}>Select Target Platforms</h3>
             <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-6)" }}>
@@ -500,8 +694,8 @@ export default function GeneratePage() {
           </div>
         )}
 
-        {/* Step 4: Content Settings */}
-        {currentStep === 4 && (
+        {/* Step 5: Content Settings */}
+        {currentStep === 5 && (
           <div>
             <h3 style={{ marginBottom: "var(--space-2)" }}>Content Settings</h3>
             <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-6)" }}>
@@ -610,7 +804,7 @@ export default function GeneratePage() {
                       <div className="form-group">
                         <label className="form-label">Video Duration</label>
                         <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                          {[15, 30, 60].map((d) => (
+                          {[15, 24, 30, 60].map((d) => (
                             <button
                               key={d}
                               className={`btn btn-sm ${config.videoDuration === d ? "btn-primary" : "btn-secondary"}`}
@@ -619,6 +813,10 @@ export default function GeneratePage() {
                               {d}s
                             </button>
                           ))}
+                        </div>
+                        <div style={{ marginTop: "var(--space-2)", fontSize: "var(--font-xs)", color: "var(--accent-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>⏳</span>
+                          <span><strong>Video Generation Timing:</strong> Minimum 5 minutes waiting time (300s per clip) for 3-clip high-definition AI rendering & neural voiceover.</span>
                         </div>
                       </div>
                     )}
@@ -737,6 +935,44 @@ export default function GeneratePage() {
                 </>
               )}
 
+              {/* Optional Mobile / Contact Number */}
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
+                  <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>
+                    📞 Contact / Mobile Number (Optional)
+                  </label>
+                  <span style={{ fontSize: "var(--font-xs)", color: "var(--accent-primary)", fontWeight: 500 }}>
+                    Reflects on image badge & caption CTA
+                  </span>
+                </div>
+                <div style={{ position: "relative" }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: "var(--space-3)",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      fontSize: "var(--font-sm)",
+                      color: "var(--text-tertiary)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    +91
+                  </span>
+                  <input
+                    type="tel"
+                    className="form-input"
+                    style={{ paddingLeft: "3.2rem" }}
+                    placeholder="e.g. 8112570656"
+                    value={config.contactNumber}
+                    onChange={(e) => setConfig({ ...config, contactNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                  />
+                </div>
+                <p style={{ fontSize: "var(--font-xs)", color: "var(--text-secondary)", marginTop: "var(--space-1)" }}>
+                  Enter a 10-digit mobile number. When provided, an official <em>📞 Call / WhatsApp</em> badge is drawn directly on the visual graphic, and Line 2 of the post caption includes this direct contact CTA.
+                </p>
+              </div>
+
               {/* Custom Instructions */}
               <div className="form-group">
                 <label className="form-label">Custom Instructions</label>
@@ -752,8 +988,8 @@ export default function GeneratePage() {
           </div>
         )}
 
-        {/* Step 5: Review & Generate */}
-        {currentStep === 5 && (
+        {/* Step 6: Review & Generate */}
+        {currentStep === 6 && (
           <div>
             <h3 style={{ marginBottom: "var(--space-2)" }}>Review & Generate</h3>
             <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-6)" }}>
@@ -772,6 +1008,17 @@ export default function GeneratePage() {
                   borderRadius: "var(--radius-md)",
                 }}
               >
+                <span style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>Chrome Account:</span>
+                <span style={{ fontSize: "var(--font-sm)", fontWeight: 600 }}>
+                  👤 {chromeAccounts.find((a) => a.id === config.accountId || (a.profile_dir || a.profile_directory) === config.profileDir)?.google_name || chromeAccounts.find((a) => a.id === config.accountId || (a.profile_dir || a.profile_directory) === config.profileDir)?.name || "Shivam Mishra"} (<code>{config.profileDir}</code>)
+                </span>
+
+                <span style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>Social Profiles:</span>
+                <span style={{ fontSize: "var(--font-sm)", fontWeight: 600 }}>
+                  📘 {chromeAccounts.find((a) => a.id === config.accountId || (a.profile_dir || a.profile_directory) === config.profileDir)?.facebook_name || "Linked FB"} &nbsp;|&nbsp; 
+                  📸 @{chromeAccounts.find((a) => a.id === config.accountId || (a.profile_dir || a.profile_directory) === config.profileDir)?.instagram_username || "Linked IG"}
+                </span>
+
                 <span style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>Products:</span>
                 <span style={{ fontSize: "var(--font-sm)", fontWeight: 600 }}>
                   {config.selectedProducts.map((id) => products.find((p) => p.id === id)?.name).join(", ")}
@@ -814,6 +1061,11 @@ export default function GeneratePage() {
                       {config.visualStyle}
                     </span>
 
+                    <span style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>Helpline / Contact:</span>
+                    <span style={{ fontSize: "var(--font-sm)", fontWeight: 600, color: config.contactNumber ? "var(--accent-primary)" : "var(--text-tertiary)" }}>
+                      {config.contactNumber ? `📞 +91 ${config.contactNumber}` : "None specified"}
+                    </span>
+
                     {config.skillImageName && (
                       <>
                         <span style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>Skill Image:</span>
@@ -824,6 +1076,28 @@ export default function GeneratePage() {
                     )}
                   </>
                 )}
+              </div>
+
+              {/* Telegram Lifecycle Alert Badge */}
+              <div
+                style={{
+                  padding: "var(--space-3) var(--space-4)",
+                  background: "rgba(0, 136, 204, 0.08)",
+                  border: "1px solid rgba(0, 136, 204, 0.3)",
+                  borderRadius: "var(--radius-md)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-3)",
+                  fontSize: "var(--font-xs)",
+                }}
+              >
+                <span style={{ fontSize: "1.3rem" }}>🔔</span>
+                <div>
+                  <strong style={{ color: "#0088cc", display: "block" }}>Real-time Telegram Lifecycle Alerts Enabled:</strong>
+                  <span style={{ color: "var(--text-secondary)" }}>
+                    Immediate notifications will be sent to Telegram when this task starts (with Google & Social profile identities) and when it completes with live Facebook and Instagram links.
+                  </span>
+                </div>
               </div>
 
               {/* Human Flow Mode Selector */}
@@ -1182,6 +1456,36 @@ export default function GeneratePage() {
                     </div>
 
                     <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", flexWrap: "wrap" }}>
+                      {config.selectedPlatforms.length > 1 && (
+                        <button
+                          onClick={() => handleDirectPublish(config.selectedPlatforms)}
+                          disabled={directPosting}
+                          className="btn"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "var(--space-2)",
+                            padding: "var(--space-2) var(--space-4)",
+                            fontWeight: 700,
+                            background: "linear-gradient(135deg, #7C5CFC, #4F46E5)",
+                            color: "#fff",
+                            boxShadow: "0 4px 14px rgba(124, 92, 252, 0.4)",
+                          }}
+                          title={`Broadcast to all ${config.selectedPlatforms.length} selected platforms (${config.selectedPlatforms.join(", ")})`}
+                        >
+                          {directPosting ? (
+                            <>
+                              <span className="spinner" style={{ width: 16, height: 16 }} />
+                              Broadcasting...
+                            </>
+                          ) : (
+                            <>
+                              <span>🚀</span> Broadcast to Both ({config.selectedPlatforms.map((p) => p.toUpperCase()).join(" + ")})
+                            </>
+                          )}
+                        </button>
+                      )}
+
                       <button
                         onClick={() => handleDirectPublish(directPostPlatform)}
                         disabled={directPosting}
@@ -1201,7 +1505,7 @@ export default function GeneratePage() {
                           </>
                         ) : (
                           <>
-                            <span>⚡</span> Publish to {directPostPlatform.toUpperCase()} & Save Campaign
+                            <span>⚡</span> Publish to {directPostPlatform.toUpperCase()} Only
                           </>
                         )}
                       </button>
@@ -1294,10 +1598,10 @@ export default function GeneratePage() {
         >
           ← Previous
         </button>
-        {currentStep < 5 && (
+        {currentStep < 6 && (
           <button
             className="btn btn-primary"
-            onClick={() => setCurrentStep((prev) => Math.min(5, prev + 1))}
+            onClick={() => setCurrentStep((prev) => Math.min(6, prev + 1))}
             disabled={!canProceed()}
           >
             Next →

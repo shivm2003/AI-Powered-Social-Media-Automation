@@ -220,26 +220,47 @@ export async function POST(request) {
     for (const platform of finalPlatforms) {
       try {
         const targetPlatformDir = path.join(chromeProfilesDir, platform);
-        const targetDefaultDir = path.join(targetPlatformDir, "Default");
+        const isShared = platform === "shared_browser";
+        const targetDestDir = isShared
+          ? path.join(targetPlatformDir, profileId)
+          : path.join(targetPlatformDir, "Default");
 
-        fs.mkdirSync(targetDefaultDir, { recursive: true });
+        fs.mkdirSync(targetDestDir, { recursive: true });
 
         // ── 1. Create SANITIZED Local State ──
-        // Critical: keep os_crypt (DPAPI encryption key) but set ONLY Default in info_cache
-        // and set picker_shown: false so Chrome NEVER opens the profile selector screen!
         if (localStateRaw && localStateRaw.os_crypt) {
-          const selectedInfo = localStateRaw?.profile?.info_cache?.[profileId] || { name: profileName };
+          let sanitizedInfoCache = {};
+          if (isShared) {
+            const rawInfoCache = localStateRaw?.profile?.info_cache || {};
+            for (const [pKey, pInfo] of Object.entries(rawInfoCache)) {
+              sanitizedInfoCache[pKey] = {
+                active_time: pInfo.active_time || 0,
+                avatar_icon: pInfo.avatar_icon || "chrome://theme/IDR_PROFILE_AVATAR_26",
+                gaia_id: pInfo.gaia_id || "",
+                gaia_name: pInfo.gaia_name || "",
+                hosted_domain: pInfo.hosted_domain || "NO_HOSTED_DOMAIN",
+                name: pInfo.name || pKey,
+                shortcut_name: pInfo.shortcut_name || pKey,
+                user_name: pInfo.user_name || "",
+              };
+            }
+          } else {
+            const selectedInfo = localStateRaw?.profile?.info_cache?.[profileId] || { name: profileName };
+            sanitizedInfoCache = {
+              Default: {
+                ...selectedInfo,
+                name: selectedInfo.name || "Default",
+              },
+            };
+          }
+
           const sanitizedLocalState = {
             os_crypt: localStateRaw.os_crypt,
             profile: {
-              info_cache: {
-                Default: {
-                  ...selectedInfo,
-                  name: selectedInfo.name || "Default",
-                },
-              },
-              last_used: "Default",
+              info_cache: sanitizedInfoCache,
+              last_used: isShared ? profileId : "Default",
               picker_shown: false,
+              ...(isShared ? { profiles_order: Object.keys(localStateRaw?.profile?.info_cache || {}) } : {}),
             },
           };
           fs.writeFileSync(
@@ -252,7 +273,7 @@ export async function POST(request) {
         // ── 2. Copy essential profile files ──
         for (const fname of essentialFiles) {
           const srcFile = path.join(srcProfileDir, fname);
-          copyFileSafe(srcFile, path.join(targetDefaultDir, fname));
+          copyFileSafe(srcFile, path.join(targetDestDir, fname));
         }
 
         // ── 3. Copy essential directories cleanly (no lock files) ──

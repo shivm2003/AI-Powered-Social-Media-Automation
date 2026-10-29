@@ -33,7 +33,14 @@ export async function POST(request) {
       targetCount = 10,
       safetyDelay = 15,
       mode = "location",
+      accountId,
+      profileDir,
+      account_id,
+      profile_dir,
     } = body;
+
+    const effectiveAccountId = accountId || account_id;
+    const effectiveProfileDir = profileDir || profile_dir;
 
     const campaignId = uuidv4();
     const effectiveLocation = mode === "suggestions" 
@@ -50,7 +57,7 @@ export async function POST(request) {
       target_count: parseInt(targetCount, 10),
       safety_delay_seconds: parseInt(safetyDelay, 10),
       status: "running",
-      logs: [`Outreach initiated from Web Dashboard | Mode: ${mode}`],
+      logs: [`Outreach initiated from Web Dashboard | Mode: ${mode}${effectiveProfileDir ? ` | Profile: ${effectiveProfileDir}` : ""}`],
     });
 
     // 2. Launch execution via automation runner with dynamic timeout based on request count
@@ -63,6 +70,8 @@ export async function POST(request) {
       mode,
       target_count: parseInt(targetCount, 10),
       safety_delay: parseInt(safetyDelay, 10),
+      account_id: effectiveAccountId,
+      profile_dir: effectiveProfileDir,
     }, effectiveTimeoutMs).catch((err) => {
       console.error(`Growth outreach process error for ${campaignId}:`, err);
       updateGrowthCampaignStatus(campaignId, "failed", { logs: [err.message] });

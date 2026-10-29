@@ -11,22 +11,27 @@ LOAN_SOLUTIONS_APPLY_URL = "https://loansolutions.everythingrental.in/applicatio
 def ensure_apply_now_at_start(
     caption: str,
     apply_url: str = LOAN_SOLUTIONS_APPLY_URL,
-    is_loan: bool = True
+    is_loan: bool = True,
+    contact_number: str = None
 ) -> str:
     """
-    Ensures that '👉 Apply Now: {apply_url}' is strictly placed at the VERY START (Line 1)
-    of the caption. Strips any duplicate or trailing Apply Now links from the rest of the text.
+    Ensures that '👉 Apply Now: {apply_url}' and optional '📞 Call / WhatsApp: {contact_number}'
+    are strictly placed at the VERY START (Lines 1-2) of the caption.
+    Strips any duplicate or trailing Apply Now and phone lines from the rest of the text.
     """
-    if not caption:
-        return f"👉 Apply Now: {apply_url}" if is_loan else ""
-
-    if not is_loan:
-        return caption.strip()
-
+    phone = contact_number or ("8112570656" if is_loan else None)
     target_url = apply_url or LOAN_SOLUTIONS_APPLY_URL
-    cta_line = f"👉 Apply Now: {target_url}"
 
-    # Strip existing variations of Apply Now anywhere in the text
+    header_lines = []
+    if is_loan:
+        header_lines.append(f"👉 Apply Now: {target_url}")
+    if phone:
+        header_lines.append(f"📞 Call / WhatsApp: +91 {phone}")
+    cta_block = "\n".join(header_lines)
+
+    if not caption:
+        return cta_block
+
     cleaned = caption
     patterns_to_remove = [
         r"👉\s*Apply\s+Now\s*:\s*https?://\S+",
@@ -34,6 +39,15 @@ def ensure_apply_now_at_start(
         r"Apply\s+Now\s*:\s*https?://\S+",
         re.escape(target_url),
     ]
+    if phone:
+        patterns_to_remove.extend([
+            rf"📞\s*Call\s*/\s*WhatsApp\s*:\s*\+?91[\s-]*{phone}",
+            rf"📞\s*Call\s*/\s*WhatsApp\s*:\s*{phone}",
+            rf"Call\s*/\s*WhatsApp\s*:\s*{phone}",
+            rf"Call\s*:\s*{phone}",
+            rf"WhatsApp\s*:\s*{phone}",
+            re.escape(phone),
+        ])
 
     for pat in patterns_to_remove:
         cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE)
@@ -41,8 +55,7 @@ def ensure_apply_now_at_start(
     # Clean up excess whitespace and blank lines
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
-    # Prepend CTA line at the very top (Line 1)
     if cleaned:
-        return f"{cta_line}\n\n{cleaned}"
+        return f"{cta_block}\n\n{cleaned}" if cta_block else cleaned
     else:
-        return cta_line
+        return cta_block

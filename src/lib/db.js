@@ -45,6 +45,7 @@ async function initializeDatabase(client) {
       disclaimer TEXT,
       custom_prompt TEXT,
       campaign_objectives TEXT DEFAULT '[]',
+      contact_number TEXT,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
@@ -93,10 +94,28 @@ async function initializeDatabase(client) {
       telegram_message_id TEXT,
       revision_notes TEXT,
       revision_count INTEGER DEFAULT 0,
+      contact_number TEXT,
+      account_id TEXT,
       posted_at TIMESTAMP WITH TIME ZONE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chrome_accounts (
+      id TEXT PRIMARY KEY,
+      profile_dir TEXT NOT NULL UNIQUE,
+      google_name TEXT NOT NULL,
+      google_email TEXT NOT NULL,
+      facebook_name TEXT,
+      facebook_id TEXT,
+      facebook_page_url TEXT,
+      instagram_username TEXT,
+      instagram_url TEXT,
+      is_default BOOLEAN DEFAULT FALSE,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -169,9 +188,9 @@ export async function createProduct(product) {
     INSERT INTO products (
       id, name, description, category, website_url, logo_path,
       target_audience, key_benefits, brand_colors, tone,
-      disclaimer, custom_prompt, campaign_objectives
+      disclaimer, custom_prompt, campaign_objectives, contact_number
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
   `;
   return query(sql, [
     product.id,
@@ -187,6 +206,7 @@ export async function createProduct(product) {
     product.disclaimer || null,
     product.custom_prompt || null,
     typeof product.campaign_objectives === "string" ? product.campaign_objectives : JSON.stringify(product.campaign_objectives || []),
+    product.contact_number || null,
   ]);
 }
 
@@ -196,8 +216,8 @@ export async function updateProduct(id, product) {
       name = $1, description = $2, category = $3, website_url = $4,
       target_audience = $5, key_benefits = $6, brand_colors = $7,
       tone = $8, disclaimer = $9, custom_prompt = $10, campaign_objectives = $11,
-      updated_at = NOW()
-    WHERE id = $12
+      contact_number = $12, updated_at = NOW()
+    WHERE id = $13
   `;
   return query(sql, [
     product.name,
@@ -211,6 +231,7 @@ export async function updateProduct(id, product) {
     product.disclaimer || null,
     product.custom_prompt || null,
     typeof product.campaign_objectives === "string" ? product.campaign_objectives : JSON.stringify(product.campaign_objectives || []),
+    product.contact_number || null,
     id,
   ]);
 }
@@ -310,9 +331,9 @@ export async function createCampaign(campaign) {
     INSERT INTO campaigns (
       id, product_id, llm_provider, content_type, language,
       platforms, audience, tone, cta, hashtags,
-      aspect_ratio, video_duration, visual_style, custom_instructions, status
+      aspect_ratio, video_duration, visual_style, custom_instructions, contact_number, account_id, status
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
   `;
   return query(sql, [
     campaign.id,
@@ -329,6 +350,8 @@ export async function createCampaign(campaign) {
     campaign.video_duration || 15,
     campaign.visual_style || "minimal",
     campaign.custom_instructions || null,
+    campaign.contact_number || null,
+    campaign.account_id || null,
     campaign.status || "draft",
   ]);
 }
@@ -362,6 +385,10 @@ export async function updateCampaignStatus(id, status, extra = {}) {
     setClauses.push(`revision_notes = $${paramIdx++}`);
     params.push(extra.revision_notes);
     setClauses.push("revision_count = revision_count + 1");
+  }
+  if (extra.contact_number) {
+    setClauses.push(`contact_number = $${paramIdx++}`);
+    params.push(extra.contact_number);
   }
   if (status === "posted") {
     setClauses.push("posted_at = NOW()");
@@ -545,4 +572,80 @@ export async function updateSocialGroup(id, status, updates = {}) {
   const { rows } = await query(sql, params);
   return rows[0] || null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHROME ACCOUNTS QUERIES (7 GOOGLE PROFILES & LINKED FB/IG)
+// ─────────────────────────────────────────────────────────────────────────────
+export async function getAllChromeAccounts() {
+  const { rows } = await query(
+    "SELECT * FROM chrome_accounts ORDER BY is_default DESC, created_at ASC"
+  );
+  return rows;
+}
+
+export async function getChromeAccountById(id) {
+  const { rows } = await query("SELECT * FROM chrome_accounts WHERE id = $1", [id]);
+  return rows[0] || null;
+}
+
+export async function getChromeAccountByProfileDir(profileDir) {
+  const { rows } = await query(
+    "SELECT * FROM chrome_accounts WHERE LOWER(profile_dir) = LOWER($1)",
+    [profileDir]
+  );
+  return rows[0] || null;
+}
+
+export async function updateChromeAccount(id, updates = {}) {
+  const {
+    facebook_name,
+    facebook_id,
+    facebook_page_url,
+    instagram_username,
+    instagram_url,
+    is_default,
+    is_active,
+  } = updates;
+
+  const sets = ["updated_at = NOW()"];
+  const params = [];
+
+  if (facebook_name !== undefined) {
+    params.push(facebook_name);
+    sets.push(`facebook_name = $${params.length}`);
+  }
+  if (facebook_id !== undefined) {
+    params.push(facebook_id);
+    sets.push(`facebook_id = $${params.length}`);
+  }
+  if (facebook_page_url !== undefined) {
+    params.push(facebook_page_url);
+    sets.push(`facebook_page_url = $${params.length}`);
+  }
+  if (instagram_username !== undefined) {
+    params.push(instagram_username);
+    sets.push(`instagram_username = $${params.length}`);
+  }
+  if (instagram_url !== undefined) {
+    params.push(instagram_url);
+    sets.push(`instagram_url = $${params.length}`);
+  }
+  if (is_default !== undefined) {
+    if (is_default) {
+      await query("UPDATE chrome_accounts SET is_default = FALSE");
+    }
+    params.push(is_default);
+    sets.push(`is_default = $${params.length}`);
+  }
+  if (is_active !== undefined) {
+    params.push(is_active);
+    sets.push(`is_active = $${params.length}`);
+  }
+
+  params.push(id);
+  const sql = `UPDATE chrome_accounts SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`;
+  const { rows } = await query(sql, params);
+  return rows[0] || null;
+}
+
 

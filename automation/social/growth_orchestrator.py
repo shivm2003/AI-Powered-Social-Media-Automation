@@ -159,15 +159,29 @@ def run_growth_campaign(
     telegram_chat_id: str = None,
     telegram_message_id: int = None,
     mode: str = "location",
+    account_id: str = None,
+    profile_dir: str = None,
+    account_info: dict = None,
+    task_obj=None,
     **kwargs
 ) -> dict:
     """
     Executes a complete growth outreach campaign (Facebook, Instagram, or Both simultaneously)
     supporting Location, Suggestions, and Random Discovery strategies.
+    Displays mapped Google Chrome Account profile identity and granular real-time activities in all status updates.
     """
     tg_chat_id = tg_chat_id or telegram_chat_id or kwargs.get("chat_id")
     tg_message_id = tg_message_id or telegram_message_id or kwargs.get("message_id")
     mode = (mode or kwargs.get("mode") or "location").lower().strip()
+    task_obj = task_obj or kwargs.get("task")
+
+    from db_campaigns import get_chrome_account
+    acc = account_info or get_chrome_account(account_id or profile_dir or kwargs.get("account_id")) or {}
+    acc_name = acc.get("google_name") or acc.get("name", "Shivam Mishra")
+    acc_email = acc.get("google_email") or acc.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc.get("profile_dir") or acc.get("profile_directory", "Default")
+    acc_fb = acc.get("facebook_name", "Techie Shivam (Loan Solutions)")
+    acc_ig = acc.get("instagram_username", "loansolutions2026")
 
     stop_event = threading.Event()
     with ACTIVE_TASKS_LOCK:
@@ -177,6 +191,8 @@ def run_growth_campaign(
             "location": location,
             "mode": mode,
             "target_count": target_count,
+            "account_id": account_id or acc.get("id"),
+            "profile_dir": acc_pdir,
             "started_at": time.time(),
         }
 
@@ -204,16 +220,26 @@ def run_growth_campaign(
     mode_badges = {
         "suggestions": "🌟 Algorithmic Suggestions (PYMK & Recommendations)",
         "random": "🎲 Random Discovery (Explore Feed Creators)",
-        "location": f"📍 Location / Keyword: {location}",
+        "location": f"📍 Location Target: {location} (Real Residents | Channels Excluded)",
     }
-    mode_title = mode_badges.get(mode, f"📍 Location Target: {location}")
+    mode_title = mode_badges.get(mode, f"📍 Location Target: {location} (Real Residents | Channels Excluded)")
 
-    logger.info(f"=== Launching Growth Campaign {campaign_id}: {clean_platform.upper()} | {mode_title} (Target: {target_count}) ===")
+    logger.info(f"=== Launching Growth Campaign {campaign_id}: {clean_platform.upper()} | {mode_title} (Target: {target_count}) [Chrome Profile: {acc_pdir}] ===")
+
+    init_activity = f"🚀 Initializing outreach engine: {mode_title}"
+    if task_obj:
+        try:
+            task_obj.set_activity(init_activity)
+        except Exception:
+            pass
 
     state = {
         "fb_sent": 0,
         "ig_sent": 0,
         "total_sent": 0,
+        "skipped_channels": 0,
+        "current_activity": init_activity,
+        "recent_activities": [init_activity],
         "last_tg_update": 0,
         "is_cooldown": False,
         "cooldown_msg": "",
@@ -226,8 +252,8 @@ def run_growth_campaign(
         now = time.time()
         if not tg_chat_id:
             return
-        # Throttle Telegram edits to max once every 3.5s to avoid hitting rate limits
-        if not force and (now - state["last_tg_update"] < 3.5):
+        # Throttle Telegram edits to max once every 3.2s to avoid hitting rate limits
+        if not force and (now - state["last_tg_update"] < 3.2):
             return
 
         state["last_tg_update"] = now
@@ -235,6 +261,11 @@ def run_growth_campaign(
         
         status_header = (
             f"🚀 <b>Outreach & Growth in Progress</b>\n\n"
+            f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+            f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+            f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+            f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+            f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
             f"🎯 <b>Strategy:</b> {mode_title}\n"
             f"🔢 <b>Target:</b> {total_target} total actions\n\n"
             f"📊 <b>Progress:</b> {progress_str} <b>{state['total_sent']}/{total_target}</b>\n"
@@ -244,11 +275,21 @@ def run_growth_campaign(
             status_header += f"📘 <b>Facebook Friends:</b> {state['fb_sent']}/{target_count}\n"
         if clean_platform in ["instagram", "both"]:
             status_header += f"📸 <b>Instagram Follows:</b> {state['ig_sent']}/{target_count}\n"
+        if state.get("skipped_channels", 0) > 0:
+            status_header += f"🛡️ <b>Skipped Channels/Pages:</b> {state['skipped_channels']}\n"
+
+        status_header += f"\n⚡ <b>CURRENT WORKING ACTIVITY:</b>\n▶️ <code>{state.get('current_activity', 'Running...')}</code>\n"
+
+        recent_acts = state.get("recent_activities", [])
+        if recent_acts:
+            status_header += "\n📜 <b>RECENT ACTIONS:</b>\n"
+            for act in recent_acts[-4:]:
+                status_header += f"• {act}\n"
 
         if state.get("is_cooldown"):
             status_header += f"\n☕ <b>Safety Break:</b> {state.get('cooldown_msg', '2-minute break in progress')}...\n"
         else:
-            status_header += f"⏱️ <i>Human Safety Pacing: ~{safety_delay}s cooldown</i>\n"
+            status_header += f"\n⏱️ <i>Human Safety Pacing: ~{safety_delay}s cooldown</i>\n"
 
         stop_keyboard = {
             "inline_keyboard": [
@@ -265,8 +306,28 @@ def run_growth_campaign(
 
     # Progress callbacks for Facebook and Instagram
     def on_fb_progress(sent, target, details):
-        state["fb_sent"] = sent
-        state["total_sent"] = state["fb_sent"] + state["ig_sent"]
+        if details.get("activity"):
+            act = details["activity"]
+            state["current_activity"] = act
+            if not state["recent_activities"] or state["recent_activities"][-1] != act:
+                state["recent_activities"].append(act)
+                if len(state["recent_activities"]) > 6:
+                    state["recent_activities"].pop(0)
+            if task_obj:
+                try:
+                    task_obj.set_activity(act)
+                except Exception:
+                    pass
+
+        if sent is not None and sent > state["fb_sent"]:
+            state["fb_sent"] = sent
+            state["total_sent"] = state["fb_sent"] + state["ig_sent"]
+            if task_obj:
+                try:
+                    task_obj.update_progress(state["total_sent"], total_target)
+                except Exception:
+                    pass
+
         if details.get("cooldown"):
             state["is_cooldown"] = True
             state["cooldown_msg"] = details.get("message", "2-minute cooldown active")
@@ -276,14 +337,43 @@ def run_growth_campaign(
             return
 
         state["is_cooldown"] = False
-        u_name = details.get("user", "User")
-        state["logs"].append(f"[Facebook] Sent friend request #{sent} to {u_name}")
-        update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "running", state["logs"])
+        u_name = details.get("user")
+        if u_name:
+            state["logs"].append(f"[Facebook] Sent friend request #{sent} to {u_name}")
+            update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "running", state["logs"])
         send_tg_live_update()
 
     def on_ig_progress(sent, target, details):
-        state["ig_sent"] = sent
-        state["total_sent"] = state["fb_sent"] + state["ig_sent"]
+        if details.get("activity"):
+            act = details["activity"]
+            state["current_activity"] = act
+            if not state["recent_activities"] or state["recent_activities"][-1] != act:
+                state["recent_activities"].append(act)
+                if len(state["recent_activities"]) > 6:
+                    state["recent_activities"].pop(0)
+            if task_obj:
+                try:
+                    task_obj.set_activity(act)
+                except Exception:
+                    pass
+
+        if details.get("skipped_channel"):
+            state["skipped_channels"] += 1
+            if task_obj:
+                try:
+                    task_obj.increment_skipped()
+                except Exception:
+                    pass
+
+        if sent is not None and sent > state["ig_sent"]:
+            state["ig_sent"] = sent
+            state["total_sent"] = state["fb_sent"] + state["ig_sent"]
+            if task_obj:
+                try:
+                    task_obj.update_progress(state["total_sent"], total_target)
+                except Exception:
+                    pass
+
         if details.get("cooldown"):
             state["is_cooldown"] = True
             state["cooldown_msg"] = details.get("message", "2-minute cooldown active")
@@ -293,9 +383,10 @@ def run_growth_campaign(
             return
 
         state["is_cooldown"] = False
-        u_name = details.get("user", "User")
-        state["logs"].append(f"[Instagram] Followed #{sent}: @{u_name}")
-        update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "running", state["logs"])
+        u_name = details.get("user")
+        if u_name:
+            state["logs"].append(f"[Instagram] Followed #{sent}: @{u_name}")
+            update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "running", state["logs"])
         send_tg_live_update()
 
     # Initial DB status
@@ -381,12 +472,17 @@ def run_growth_campaign(
     if tg_chat_id:
         finish_text = (
             f"🎉 <b>Outreach Campaign {final_status.capitalize()}!</b>\n\n"
+            f"👤 <b>Google Chrome Account:</b> {acc_name}\n"
+            f"📧 <b>Google Email:</b> <code>{acc_email}</code>\n"
+            f"📁 <b>Profile Directory:</b> <code>{acc_pdir}</code>\n"
+            f"📘 <b>Facebook Page:</b> {acc_fb}\n"
+            f"📸 <b>Instagram Account:</b> @{acc_ig}\n\n"
             f"🎯 <b>Strategy:</b> {mode_title}\n"
             f"📊 <b>Results Summary:</b>\n"
             f"• 📘 <b>Facebook Friend Requests Sent:</b> {state['fb_sent']}/{target_count if clean_platform in ['facebook', 'both'] else 0}\n"
             f"• 📸 <b>Instagram Follow Requests Sent:</b> {state['ig_sent']}/{target_count if clean_platform in ['instagram', 'both'] else 0}\n"
             f"• 🏆 <b>Total Outreach Actions:</b> {state['total_sent']}/{total_target}\n\n"
-            f"🔒 <i>All accounts safely protected with human delay pacing.</i>"
+            f"🔒 <i>All accounts safely protected with human delay pacing on profile <code>{acc_pdir}</code>.</i>"
         )
         post_keyboard = {
             "inline_keyboard": [

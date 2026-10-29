@@ -6,6 +6,7 @@ import InstagramUnfollowDeck from "@/components/growth/InstagramUnfollowDeck";
 import FriendsGroupDeck from "@/components/growth/FriendsGroupDeck";
 
 const PRESET_LOCATIONS = [
+  "Lucknow",
   "New Delhi",
   "Mumbai",
   "Bangalore",
@@ -29,7 +30,30 @@ export default function GrowthPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [activeTab, setActiveTab] = useState("accept"); // 'accept', 'launcher', 'history'
 
+  const [chromeAccounts, setChromeAccounts] = useState([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [selectedProfileDir, setSelectedProfileDir] = useState("Default");
+
   const pollIntervalRef = useRef(null);
+
+  // Load Chrome accounts
+  useEffect(() => {
+    async function loadAccounts() {
+      try {
+        const res = await fetch("/api/accounts");
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setChromeAccounts(data);
+          const def = data.find((a) => a.is_default) || data[0];
+          setSelectedAccountId(def.id || "1");
+          setSelectedProfileDir(def.profile_dir || def.profile_directory || "Default");
+        }
+      } catch (e) {
+        console.error("Failed to load Chrome accounts:", e);
+      }
+    }
+    loadAccounts();
+  }, []);
 
   // Fetch campaigns
   const fetchCampaigns = useCallback(async () => {
@@ -92,6 +116,8 @@ export default function GrowthPage() {
           location: effectiveLocation,
           targetCount: parseInt(targetCount, 10),
           safetyDelay: parseInt(safetyDelay, 10),
+          accountId: selectedAccountId,
+          profileDir: selectedProfileDir,
         }),
       });
 
@@ -103,6 +129,8 @@ export default function GrowthPage() {
           mode: strategyMode,
           location: effectiveLocation,
           target_count: targetCount,
+          account_id: selectedAccountId,
+          profile_dir: selectedProfileDir,
           fb_sent_count: 0,
           ig_sent_count: 0,
           status: "running",
@@ -258,6 +286,61 @@ export default function GrowthPage() {
             <h2 style={{ fontSize: "1.25rem", fontWeight: "600", color: "var(--text-primary)", marginBottom: "var(--space-5)" }}>
               ⚙️ Outreach Configuration
             </h2>
+
+            {/* Google Chrome Account & Profile Selector */}
+            {chromeAccounts.length > 0 && (
+              <div style={{ marginBottom: "var(--space-6)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-3)" }}>
+                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", color: "var(--text-secondary)" }}>
+                    🌐 GOOGLE CHROME PROFILE & IDENTITY
+                  </label>
+                  <span className="tag tag-info" style={{ fontSize: "0.75rem", padding: "2px 8px" }}>
+                    {chromeAccounts.length} Connected Profiles
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "var(--space-3)" }}>
+                  {chromeAccounts.map((acc, idx) => {
+                    const accName = acc.google_name || acc.name || `Profile ${idx + 1}`;
+                    const accEmail = acc.google_email || acc.email || "Google Account";
+                    const accPdir = acc.profile_dir || acc.profile_directory || "Default";
+                    const isSelected = selectedAccountId === acc.id || selectedProfileDir === accPdir;
+                    return (
+                      <div
+                        key={acc.id || idx}
+                        onClick={() => {
+                          setSelectedAccountId(acc.id);
+                          setSelectedProfileDir(accPdir);
+                        }}
+                        style={{
+                          padding: "var(--space-3) var(--space-4)",
+                          borderRadius: "var(--radius-md)",
+                          border: isSelected ? "2px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                          background: isSelected ? "rgba(124, 92, 252, 0.12)" : "var(--bg-secondary)",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: "600", fontSize: "0.88rem", color: isSelected ? "var(--accent-primary)" : "var(--text-primary)" }}>
+                            👤 {accName}
+                          </span>
+                          <span style={{ fontSize: "0.7rem", fontFamily: "monospace", color: "var(--text-muted)" }}>
+                            {accPdir}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          📧 {accEmail}
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                          📘 {acc.facebook_name || "Linked FB"} &nbsp;|&nbsp; 📸 @{acc.instagram_username || "Linked IG"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Platform Selection */}
             <div style={{ marginBottom: "var(--space-6)" }}>
@@ -587,6 +670,41 @@ export default function GrowthPage() {
                   {activeCampaign.status?.toUpperCase()}
                 </span>
               </div>
+
+              {/* Chrome Profile Badge */}
+              {(() => {
+                const currentAcc = chromeAccounts.find(
+                  (a) => a.id === activeCampaign.account_id || (a.profile_dir || a.profile_directory) === activeCampaign.profile_dir
+                ) || chromeAccounts.find((a) => a.id === selectedAccountId) || chromeAccounts[0];
+                if (!currentAcc) return null;
+                const accName = currentAcc.google_name || currentAcc.name || "Shivam Mishra";
+                const accEmail = currentAcc.google_email || currentAcc.email || "";
+                const accPdir = currentAcc.profile_dir || currentAcc.profile_directory || "Default";
+                return (
+                  <div
+                    style={{
+                      background: "rgba(124, 92, 252, 0.08)",
+                      border: "1px solid rgba(124, 92, 252, 0.2)",
+                      borderRadius: "var(--radius-md)",
+                      padding: "var(--space-3) var(--space-4)",
+                      marginBottom: "var(--space-4)",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                      <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                        👤 {accName} ({accEmail})
+                      </span>
+                      <span style={{ fontFamily: "monospace", color: "var(--accent-primary)", fontWeight: 600 }}>
+                        📁 {accPdir}
+                      </span>
+                    </div>
+                    <div style={{ color: "var(--text-secondary)", fontSize: "0.74rem" }}>
+                      📘 {currentAcc.facebook_name || "Linked FB"} &nbsp;|&nbsp; 📸 @{currentAcc.instagram_username || "Linked IG"}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Progress Bar & Counters */}
               <div style={{ marginBottom: "var(--space-5)" }}>

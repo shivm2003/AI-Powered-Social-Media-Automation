@@ -3,14 +3,26 @@ import { getSetting, getCampaignById, updateCampaignStatus, getProductById } fro
 import { runAutomationCommand } from "@/lib/automation";
 
 function safeParseArray(val) {
-  if (Array.isArray(val)) return val;
-  if (!val) return [];
-  try {
-    const p = JSON.parse(val);
-    return Array.isArray(p) ? p : [p];
-  } catch {
-    return typeof val === "string" ? [val] : [];
+  let arr = [];
+  if (Array.isArray(val)) arr = val;
+  else if (!val) return [];
+  else {
+    try {
+      const p = JSON.parse(val);
+      arr = Array.isArray(p) ? p : [p];
+    } catch {
+      arr = typeof val === "string" ? [val] : [];
+    }
   }
+  const result = [];
+  for (const item of arr) {
+    if (typeof item === "string" && item.includes(",")) {
+      result.push(...item.split(",").map((s) => s.trim()).filter(Boolean));
+    } else if (item) {
+      result.push(item);
+    }
+  }
+  return result;
 }
 
 export async function GET() {

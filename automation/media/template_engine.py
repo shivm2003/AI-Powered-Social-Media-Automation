@@ -189,13 +189,21 @@ COLOR_THEMES = [
 # Domain-specific Context Enhancers tailored for Indian Market & Middle-Class Aspirations
 DOMAIN_CONTEXTS = {
     "finance": [
-        "Authentic happy Indian middle-class family (smiling parents and cheerful child) sitting together on a comfortable sofa in their bright modern Indian apartment living room, joyfully celebrating their dream home loan approval with relief, subtle glowing 3D Indian Rupee symbol (₹) and trusted green checkmark badge in background",
-        "Delighted Indian couple holding the keys to their dream new home during Griha Pravesh moment on their sunlit balcony, warm golden hour glow, financial security concept with glowing Indian Rupee (₹) growth accent",
-        "Hardworking Indian small business owner / shopkeeper smiling with immense pride in his thriving, colorful retail store, holding a smartphone displaying instant business loan approval in Indian Rupees (₹ Lakhs)",
-        "Affectionate Indian parents celebrating their daughter's college admission, studying with a modern laptop, happy family securing education loan with Indian Rupee (₹) emblem",
-        "Confident Indian salaried professional checking digital banking loan approval notification on smartphone displaying Indian Rupee (₹) disbursement, modern Indian urban apartment backdrop",
-        "Smiling Indian family posing happily beside their brand new family car in a pleasant Indian residential neighborhood, hassle-free auto loan with low Indian Rupee (₹) monthly EMI accent",
-        "Respectable Indian financial advisor with warm pleasant smile explaining easy EMI loan options to an appreciative Indian middle-class couple in a modern glass office",
+        # --- Core Focus 1: Home Loans (Apna Ghar for Middle-Class & Striving Families) ---
+        "Authentic smiling Indian middle-class family (hardworking parents and cheerful child) standing proudly at the entrance of their newly acquired dream home during a heartwarming Griha Pravesh ceremony, holding the keys with deep emotional joy and gratitude, beautiful traditional marigold toran on doorway, warm natural sunlight, subtle glowing Indian Rupee (₹) symbol celebrating affordable Home Loan EMI approval",
+        "Loving Indian couple stepping into their brand new flat/apartment in a clean modern Indian residential society, emotional moment of achieving their lifelong dream of 'Apna Ghar' through Loan Solutions affordable Home Loan, warm sunlit living room with balcony view",
+        "Relieved Indian salaried father and mother looking at their new home ownership documents on the dining table, tears of joy and pride realizing their dream of a permanent family home has come true through an accessible, paperless Home Loan, wholesome domestic setting",
+        "Indian middle-class multi-generational family (grandparents, parents, kids) joyfully performing Griha Pravesh pooja in their dream home, celebrating secure Home Loan disbursal with affordable low EMIs in Indian Rupees (₹)",
+
+        # --- Core Focus 2: LAP - Loan Against Property (Business Growth & Capital Expansion) ---
+        "Ambitious Indian MSME entrepreneur / shop owner standing proudly inside his expanded modern retail store / workshop, holding an official approval letter of Loan Against Property (LAP), leveraging his residential/commercial property to grow his business with high sanction and low EMI, confident smile, bustling prosperous Indian market in background",
+        "Determined Indian business family reviewing their business expansion blueprint inside their manufacturing unit/office, successfully securing growth capital through Loan Against Property (LAP) without selling their asset, glowing Indian Rupee (₹) financial growth metrics and trusted RBI-registered partner badge",
+        "Progressive Indian entrepreneur in a modern office looking out at a growing commercial complex, celebrating business scaling and working capital expansion fueled by Loan Solutions Loan Against Property (LAP)",
+
+        # --- Supporting Pillars: Personal & Business Loans (Full Versatility & Future Expansion) ---
+        "Hardworking Indian business owner and salaried professional reviewing flexible Business Loan & Personal Loan options with complete confidence, transparent digital KYC, low monthly EMIs in Indian Rupees (₹), and quick paperless approval",
+        "Indian middle-class family celebrating family milestones (higher education and medical peace of mind), supported by instant flexible Personal Loan and enterprise Business Loan facilities",
+        "Respectable Indian financial advisor with warm pleasant smile explaining easy Home Loan, LAP, and Business Loan options to an appreciative Indian middle-class couple in a modern glass office",
     ],
     "software": [
         "holographic analytics dashboard floating seamlessly above modern glass workspace with Indian Rupee (₹) growth metrics",
@@ -267,11 +275,13 @@ def build_diverse_visual_prompt(
     platforms: list = None,
     custom_instructions: str = "",
     skill_image_path: str = None,
+    contact_number: str = None,
 ) -> dict:
     """
     Builds a rich, highly diverse visual prompt for ChatGPT / DALL-E / Gemini.
     Strictly tailored to Indian standards (Indian middle-class families, Indian Rupee ₹ currency,
     authentic domestic aspirations, and clean commercial advertising quality).
+    Incorporate contact / helpline number in the image design badge and copy CTA.
     """
     platforms = platforms or ["facebook", "instagram"]
     archetype_key = get_archetype_key(visual_style)
@@ -309,11 +319,23 @@ def build_diverse_visual_prompt(
     else:
         color_hint = f"Color harmony: {selected_color_theme}."
 
+    is_loan = "loan" in product_name.lower() or "loan" in description.lower() or category.lower() == "finance"
+    phone_num = contact_number or ("8112570656" if is_loan else None)
+
+    # Core Offering Context for Loan Solutions
+    core_focus_line = (
+        "• Strategic Focus: Flagship focus on Home Loans ('Apna Ghar' homeownership for Indian middle-class families) "
+        "and Loan Against Property (LAP unlocking property equity to grow business and enterprise). "
+        "Also highlighting comprehensive Personal Loans & Business Loans for full versatility.\n"
+        if is_loan else ""
+    )
+
     # Assemble unique image prompt with strict visual purity & Indian standards
     unique_seed = uuid.uuid4().hex[:6]
     image_prompt = (
         f"Generate a masterclass commercial advertising graphic for '{product_name}' [Style Variant #{unique_seed}].\n"
         f"• Target Demographic & Cultural Context: Authentic Indian middle-class family and individuals. Warm, relatable, respectful, and contemporary Indian home or business setting with natural smiling expressions.\n"
+        f"{core_focus_line}"
         f"• Currency Standard: Indian Rupee (₹). Any currency symbols, digital banking screens, approval badges, or visual coin accents MUST show the Indian Rupee symbol '₹' (NEVER use US Dollar '$' or foreign currency). All financial scales in Indian standards (₹, Lakhs).\n"
         f"• Core Subject & Scene: {domain_scene}.\n"
         f"• Product Context: {description[:130] if description else product_name}.\n"
@@ -325,14 +347,37 @@ def build_diverse_visual_prompt(
         f"• TEXT RULE: Absolutely NO hashtags (#...), NO paragraphs, NO descriptions, and NO tiny text painted on the image canvas. Keep the graphic 100% clean, uncluttered visual artwork."
     )
 
+    if phone_num:
+        image_prompt += f"\n• Official Contact & Helpline Ribbon: Elegantly include a clean, legible helpline badge or ribbon into the creative design: '📞 Call / WhatsApp: {phone_num}'."
+
     if custom_instructions and custom_instructions.strip():
         image_prompt += f"\n• Special User Instructions: {custom_instructions.strip()}."
 
     if skill_image_path:
         image_prompt += f"\n• Attached Reference Branding: The official brand image for '{product_name}' is uploaded into this conversation. Harmonize the visual concept, color palette, and styling with this branding."
 
-    is_loan = "loan" in product_name.lower() or "loan" in description.lower() or category.lower() == "finance"
     apply_cta_rule = "\nMandatory Call-to-Action Link: You MUST start the post caption at the very beginning (Line 1) with this exact application link: 👉 Apply Now: https://loansolutions.everythingrental.in/application" if is_loan else ""
+    if phone_num:
+        apply_cta_rule += f"\nMandatory Contact Line: Include this helpline prominently in your call-to-action: 📞 Call / WhatsApp: +91 {phone_num}"
+
+    # Social copy guidance tailored for Home Loan, LAP, Personal & Business Loans
+    if is_loan:
+        copy_instructions = (
+            f"Headline: A compelling emotional hook celebrating Home Loans (making 'Apna Ghar' a reality for middle-class families) "
+            f"and Loan Against Property (LAP unlocking property equity to grow businesses), while mentioning complete financial support (Personal & Business Loans).\n"
+            f"Caption: An engaging 2-3 paragraph marketing copy covering:\n"
+            f"  🏠 Home Loans: Affordable EMIs & paperless approval helping middle-class families secure their dream home.\n"
+            f"  🏢 Loan Against Property (LAP): Unlock up to 70% of your property's value to supercharge your business expansion.\n"
+            f"  💼 Personal & Business Loans: Flexible financing for working capital, medical/wedding needs, and enterprise growth.\n"
+            f"  🛡️ 100% Transparent digital process with authorized RBI-regulated lending partners.{apply_cta_rule}\n"
+            f"Hashtags: High-impact hashtags: #HomeLoan #ApnaGhar #LoanAgainstProperty #LAP #BusinessGrowth #MiddleClassDreams #PersonalLoan #BusinessLoan #LoanSolutions #LowEMI #FinancialFreedom"
+        )
+    else:
+        copy_instructions = (
+            f"Headline: A compelling, emotional hook for {product_name} celebrating family dreams, financial security, and easy approvals\n"
+            f"Caption: An engaging 2-3 paragraph marketing copy highlighting trust, transparent process, low monthly EMIs in Indian Rupees (₹), quick disbursal, and a clear call-to-action.{apply_cta_rule}\n"
+            f"Hashtags: Fresh, high-volume viral hashtags and SEO keywords tailored for {', '.join(platforms)} to maximize reach on Instagram and Facebook."
+        )
 
     # Assemble complete unified prompt with strict visual vs. text copy separation for Indian audience
     unified_prompt = (
@@ -341,9 +386,7 @@ def build_diverse_visual_prompt(
         f"CRITICAL: Do NOT draw or paint hashtags (#...) or long descriptive text inside the image. The image must be clean visual art.\n\n"
         f"--- TASK 2: SOCIAL MEDIA POST (IN CHAT TEXT BELOW THE IMAGE ONLY) ---\n"
         f"In your text reply beneath the image, write the social media post tailored for an Indian middle-class audience:\n"
-        f"Headline: A compelling, emotional hook for {product_name} celebrating family dreams, financial security, and easy approvals\n"
-        f"Caption: An engaging 2-3 paragraph marketing copy highlighting trust, transparent process, low monthly EMIs in Indian Rupees (₹), quick disbursal, and a clear call-to-action.{apply_cta_rule}\n"
-        f"Hashtags: Fresh, high-volume viral hashtags and SEO keywords tailored for {', '.join(platforms)} to maximize reach on Instagram and Facebook (e.g. #ExplorePage #ViralReels #LoanSolutions #PersonalLoan #LowEMI #ApnaGhar #FinancialFreedom - written ONLY here in text, NEVER painted inside the image)."
+        f"{copy_instructions}"
     )
 
     return {

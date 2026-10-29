@@ -28,9 +28,71 @@ export default function CampaignsPage() {
 
   // Platform selection modal state
   const [selectedCampaignForPost, setSelectedCampaignForPost] = useState(null);
-  const [targetPlatform, setTargetPlatform] = useState("facebook");
+  const [targetPlatforms, setTargetPlatforms] = useState(["facebook", "instagram"]);
   const [postingStatus, setPostingStatus] = useState("idle"); // "idle" | "posting" | "success" | "error"
   const [postingMessage, setPostingMessage] = useState("");
+
+  // Revision modal state
+  const [selectedCampaignForRevision, setSelectedCampaignForRevision] = useState(null);
+  const [revisionNotes, setRevisionNotes] = useState("");
+  const [revisionContactNumber, setRevisionContactNumber] = useState("");
+  const [revisionProvider, setRevisionProvider] = useState("gemini");
+  const [revisionStatus, setRevisionStatus] = useState("idle"); // "idle" | "generating" | "success" | "error"
+  const [revisionMessage, setRevisionMessage] = useState("");
+
+  function openRevisionModal(campaign) {
+    setSelectedCampaignForRevision(campaign);
+    setRevisionNotes("");
+    setRevisionContactNumber(campaign.contact_number || (campaign.product_name?.toLowerCase().includes("loan") ? "8112570656" : ""));
+    setRevisionProvider(campaign.llm_provider || "gemini");
+    setRevisionStatus("idle");
+    setRevisionMessage("");
+  }
+
+  function applyPresetNote(note) {
+    setRevisionNotes((prev) => {
+      if (!prev.trim()) return note;
+      if (prev.includes(note)) return prev;
+      return `${prev.trim()}\n• ${note}`;
+    });
+  }
+
+  async function handleSubmitRevision() {
+    if (!selectedCampaignForRevision) return;
+    if (!revisionNotes.trim()) {
+      alert("Please enter revision instructions or choose from the suggested ideas.");
+      return;
+    }
+
+    setRevisionStatus("generating");
+    setRevisionMessage("Connecting to AI engine to rewrite copy, synthesize revised visual graphic, and dispatch updated preview to Telegram...");
+
+    try {
+      const res = await fetch(`/api/campaigns/${selectedCampaignForRevision.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "revise",
+          notes: revisionNotes.trim(),
+          provider: revisionProvider,
+          contact_number: revisionContactNumber || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRevisionStatus("success");
+        setRevisionMessage(data.message || "🎉 Revision generated! Updated preview sent to Telegram.");
+        fetchCampaigns();
+      } else {
+        setRevisionStatus("error");
+        setRevisionMessage(data.error || data.warning || "Revision failed to generate.");
+      }
+    } catch (err) {
+      setRevisionStatus("error");
+      setRevisionMessage(err.message || "An unexpected error occurred during revision.");
+    }
+  }
 
   async function fetchCampaigns() {
     try {
@@ -52,30 +114,46 @@ export default function CampaignsPage() {
 
   function openPlatformModal(campaign) {
     setSelectedCampaignForPost(campaign);
-    setTargetPlatform("facebook");
+    const existing = safeArray(campaign.platforms);
+    setTargetPlatforms(existing.length > 0 ? existing : ["facebook", "instagram"]);
     setPostingStatus("idle");
     setPostingMessage("");
   }
 
+  function toggleTargetPlatform(platId) {
+    if (postingStatus === "posting") return;
+    setTargetPlatforms((prev) =>
+      prev.includes(platId) ? prev.filter((p) => p !== platId) : [...prev, platId]
+    );
+  }
+
+  function selectBothMeta() {
+    if (postingStatus === "posting") return;
+    setTargetPlatforms(["facebook", "instagram"]);
+  }
+
   async function handlePublishToSelectedPlatform() {
     if (!selectedCampaignForPost) return;
+    if (targetPlatforms.length === 0) {
+      alert("Please select at least one platform to publish to.");
+      return;
+    }
     setPostingStatus("posting");
+    const platLabels = targetPlatforms.map((p) => p.toUpperCase()).join(" + ");
     setPostingMessage(
-      targetPlatform === "facebook"
-        ? "Opening Chrome and verifying Facebook login... If login is required, please check your Telegram bot to enter your password!"
-        : `Connecting to browser and preparing to publish to ${targetPlatform}...`
+      `Connecting to Chrome browser and publishing to ${platLabels}... If login is required, please check your Telegram bot!`
     );
 
     try {
       const res = await fetch(`/api/campaigns/${selectedCampaignForPost.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", platform: targetPlatform }),
+        body: JSON.stringify({ action: "approve", platforms: targetPlatforms }),
       });
       const data = await res.json();
       if (res.ok) {
         setPostingStatus("success");
-        setPostingMessage(data.message || `🎉 Successfully published to ${targetPlatform}!`);
+        setPostingMessage(data.message || `🎉 Successfully published to ${platLabels}!`);
         fetchCampaigns();
       } else {
         setPostingStatus("error");
@@ -244,12 +322,20 @@ export default function CampaignsPage() {
                           {statusConfig.icon} {statusConfig.label}
                         </span>
                       </div>
-                      <div style={{ display: "flex", gap: "var(--space-3)", fontSize: "var(--font-xs)", color: "var(--text-secondary)", marginTop: "var(--space-1)" }}>
+                      <div style={{ display: "flex", gap: "var(--space-3)", fontSize: "var(--font-xs)", color: "var(--text-secondary)", marginTop: "var(--space-1)", flexWrap: "wrap", alignItems: "center" }}>
                         <span>{CONTENT_TYPES[campaign.content_type]?.name || campaign.content_type}</span>
                         <span>•</span>
                         <span>{LLM_PROVIDERS[campaign.llm_provider]?.icon} {LLM_PROVIDERS[campaign.llm_provider]?.name || campaign.llm_provider}</span>
                         <span>•</span>
                         <span style={{ textTransform: "capitalize" }}>{campaign.language}</span>
+                        {(campaign.contact_number || campaign.product_name?.toLowerCase().includes("loan")) && (
+                          <>
+                            <span>•</span>
+                            <span className="tag tag-success" style={{ fontSize: "11px", fontWeight: 600 }}>
+                              📞 +91 {campaign.contact_number || "8112570656"}
+                            </span>
+                          </>
+                        )}
                       </div>
 
                       {/* Target Platforms */}
@@ -363,13 +449,27 @@ export default function CampaignsPage() {
                           </a>
                         )}
                       {campaign.status !== "posted" && (
-                        <button
-                          className="btn btn-sm btn-primary"
-                          onClick={() => openPlatformModal(campaign)}
-                          title="Approve and choose social account to publish"
-                        >
-                          🚀 Approve & Post
-                        </button>
+                        <>
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => openRevisionModal(campaign)}
+                            title="Suggest revision for marketing copy or visual graphic"
+                            style={{
+                              borderColor: "rgba(245, 158, 11, 0.4)",
+                              color: "#FBBF24",
+                              background: "rgba(245, 158, 11, 0.08)",
+                            }}
+                          >
+                            ✏️ Suggest Revision
+                          </button>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={() => openPlatformModal(campaign)}
+                            title="Approve and choose social account to publish"
+                          >
+                            🚀 Approve & Post
+                          </button>
+                        </>
                       )}
                       <button
                         className="btn btn-sm btn-ghost"
@@ -608,8 +708,29 @@ export default function CampaignsPage() {
 
             {/* Platform Selection Options */}
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-              <div style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
-                Select Social Platform:
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-1)" }}>
+                <span style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+                  Select Target Platforms ({targetPlatforms.length} selected):
+                </span>
+                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    onClick={selectBothMeta}
+                    style={{ fontSize: "11px", padding: "2px 8px" }}
+                    title="Select Facebook & Instagram together"
+                  >
+                    ⚡ Facebook + Instagram
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    onClick={() => setTargetPlatforms(["facebook", "instagram", "linkedin", "whatsapp"])}
+                    style={{ fontSize: "11px", padding: "2px 8px" }}
+                  >
+                    Select All
+                  </button>
+                </div>
               </div>
 
               {[
@@ -625,6 +746,7 @@ export default function CampaignsPage() {
                   name: "Instagram",
                   icon: "📸",
                   desc: "Publishes image and captions directly to your Instagram profile",
+                  highlight: "✨ Direct Creator Studio & Post Pipeline",
                 },
                 {
                   id: "linkedin",
@@ -639,13 +761,11 @@ export default function CampaignsPage() {
                   desc: "Broadcasts graphic and copy via WhatsApp Web",
                 },
               ].map((plat) => {
-                const isSelected = targetPlatform === plat.id;
+                const isSelected = targetPlatforms.includes(plat.id);
                 return (
                   <div
                     key={plat.id}
-                    onClick={() => {
-                      if (postingStatus !== "posting") setTargetPlatform(plat.id);
-                    }}
+                    onClick={() => toggleTargetPlatform(plat.id)}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -653,7 +773,7 @@ export default function CampaignsPage() {
                       padding: "var(--space-3) var(--space-4)",
                       borderRadius: "var(--radius-md)",
                       border: `1.5px solid ${isSelected ? "var(--primary)" : "var(--border)"}`,
-                      background: isSelected ? "rgba(99, 102, 241, 0.12)" : "var(--bg-tertiary)",
+                      background: isSelected ? "rgba(99, 102, 241, 0.15)" : "var(--bg-tertiary)",
                       cursor: postingStatus === "posting" ? "not-allowed" : "pointer",
                       transition: "all 0.15s ease",
                     }}
@@ -688,17 +808,20 @@ export default function CampaignsPage() {
                     </div>
                     <div
                       style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
+                        width: 20,
+                        height: 20,
+                        borderRadius: "4px",
                         border: `2px solid ${isSelected ? "var(--primary)" : "var(--border-light)"}`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         background: isSelected ? "var(--primary)" : "transparent",
+                        color: "#fff",
+                        fontSize: "12px",
+                        fontWeight: "bold",
                       }}
                     >
-                      {isSelected && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
+                      {isSelected ? "✓" : ""}
                     </div>
                   </div>
                 );
@@ -773,16 +896,352 @@ export default function CampaignsPage() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={postingStatus === "posting"}
+                  disabled={postingStatus === "posting" || targetPlatforms.length === 0}
                   onClick={handlePublishToSelectedPlatform}
                 >
                   {postingStatus === "posting" ? (
                     <>
                       <span className="spinner" style={{ width: 16, height: 16, borderTopColor: "#fff" }} />
-                      Publishing to {targetPlatform.toUpperCase()}...
+                      Publishing to {targetPlatforms.map((p) => p.toUpperCase()).join(" + ")}...
                     </>
                   ) : (
-                    `🚀 Post to ${targetPlatform.charAt(0).toUpperCase() + targetPlatform.slice(1)}`
+                    `🚀 Post to ${targetPlatforms.length === 0 ? "Select Platform" : targetPlatforms.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" & ")}`
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Interactive Suggest Revision Modal ── */}
+      {selectedCampaignForRevision && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "var(--space-4)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && revisionStatus !== "generating") {
+              setSelectedCampaignForRevision(null);
+              setRevisionStatus("idle");
+              setRevisionMessage("");
+            }
+          }}
+        >
+          <div
+            className="modal card"
+            style={{
+              maxWidth: "640px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              padding: "var(--space-6)",
+              background: "linear-gradient(145deg, rgba(26, 26, 46, 0.96), rgba(15, 15, 26, 0.98))",
+              border: "1px solid rgba(245, 158, 11, 0.35)",
+              boxShadow: "0 25px 60px -15px rgba(245, 158, 11, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-1)" }}>
+                  <span style={{ fontSize: "1.4rem" }}>✏️</span>
+                  <h3 style={{ margin: 0, fontSize: "var(--font-xl)", fontWeight: 700, color: "#fff" }}>
+                    Suggest AI Revision
+                  </h3>
+                  <span
+                    className="tag"
+                    style={{
+                      background: "rgba(245, 158, 11, 0.15)",
+                      color: "#FBBF24",
+                      border: "1px solid rgba(245, 158, 11, 0.3)",
+                      fontSize: "11px",
+                    }}
+                  >
+                    Revision #{((selectedCampaignForRevision.revision_count || 0) + 1)}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "var(--font-sm)", color: "var(--text-secondary)" }}>
+                  Refine copy tone, highlight key offers, or re-render visual graphics with AI.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={revisionStatus === "generating"}
+                onClick={() => {
+                  setSelectedCampaignForRevision(null);
+                  setRevisionStatus("idle");
+                  setRevisionMessage("");
+                }}
+                style={{ fontSize: "1.2rem", padding: "4px 8px" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Current Campaign Context */}
+            <div
+              style={{
+                padding: "var(--space-3) var(--space-4)",
+                background: "rgba(255, 255, 255, 0.03)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                fontSize: "var(--font-sm)",
+              }}
+            >
+              <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>
+                Target Product: <span style={{ color: "var(--primary-light)" }}>{selectedCampaignForRevision.product_name || "Loan Solutions"}</span>
+              </div>
+              <div
+                style={{
+                  color: "var(--text-secondary)",
+                  fontSize: "var(--font-xs)",
+                  maxHeight: "60px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  lineHeight: 1.4,
+                }}
+              >
+                Previous Draft: {selectedCampaignForRevision.generated_caption ? selectedCampaignForRevision.generated_caption.slice(0, 140) + "..." : "No prior caption"}
+              </div>
+            </div>
+
+            {/* Quick Preset Revision Chips */}
+            <div>
+              <label style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "var(--space-2)" }}>
+                💡 QUICK REVISION IDEAS (CLICK TO APPLY)
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+                {[
+                  "📞 Highlight helpline +91 8112570656",
+                  "⚡ Make tone higher energy & urgent",
+                  "💰 Highlight ₹50 Lakh instant disbursal & 0% processing fee",
+                  "📱 Shorten copy for quick mobile feed reading",
+                  "🎨 Regenerate visual image with festive Indian theme",
+                  "🏠 Focus on Griha Pravesh & Low EMI Home Loans",
+                  "🤝 Highlight 100% paperless digital KYC",
+                ].map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => applyPresetNote(preset)}
+                    style={{
+                      background: "rgba(124, 92, 252, 0.08)",
+                      border: "1px solid rgba(124, 92, 252, 0.25)",
+                      color: "var(--text-primary)",
+                      padding: "4px 10px",
+                      borderRadius: "20px",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(124, 92, 252, 0.2)";
+                      e.currentTarget.style.borderColor = "var(--primary-light)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(124, 92, 252, 0.08)";
+                      e.currentTarget.style.borderColor = "rgba(124, 92, 252, 0.25)";
+                    }}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Optional Helpline / Mobile Number for Revision */}
+            <div>
+              <label style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "var(--space-1)" }}>
+                📞 REVISION HELPLINE / MOBILE NUMBER (OPTIONAL)
+              </label>
+              <div style={{ position: "relative" }}>
+                <span
+                  style={{
+                    position: "absolute",
+                    left: "var(--space-3)",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    fontSize: "var(--font-sm)",
+                    color: "var(--text-tertiary)",
+                    fontWeight: 600,
+                  }}
+                >
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  value={revisionContactNumber}
+                  onChange={(e) => setRevisionContactNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="8112570656"
+                  disabled={revisionStatus === "generating"}
+                  style={{
+                    width: "100%",
+                    background: "var(--bg-tertiary)",
+                    color: "var(--text-primary)",
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "var(--space-2) var(--space-3) var(--space-2) 3.2rem",
+                    fontSize: "var(--font-sm)",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px", display: "block" }}>
+                Reflected on the regenerated visual graphic badge and Line 2 caption CTA.
+              </span>
+            </div>
+
+            {/* AI Engine & Custom Instructions */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
+                <label style={{ fontSize: "var(--font-xs)", fontWeight: 600, color: "var(--text-secondary)", margin: 0 }}>
+                  SPECIFIC REVISION INSTRUCTIONS
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>Engine:</span>
+                  <select
+                    value={revisionProvider}
+                    onChange={(e) => setRevisionProvider(e.target.value)}
+                    disabled={revisionStatus === "generating"}
+                    style={{
+                      background: "var(--bg-tertiary)",
+                      color: "var(--text-primary)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "2px 8px",
+                      fontSize: "11px",
+                    }}
+                  >
+                    <option value="gemini">♊ Gemini 2.5 Flash (Fastest)</option>
+                    <option value="chatgpt">🤖 ChatGPT</option>
+                    <option value="claude">🧠 Claude</option>
+                  </select>
+                </div>
+              </div>
+
+              <textarea
+                rows={4}
+                value={revisionNotes}
+                onChange={(e) => setRevisionNotes(e.target.value)}
+                disabled={revisionStatus === "generating"}
+                placeholder="Describe what you want changed (e.g. 'Emphasize instant loan approval in 2 minutes, use golden and royal blue colors for Griha Pravesh image')..."
+                style={{
+                  width: "100%",
+                  background: "var(--bg-tertiary)",
+                  color: "var(--text-primary)",
+                  border: "1px solid rgba(245, 158, 11, 0.3)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "var(--space-3)",
+                  fontSize: "var(--font-sm)",
+                  lineHeight: 1.5,
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
+
+            {/* Status Feedback Banner */}
+            {revisionStatus !== "idle" && (
+              <div
+                style={{
+                  padding: "var(--space-3) var(--space-4)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "var(--font-sm)",
+                  background:
+                    revisionStatus === "generating"
+                      ? "rgba(245, 158, 11, 0.12)"
+                      : revisionStatus === "success"
+                        ? "rgba(16, 185, 129, 0.12)"
+                        : "rgba(239, 68, 68, 0.12)",
+                  border: `1px solid ${
+                    revisionStatus === "generating"
+                      ? "rgba(245, 158, 11, 0.35)"
+                      : revisionStatus === "success"
+                        ? "rgba(16, 185, 129, 0.35)"
+                        : "rgba(239, 68, 68, 0.35)"
+                  }`,
+                  color:
+                    revisionStatus === "generating"
+                      ? "#FDE68A"
+                      : revisionStatus === "success"
+                        ? "var(--success)"
+                        : "var(--danger)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-3)",
+                }}
+              >
+                {revisionStatus === "generating" && <span className="spinner" style={{ width: 18, height: 18 }} />}
+                {revisionStatus === "success" && <span style={{ fontSize: "1.2rem" }}>✅</span>}
+                {revisionStatus === "error" && <span style={{ fontSize: "1.2rem" }}>⚠️</span>}
+                <div style={{ flex: 1, lineHeight: 1.4 }}>{revisionMessage}</div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)", marginTop: "var(--space-2)" }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={revisionStatus === "generating"}
+                onClick={() => {
+                  setSelectedCampaignForRevision(null);
+                  setRevisionStatus("idle");
+                  setRevisionMessage("");
+                }}
+              >
+                Cancel
+              </button>
+
+              {revisionStatus === "success" ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setSelectedCampaignForRevision(null);
+                    setRevisionStatus("idle");
+                    setRevisionMessage("");
+                  }}
+                >
+                  Done
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={revisionStatus === "generating" || !revisionNotes.trim()}
+                  onClick={handleSubmitRevision}
+                  style={{
+                    background: "linear-gradient(135deg, #F59E0B, #D97706)",
+                    color: "#fff",
+                    border: "none",
+                    fontWeight: 600,
+                  }}
+                >
+                  {revisionStatus === "generating" ? (
+                    <>
+                      <span className="spinner" style={{ width: 16, height: 16, borderTopColor: "#fff" }} />
+                      Regenerating Content & Preview...
+                    </>
+                  ) : (
+                    "🔄 Generate Revision & Update Preview"
                   )}
                 </button>
               )}

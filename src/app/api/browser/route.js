@@ -48,21 +48,23 @@ function getChromeUserDataDir() {
   return path.join(localAppData, "Google", "Chrome", "User Data");
 }
 
-function getProfileDetails(profileDir) {
+function getProfileDetails(profileDir, targetProfileId = null) {
   try {
     const localStatePath = path.join(profileDir, "Local State");
     if (fs.existsSync(localStatePath)) {
       const ls = JSON.parse(fs.readFileSync(localStatePath, "utf8"));
-      const def = ls?.profile?.info_cache?.Default;
-      if (def) {
+      const pKey = targetProfileId || ls?.profile?.last_used || "Default";
+      const info = ls?.profile?.info_cache?.[pKey] || ls?.profile?.info_cache?.["Default"];
+      if (info) {
         return {
-          email: def.user_name || def.hosted_domain || "",
-          name: def.name || def.shortcut_name || "Primary Profile",
+          email: info.user_name || info.hosted_domain || "",
+          name: info.name || info.shortcut_name || pKey,
+          profileDir: pKey,
         };
       }
     }
   } catch {}
-  return { email: "2003shivam1990@gmail.com", name: "Shivam" };
+  return { email: "2003shivam1990@gmail.com", name: "Shivam Mishra", profileDir: "Default" };
 }
 
 function syncProfileToSharedDir(srcProfileId = "Default") {
@@ -72,30 +74,35 @@ function syncProfileToSharedDir(srcProfileId = "Default") {
   const srcProfileDir = path.join(userDataDir, srcProfileId);
   const srcLocalState = path.join(userDataDir, "Local State");
   const destDir = path.join(process.cwd(), "chrome_profiles", "shared_browser");
-  const destDefaultDir = path.join(destDir, "Default");
+  const destProfileDir = path.join(destDir, srcProfileId);
 
-  fs.mkdirSync(destDefaultDir, { recursive: true });
+  fs.mkdirSync(destProfileDir, { recursive: true });
 
-  // 1. Sanitize Local State with DPAPI os_crypt
+  // 1. Sanitize Local State preserving all profiles
   if (fs.existsSync(srcLocalState)) {
     try {
       const lsRaw = JSON.parse(fs.readFileSync(srcLocalState, "utf8"));
-      const selectedInfo = lsRaw?.profile?.info_cache?.[srcProfileId] || {
-        name: "Shivam",
-        user_name: "2003shivam1990@gmail.com",
-      };
+      const rawInfoCache = lsRaw?.profile?.info_cache || {};
+      const sanitizedInfoCache = {};
+      for (const [pKey, pInfo] of Object.entries(rawInfoCache)) {
+        sanitizedInfoCache[pKey] = {
+          active_time: pInfo.active_time || 0,
+          avatar_icon: pInfo.avatar_icon || "chrome://theme/IDR_PROFILE_AVATAR_26",
+          gaia_id: pInfo.gaia_id || "",
+          gaia_name: pInfo.gaia_name || "",
+          hosted_domain: pInfo.hosted_domain || "NO_HOSTED_DOMAIN",
+          name: pInfo.name || pKey,
+          shortcut_name: pInfo.shortcut_name || pKey,
+          user_name: pInfo.user_name || "",
+        };
+      }
       const sanitizedLocalState = {
         os_crypt: lsRaw.os_crypt || {},
         profile: {
-          info_cache: {
-            Default: {
-              ...selectedInfo,
-              name: selectedInfo.name || "Shivam",
-              user_name: selectedInfo.user_name || "2003shivam1990@gmail.com",
-            },
-          },
-          last_used: "Default",
+          info_cache: sanitizedInfoCache,
+          last_used: srcProfileId,
           picker_shown: false,
+          profiles_order: Object.keys(rawInfoCache),
         },
       };
       fs.writeFileSync(
@@ -124,7 +131,7 @@ function syncProfileToSharedDir(srcProfileId = "Default") {
 
   for (const f of essentialFiles) {
     const s = path.join(srcProfileDir, f);
-    const d = path.join(destDefaultDir, f);
+    const d = path.join(destProfileDir, f);
     if (fs.existsSync(s)) {
       try {
         fs.copyFileSync(s, d);
@@ -170,16 +177,16 @@ function syncProfileToSharedDir(srcProfileId = "Default") {
   }
 
   for (const d of essentialDirs) {
-    copyDirClean(path.join(srcProfileDir, d), path.join(destDefaultDir, d));
+    copyDirClean(path.join(srcProfileDir, d), path.join(destProfileDir, d));
   }
 
   // 4. Remove any stale locks in destination
   try {
-    const entries = fs.readdirSync(destDefaultDir);
+    const entries = fs.readdirSync(destProfileDir);
     for (const ent of entries) {
       if (ent.toLowerCase() === "lock" || ent.toLowerCase().includes("singleton")) {
         try {
-          fs.unlinkSync(path.join(destDefaultDir, ent));
+          fs.unlinkSync(path.join(destProfileDir, ent));
         } catch {}
       }
     }
@@ -197,9 +204,10 @@ export async function GET() {
     connected,
     port: 9222,
     profileEmail: details.email || "2003shivam1990@gmail.com",
-    profileName: details.name || "Shivam",
+    profileName: details.name || "Shivam Mishra",
+    profileDir: details.profileDir || "Default",
     message: connected
-      ? `Bot is connected to Chrome profile ${details.email} on port 9222.`
+      ? `Bot is connected to Chrome profile ${details.email} (${details.profileDir}) on port 9222.`
       : "No active browser detected on port 9222.",
   });
 }
@@ -212,17 +220,19 @@ export async function POST(request) {
     } catch {}
 
     const { profileId = "Default", forceSync = true, forceClose = true } = body;
+    const sharedDir = path.join(process.cwd(), "chrome_profiles", "shared_browser");
+    const currentDetails = getProfileDetails(sharedDir);
 
     const alreadyConnected = await checkPort(9222);
-    if (alreadyConnected && !forceClose) {
-      const sharedDir = path.join(process.cwd(), "chrome_profiles", "shared_browser");
-      const details = getProfileDetails(sharedDir);
+    // If already connected with the EXACT requested profile and forceClose is not set, reuse
+    if (alreadyConnected && !forceClose && currentDetails.profileDir?.toLowerCase() === profileId.toLowerCase()) {
       return NextResponse.json({
         success: true,
         alreadyRunning: true,
         connected: true,
-        profileEmail: details.email,
-        message: `Chrome is already running with remote debugging on port 9222 (${details.email})!`,
+        profileEmail: currentDetails.email,
+        profileDir: currentDetails.profileDir,
+        message: `Chrome is already running with remote debugging on port 9222 (${currentDetails.email})!`,
       });
     }
 
@@ -235,34 +245,31 @@ export async function POST(request) {
     }
 
     // Terminate existing Chrome instances to free locks and allow remote debugging
-    if (forceClose || !alreadyConnected) {
-      try {
-        execSync(
-          'powershell -Command "Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue"',
-          { stdio: "ignore", timeout: 6000 }
-        );
-        await new Promise((r) => setTimeout(r, 2000));
-      } catch (err) {
-        console.warn("Could not stop Chrome processes:", err.message);
-      }
+    try {
+      execSync(
+        'powershell -Command "Stop-Process -Name chrome, chromedriver -Force -ErrorAction SilentlyContinue"',
+        { stdio: "ignore", timeout: 6000 }
+      );
+      await new Promise((r) => setTimeout(r, 1500));
+    } catch (err) {
+      console.warn("Could not stop Chrome processes:", err.message);
     }
 
-    const profileDir = path.join(process.cwd(), "chrome_profiles", "shared_browser");
-    fs.mkdirSync(profileDir, { recursive: true });
+    fs.mkdirSync(sharedDir, { recursive: true });
 
-    // Sync user profile (2003shivam1990@gmail.com) into shared_browser
+    // Sync requested profile into shared_browser
     if (forceSync) {
       syncProfileToSharedDir(profileId);
     }
 
-    // Launch Chrome detached with remote debugging enabled
+    // Launch Chrome detached with remote debugging enabled and specific profile
     const args = [
       "--remote-debugging-port=9222",
-      `--user-data-dir=${profileDir}`,
+      `--user-data-dir=${sharedDir}`,
+      `--profile-directory=${profileId}`,
       "--no-first-run",
       "--no-default-browser-check",
       "http://localhost:3000",
-      "https://chatgpt.com",
     ];
 
     const child = spawn(chromePath, args, {
@@ -273,20 +280,21 @@ export async function POST(request) {
 
     // Poll until port 9222 is open (up to 5 seconds)
     let connected = false;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
       await new Promise((r) => setTimeout(r, 500));
       connected = await checkPort(9222);
       if (connected) break;
     }
 
-    const details = getProfileDetails(profileDir);
+    const details = getProfileDetails(sharedDir, profileId);
 
     return NextResponse.json({
       success: true,
       connected,
       profileEmail: details.email,
+      profileDir: details.profileDir,
       message: connected
-        ? `Chrome successfully launched with profile ${details.email}! Remote debugging active on port 9222.`
+        ? `Chrome successfully launched with profile ${details.email} (${profileId})! Remote debugging active on port 9222.`
         : "Chrome process started. Initializing remote debugging...",
     });
   } catch (error) {

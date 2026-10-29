@@ -58,6 +58,9 @@ class AutomationTask:
     error_message: Optional[str] = None
     stop_event: threading.Event = field(default_factory=threading.Event)
     on_promoted: Optional[Callable] = None
+    current_activity: str = "Initializing task..."
+    recent_activities: List[str] = field(default_factory=list)
+    skipped_count: int = 0
 
     def __post_init__(self):
         if not self.lock_key:
@@ -69,6 +72,19 @@ class AutomationTask:
         self.progress_current = current
         if total is not None:
             self.progress_total = total
+
+    def set_activity(self, text: str):
+        if not text:
+            return
+        clean_text = str(text).strip()
+        self.current_activity = clean_text
+        if not self.recent_activities or self.recent_activities[-1] != clean_text:
+            self.recent_activities.append(clean_text)
+            if len(self.recent_activities) > 8:
+                self.recent_activities.pop(0)
+
+    def increment_skipped(self, count: int = 1):
+        self.skipped_count += count
 
     def is_stopped(self) -> bool:
         return self.stop_event.is_set()
@@ -251,6 +267,9 @@ class TaskQueueOrchestrator:
                     "state": task.state.value,
                     "progress": f"{task.progress_current}/{task.progress_total}",
                     "elapsed_seconds": elapsed,
+                    "current_activity": getattr(task, "current_activity", "Working in background..."),
+                    "recent_activities": list(getattr(task, "recent_activities", [])),
+                    "skipped_count": getattr(task, "skipped_count", 0),
                 })
 
             queued_list = []

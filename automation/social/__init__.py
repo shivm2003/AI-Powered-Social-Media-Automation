@@ -30,8 +30,17 @@ def publish_to_platform(platform: str, media_path: str = None, caption: str = ""
 
 def publish_to_all_platforms(platforms: list, media_path: str = None, caption: str = "") -> dict:
     """Publishes content across multiple selected platforms."""
+    clean_platforms = []
+    for p in (platforms or []):
+        if isinstance(p, str) and "," in p:
+            clean_platforms.extend([x.strip().lower() for x in p.split(",") if x.strip()])
+        elif isinstance(p, str) and p.strip():
+            clean_platforms.append(p.strip().lower())
+    seen = set()
+    clean_platforms = [x for x in clean_platforms if not (x in seen or seen.add(x))]
+
     results = {}
-    for p in platforms:
+    for p in clean_platforms:
         try:
             results[p] = publish_to_platform(p, media_path=media_path, caption=caption)
         except Exception as e:

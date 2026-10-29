@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 
 logger = logging.getLogger("automation.driver")
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
 
 try:
     import undetected_chromedriver as uc
@@ -20,7 +21,7 @@ except ImportError:
     HAS_SELENIUM = False
     logger.warning("Selenium/undetected-chromedriver not installed. Run: pip install undetected-chromedriver selenium")
 
-from config import PLATFORM_PROFILES, PLATFORM_URLS, CHROME_OPTIONS, TIMEOUTS, HUMAN_DELAY
+from config import PLATFORM_PROFILES, PLATFORM_URLS, CHROME_OPTIONS, TIMEOUTS, HUMAN_DELAY, CHROME_PROFILES_DIR, BASE_DIR
 
 
 def get_chrome_version_main():
@@ -50,7 +51,7 @@ def is_debugging_port_open(port=9222):
         return False
 
 
-def ensure_debugging_browser():
+def ensure_debugging_browser(profile_dir="Default"):
     """Ensure Chrome is running with remote debugging enabled on port 9222."""
     if is_debugging_port_open(9222):
         return True
@@ -66,13 +67,16 @@ def ensure_debugging_browser():
     if not chrome_exe:
         return False
 
-    shared_profile = Path(__file__).parent.parent / "chrome_profiles" / "shared_browser"
+    shared_profile = CHROME_PROFILES_DIR / "shared_browser"
     shared_profile.mkdir(parents=True, exist_ok=True)
 
     args = [
         chrome_exe,
         "--remote-debugging-port=9222",
         f"--user-data-dir={shared_profile}",
+        f"--profile-directory={profile_dir}",
+        "--window-size=1280,900",
+        "--start-maximized",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-background-timer-throttling",
@@ -105,6 +109,39 @@ class BrowserDriver:
         self._watchdog_started = False
         self._start_health_watchdog()
 
+    def is_driver_alive(self, driver) -> bool:
+        """Safely verify if driver is responsive and connected, avoiding urllib3 retry freezes."""
+        if not driver:
+            return False
+        if getattr(driver, "_is_shared", False) and not is_debugging_port_open(9222):
+            return False
+        try:
+            _ = driver.title
+            return True
+        except Exception:
+            return False
+
+    def purge_dead_driver(self, dead_key=None, driver_obj=None):
+        """Cleanly removes a disconnected/crashed driver and all its references from self.drivers and platform_tabs."""
+        with self.lock:
+            dead_drivers = set()
+            if dead_key:
+                d = self.drivers.pop(dead_key, None)
+                if d:
+                    dead_drivers.add(d)
+            if driver_obj:
+                dead_drivers.add(driver_obj)
+
+            for k, d in list(self.drivers.items()):
+                if d in dead_drivers or (dead_key and k == dead_key):
+                    try:
+                        d.quit()
+                    except Exception:
+                        pass
+                    self.drivers.pop(k, None)
+
+            self.platform_tabs.clear()
+
     def _start_health_watchdog(self):
         """Starts a background daemon thread that checks idle tabs periodically to auto-heal blank white screens."""
         if self._watchdog_started:
@@ -123,9 +160,16 @@ class BrowserDriver:
                         shared_driver = self.drivers.get("_shared_debug_driver")
                         if not shared_driver:
                             continue
+
+                        # If debugging port 9222 is closed, Chrome is NOT running!
+                        if not is_debugging_port_open(9222):
+                            self.purge_dead_driver("_shared_debug_driver", shared_driver)
+                            continue
+
                         try:
                             handles = shared_driver.window_handles
                         except Exception:
+                            self.purge_dead_driver("_shared_debug_driver", shared_driver)
                             continue
 
                         for platform, handle in list(self.platform_tabs.items()):
@@ -295,13 +339,27 @@ class BrowserDriver:
         """Switches to the designated tab for platform, creating one if not present, and ensures it is rendered."""
         with self.lock:
             driver = driver or self.get_driver(platform)
+            if not self.is_driver_alive(driver):
+                self.purge_dead_driver(platform, driver)
+                driver = self.get_driver(platform)
+
             target_url = target_url or PLATFORM_URLS.get(platform, "https://google.com")
             import urllib.parse
             target_netloc = urllib.parse.urlparse(target_url).netloc.lower()
 
+            try:
+                available_handles = driver.window_handles
+            except Exception:
+                self.purge_dead_driver(platform, driver)
+                driver = self.get_driver(platform)
+                try:
+                    available_handles = driver.window_handles
+                except Exception:
+                    available_handles = []
+
             # 1. Check if we already have a saved window handle that is still open
             saved_handle = self.platform_tabs.get(platform)
-            if saved_handle and saved_handle in driver.window_handles:
+            if saved_handle and saved_handle in available_handles:
                 try:
                     driver.switch_to.window(saved_handle)
                     current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
@@ -318,7 +376,7 @@ class BrowserDriver:
                     pass
 
             # 2. Search existing window handles for a tab matching the target domain
-            for handle in driver.window_handles:
+            for handle in available_handles:
                 try:
                     driver.switch_to.window(handle)
                     current_netloc = urllib.parse.urlparse(driver.current_url).netloc.lower()
@@ -343,8 +401,11 @@ class BrowserDriver:
                 time.sleep(1.0)
             except Exception as e_new:
                 logger.warning(f"Could not open new tab for {platform}: {e_new}")
-                driver.get(target_url)
-                self.platform_tabs[platform] = driver.current_window_handle
+                try:
+                    driver.get(target_url)
+                    self.platform_tabs[platform] = driver.current_window_handle
+                except Exception:
+                    pass
 
             self.ensure_healthy_page(driver, platform, target_url=target_url)
             return driver
@@ -357,17 +418,17 @@ class BrowserDriver:
 
             # ── 1. If remote debugging port 9222 is active or can be activated, connect to user's browser ──
             if not is_debugging_port_open(9222):
+                self.purge_dead_driver("_shared_debug_driver")
                 ensure_debugging_browser()
 
             if is_debugging_port_open(9222):
                 shared_driver = self.drivers.get("_shared_debug_driver")
                 if shared_driver:
-                    try:
-                        shared_driver.title
+                    if self.is_driver_alive(shared_driver):
                         self.drivers[platform] = shared_driver
                         return shared_driver
-                    except Exception:
-                        self.drivers.pop("_shared_debug_driver", None)
+                    else:
+                        self.purge_dead_driver("_shared_debug_driver", shared_driver)
 
                 logger.info("Found active Chrome on port 9222! Attaching bot to user's existing browser window...")
                 try:
@@ -387,18 +448,18 @@ class BrowserDriver:
 
         # ── 2. Fallback: Standalone undetected-chromedriver with dedicated profile ──
         if platform in self.drivers:
-            try:
-                self.drivers[platform].title
-                return self.drivers[platform]
-            except Exception:
-                del self.drivers[platform]
+            d = self.drivers[platform]
+            if self.is_driver_alive(d):
+                return d
+            else:
+                self.purge_dead_driver(platform, d)
 
         profile_dir = PLATFORM_PROFILES.get(platform)
         if not profile_dir:
             raise ValueError(f"Unknown platform: {platform}")
 
         # If shared_browser contains full cookies and platform profile doesn't, prefer shared_browser
-        shared_profile = profile_dir.parent / "shared_browser"
+        shared_profile = CHROME_PROFILES_DIR / "shared_browser"
         shared_cookie = shared_profile / "Default" / "Network" / "Cookies"
         platform_cookie = profile_dir / "Default" / "Network" / "Cookies"
         if shared_cookie.exists() and (not platform_cookie.exists() or platform_cookie.stat().st_size < 30000):

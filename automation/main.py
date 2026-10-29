@@ -259,9 +259,11 @@ def handle_command(command: dict):
         elif action == "human_flow":
             platform = command.get("platform", "gemini")
             query = command.get("query", "Search and draft a viral marketing post for our product.")
-            logger.info(f"Executing human_flow for platform: {platform}...")
+            account_id = command.get("account_id")
+            profile_dir = command.get("profile_dir") or command.get("profile_directory")
+            logger.info(f"Executing human_flow for platform: {platform} (Account: {account_id or profile_dir or 'Default'})...")
             from browser.human_operator import execute_full_human_flow
-            result = execute_full_human_flow(platform=platform, query=query)
+            result = execute_full_human_flow(platform=platform, query=query, account_id=account_id, profile_dir=profile_dir)
             send_response(result)
 
         elif action == "human_flow_generate":
@@ -278,7 +280,12 @@ def handle_command(command: dict):
             skill_image_path = command.get("skill_image_path", None)
             campaign_id = command.get("campaign_id", None)
 
-            logger.info(f"Executing human_flow_generate for platform: {platform}...")
+            revision_count = command.get("revision_count", None)
+            contact_number = command.get("contact_number") or command.get("phone_number")
+            account_id = command.get("account_id")
+            profile_dir = command.get("profile_dir") or command.get("profile_directory")
+
+            logger.info(f"Executing human_flow_generate for platform: {platform} (Account: {account_id or profile_dir or 'default'})...")
             from browser.human_operator import execute_human_generation_and_telegram_flow
             result = execute_human_generation_and_telegram_flow(
                 platform=platform,
@@ -292,7 +299,11 @@ def handle_command(command: dict):
                 aspect_ratio=aspect_ratio,
                 visual_style=visual_style,
                 skill_image_path=skill_image_path,
-                campaign_id=campaign_id
+                campaign_id=campaign_id,
+                revision_count=revision_count,
+                contact_number=contact_number,
+                account_id=account_id,
+                profile_dir=profile_dir,
             )
             send_response(result)
 
@@ -313,7 +324,10 @@ def handle_command(command: dict):
             tg_chat_id = command.get("telegram_chat_id", None)
             tg_message_id = command.get("telegram_message_id", None)
 
-            logger.info(f"Executing growth_outreach for {platform} | Mode: {mode} | Location: {location}...")
+            account_id = command.get("account_id") or command.get("accountId")
+            profile_dir = command.get("profile_dir") or command.get("profileDir")
+
+            logger.info(f"Executing growth_outreach for {platform} | Mode: {mode} | Location: {location} | Profile: {profile_dir or 'Default'}...")
             from social.growth_orchestrator import run_growth_campaign
             result = run_growth_campaign(
                 campaign_id=campaign_id,
@@ -323,7 +337,9 @@ def handle_command(command: dict):
                 target_count=target_count,
                 safety_delay=safety_delay,
                 tg_chat_id=tg_chat_id,
-                tg_message_id=tg_message_id
+                tg_message_id=tg_message_id,
+                account_id=account_id,
+                profile_dir=profile_dir
             )
             send_response(result)
 

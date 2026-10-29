@@ -21,6 +21,9 @@ export async function POST(request) {
       customInstructions = "",
       skillImagePath = null,
       humanFlow = true,
+      contactNumber = null,
+      accountId = null,
+      profileDir = null,
     } = body;
 
     function safeParseJson(val, fallback = {}) {
@@ -43,6 +46,13 @@ export async function POST(request) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
+    const resolvedContactNumber =
+      contactNumber ||
+      product.contact_number ||
+      (product.name?.toLowerCase().includes("loan") || product.category?.toLowerCase() === "finance"
+        ? "8112570656"
+        : null);
+
     // 1. Create campaign in DB
     const campaignId = uuidv4();
     await createCampaign({
@@ -59,6 +69,8 @@ export async function POST(request) {
       video_duration: videoDuration,
       visual_style: visualStyle,
       custom_instructions: customInstructions,
+      contact_number: resolvedContactNumber,
+      account_id: accountId,
       status: "generating",
     });
 
@@ -84,6 +96,7 @@ export async function POST(request) {
               key_benefits: safeParseJson(product.key_benefits, []),
               brand_colors: brandColorsParsed,
               logo_path: product.logo_path || null,
+              contact_number: resolvedContactNumber,
             },
             platforms: selectedPlatforms,
             content_type: contentType,
@@ -95,13 +108,16 @@ export async function POST(request) {
             visual_style: visualStyle,
             skill_image_path: skillImagePath || product.logo_path || null,
             campaign_id: campaignId,
+            contact_number: resolvedContactNumber,
+            account_id: accountId,
+            profile_dir: profileDir,
           },
-          150000 // 2.5 minutes for realistic human-paced execution
+          contentType === "video" ? 900000 : 150000 // 15 minutes for 3-clip video generation (5 min minimum wait per clip), 2.5 min for image
         );
 
         if (flowResult && flowResult.status === "success") {
           const content = flowResult.content || {};
-          const caption = content.caption || `Discover ${product.name}!`;
+          const caption = flowResult.caption || content.caption || `Discover ${product.name}!`;
           const hashtags = Array.isArray(content.hashtags) ? content.hashtags : [];
           const mediaPaths = flowResult.media_path ? [flowResult.media_path] : [];
           const telegramDispatched = !!flowResult.telegram_dispatched;
@@ -194,6 +210,7 @@ export async function POST(request) {
           logo_path: product.logo_path || null,
           skill_image_path: resolvedSkillImage,
           custom_instructions: customInstructions,
+          contact_number: resolvedContactNumber,
         }, 75000);
 
         if (imgResult.image_path) {
@@ -212,6 +229,7 @@ export async function POST(request) {
             aspect_ratio: aspectRatio,
             cta_text: "Learn More ➜",
             skill_image_path: skillImagePath || product.logo_path || null,
+            contact_number: resolvedContactNumber,
           }, 15000);
           if (fbResult.image_path) {
             mediaPaths.push(fbResult.image_path);
@@ -234,7 +252,7 @@ export async function POST(request) {
           duration: videoDuration,
           aspect_ratio: aspectRatio,
           logo_path: product.logo_path || null,
-        }, 30000);
+        }, 180000);
 
         if (vidResult.video_path) {
           mediaPaths.push(vidResult.video_path);

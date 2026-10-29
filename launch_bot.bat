@@ -9,6 +9,7 @@ echo Bot: @shiv2003_bot
 echo.
 
 set PYTHONIOENCODING=utf-8
+python -c "import psutil; [p.kill() for p in psutil.process_iter(['pid', 'name', 'cmdline']) if 'python' in (p.info['name'] or '').lower() and any('poller.py' in str(arg).lower() for arg in (p.info.get('cmdline') or []))]" 2>nul
 python "%~dp0automation\telegram\poller.py"
 
 if %ERRORLEVEL% NEQ 0 (
