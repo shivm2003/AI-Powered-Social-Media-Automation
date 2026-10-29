@@ -1966,6 +1966,43 @@ def send_task_completed_notification(
     return {"status": "success" if res.get("ok") else "error", "response": res}
 
 
+def send_telegram_document(chat_id: str, file_path: str, caption: str = None) -> dict:
+    """Sends a local document (e.g., .docx, .pdf) to a Telegram chat with HTML caption."""
+    bot_token, default_chat = get_telegram_credentials()
+    target_chat = chat_id or default_chat
+    if not bot_token or not target_chat:
+        return {"status": "error", "message": "Missing Telegram credentials."}
+
+    p = Path(file_path)
+    if not p.exists():
+        return {"status": "error", "message": f"File not found: {file_path}"}
+
+    fname = p.name
+    with open(p, "rb") as f:
+        file_bytes = f.read()
+
+    data = {
+        "chat_id": target_chat,
+        "parse_mode": "HTML"
+    }
+    if caption:
+        data["caption"] = caption[:1024]
+
+    mime = "application/octet-stream"
+    if fname.lower().endswith(".docx"):
+        mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif fname.lower().endswith(".pdf"):
+        mime = "application/pdf"
+
+    res = make_telegram_request(
+        bot_token,
+        "sendDocument",
+        data=data,
+        files={"document": (fname, file_bytes, mime)}
+    )
+    return {"status": "success" if res.get("ok") else "error", "response": res}
+
+
 
 
 
