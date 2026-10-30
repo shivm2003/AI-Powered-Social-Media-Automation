@@ -837,7 +837,7 @@ def send_outreach_platform_menu(chat_id: str, message_id: int = None, account_id
             [{"text": "⚡ Both Simultaneously (FB + IG)", "callback_data": "outreach:plat:both"}],
             [
                 {"text": "📘 Facebook (Send Requests)", "callback_data": "outreach:plat:facebook"},
-                {"text": "📸 Instagram (Follows)", "callback_data": "outreach:plat:instagram"}
+                {"text": "📸 Instagram Follow Engine", "callback_data": "outreach:plat:instagram"}
             ],
             [{"text": "🔙 Back to Main Menu", "callback_data": "root:main"}]
         ]
@@ -919,24 +919,30 @@ def send_instagram_steps_menu(chat_id: str, message_id: int = None) -> dict:
     text = (
         "📸 <b>Instagram Growth & Follow Engine — Guided Steps</b>\n"
         "<i>Connected to your authenticated Chrome browser on port 9222</i>\n\n"
-        "👇 <b>Select an Instagram Step below:</b>\n\n"
-        "🎯 <b>Step 1: Enter User ID -> Save Followers & Follow:</b>\n"
-        "Input any Instagram User ID/username. Manvix AI navigates inside the ID, extracts & saves their exact follower count to the database, and dispatches the follow request!\n\n"
-        "📊 <b>Step 2: View Saved Follows & Lead Counters:</b>\n"
-        "Inspect all saved target profiles, extracted follower numbers, and cumulative follow metrics.\n\n"
+        "👇 <b>Select an Instagram Strategy below:</b>\n\n"
+        "🎯 <b>Step 1: Follow Specific User ID & Save Followers:</b>\n"
+        "Input any User ID/username. Manvix AI navigates to their profile, extracts follower data, and follows them.\n\n"
+        "👥 <b>Step 2: Follow Followers of Target Account (Competitor / Niche):</b>\n"
+        "Input a target account (e.g. <code>@lucknow_hearts</code>). Manvix AI opens their Followers dialog and safely follows their real followers one by one!\n\n"
         "📍 <b>Step 3: Auto-Follow by Location / City:</b>\n"
-        "Discover & follow real local people in Lucknow, Delhi, Mumbai, etc. (strictly filters out channels, broadcast channels, & news pages) with human safety pacing.\n\n"
-        "📉 <b>Step 4: Prune / Unfollow Accounts:</b>\n"
+        "Discover & follow real local people in Lucknow, Delhi, etc. (filters out channels, news & media).\n\n"
+        "🌟 <b>Step 4: Suggestions & Explore Discovery:</b>\n"
+        "Target algorithmically suggested users with highest follow-back rates.\n\n"
+        "📊 <b>Step 5: View Saved Follows & Stats:</b>\n"
+        "Inspect all saved target profiles, extracted counts, and follow metrics.\n\n"
+        "📉 <b>Step 6: Prune / Unfollow Accounts:</b>\n"
         "Clean inactive followings and manage your follow ratio safely.\n\n"
         "💡 <i>Quick Tip: You can also type <code>/follow @username</code> directly in chat!</i>"
     )
 
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🎯 Step 1: Follow User ID & Save Followers", "callback_data": "outreach:ig_mode:username"}],
-            [{"text": "📊 Step 2: View Saved Follows & Stats", "callback_data": "outreach:ig_follow_stats"}],
+            [{"text": "🎯 Step 1: Follow Specific User ID", "callback_data": "outreach:ig_mode:username"}],
+            [{"text": "👥 Step 2: Follow Followers of Target Account", "callback_data": "outreach:ig_mode:target_followers"}],
             [{"text": "📍 Step 3: Auto-Follow by Location / City", "callback_data": "outreach:ig_mode:location"}],
-            [{"text": "📉 Step 4: Prune / Unfollow Accounts", "callback_data": "outreach:ig_unfollow_menu"}],
+            [{"text": "🌟 Step 4: Suggestions & Explore Discovery", "callback_data": "outreach:strat:instagram:suggestions"}],
+            [{"text": "📊 Step 5: View Saved Follows & Stats", "callback_data": "outreach:ig_follow_stats"}],
+            [{"text": "📉 Step 6: Prune / Unfollow Accounts", "callback_data": "outreach:ig_unfollow_menu"}],
             [{"text": "🔙 Back to Outreach Menu", "callback_data": "root:outreach"}]
         ]
     }

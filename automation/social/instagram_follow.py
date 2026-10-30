@@ -1787,6 +1787,417 @@ def send_instagram_follow_requests(
         }
 
 
+def _open_instagram_followers_dialog(driver, clean_target: str) -> tuple[bool, str]:
+    """
+    Navigates to target profile, clicks Followers link, and clicks 'See All Followers' if mutual view appears.
+    Returns (success: bool, error_message: str).
+    """
+    from selenium.webdriver.common.by import By
+
+    target_url = f"https://www.instagram.com/{clean_target}/"
+    driver.get(target_url)
+    time.sleep(random.uniform(2.5, 3.5))
+
+    if browser.is_blank_or_unrendered(driver):
+        browser.ensure_healthy_page(driver, "instagram", target_url=target_url)
+        time.sleep(2.0)
+
+    # Check for private or non-existent profile
+    body_text = driver.find_element(By.TAG_NAME, "body").text or ""
+    if "isn't available" in body_text or "page may have been removed" in body_text:
+        return False, f"Account @{clean_target} not found or unavailable."
+
+    if "This account is private" in body_text:
+        return False, f"Account @{clean_target} is private. You must be following them to view their followers."
+
+    # Locate and click Followers link
+    followers_link = None
+    links = driver.find_elements(By.XPATH, "//header//a[contains(@href, '/followers/')] | //a[contains(@href, '/followers/')]")
+    if links:
+        followers_link = links[0]
+
+    if not followers_link:
+        driver.get(f"https://www.instagram.com/{clean_target}/followers/")
+        time.sleep(3.0)
+    else:
+        try:
+            driver.execute_script("arguments[0].click();", followers_link)
+        except Exception:
+            followers_link.click()
+        time.sleep(2.5)
+
+    # Locate dialog modal
+    dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
+    if not dialogs:
+        for _ in range(5):
+            time.sleep(1.0)
+            dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
+            if dialogs:
+                break
+
+    if not dialogs:
+        return False, f"Could not open followers dialog for @{clean_target}."
+
+    dialog = dialogs[0]
+
+    # Check & Click 'See All Followers' (Mutual Followers View Bypass)
+    try:
+        see_all = dialog.find_elements(
+            By.XPATH,
+            ".//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'see all followers')] | "
+            ".//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'see all followers')]"
+        )
+        if see_all:
+            logger.info(f"Mutual followers detected for @{clean_target}. Clicking 'See All Followers' to unlock full list...")
+            driver.execute_script("arguments[0].click();", see_all[0])
+            time.sleep(3.0)
+    except Exception as e_see:
+        logger.debug(f"See All Followers note: {e_see}")
+
+    return True, ""
+
+
+def _get_dialog_scroll_container(driver, dialog):
+    """
+    Identifies the exact scrollable element within the Instagram followers modal.
+    """
+    try:
+        container = driver.execute_script("""
+            const dialog = arguments[0];
+            const allDivs = dialog.querySelectorAll('div');
+            for (let div of allDivs) {
+                const style = window.getComputedStyle(div);
+                if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && div.scrollHeight > div.clientHeight) {
+                    return div;
+                }
+            }
+            return dialog;
+        """, dialog)
+        return container if container else dialog
+    except Exception:
+        return dialog
+
+
+def _extract_username_from_follow_button(btn, clean_target: str):
+    """
+    Walks up DOM parent elements from a Follow button to reliably extract the Instagram username.
+    Returns (username: str or None, row_element or None).
+    """
+    from selenium.webdriver.common.by import By
+    try:
+        curr = btn
+        for _ in range(5):
+            curr = curr.find_element(By.XPATH, "..")
+            a_tags = curr.find_elements(By.XPATH, ".//a[contains(@href, '/')]")
+            u_cand = []
+            for a in a_tags:
+                h = (a.get_attribute("href") or "").split("?")[0].rstrip("/")
+                parts = h.split("/")
+                if parts and parts[-1] and parts[-1] not in SYSTEM_PATHS and parts[-1] not in [clean_target, "loansolutions2026"]:
+                    u_cand.append(parts[-1])
+            if len(set(u_cand)) == 1:
+                return list(set(u_cand))[0], curr
+    except Exception:
+        pass
+    return None, None
+
+
+def follow_target_account_followers(
+    target_username: str,
+    target_count: int = 15,
+    safety_delay: int = 15,
+    on_progress=None,
+    stop_event=None,
+    skip_if_verified: bool = False,
+    skip_if_channel: bool = True
+) -> dict:
+    """
+    Follows accounts from a target user's Followers modal dialog (https://www.instagram.com/<target_username>/).
+    1. Opens target profile in Chrome.
+    2. Clicks on followers link to open the modal dialog (bypassing mutual followers via 'See All Followers').
+    3. Deep-Slides past already-followed accounts (avoiding premature refreshes).
+    4. Minimum 5-Account Sweep: Buffers at least 5 fresh un-followed accounts before following (or reaches end of list).
+    5. Scrolls each target row into view with smooth JavaScript scroll and follows with safe human pacing.
+    6. Micro-Batch Resting: Every 30 follows, pauses for 3-4 minutes to safeguard the account up to 1,000 follows.
+    7. Only reloads the profile if 15 deep scrolls reach the absolute bottom with zero un-followed accounts.
+    """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.action_chains import ActionChains
+
+    clean_target = clean_instagram_username(target_username)
+    if not clean_target:
+        return {"status": "error", "message": "Invalid target username."}
+
+    # Clamp target count to maximum 1,000 for logical account safety
+    target_count = min(max(1, int(target_count)), 1000)
+
+    logger.info(f"Targeting followers of @{clean_target} (Goal: {target_count}, Max: 1000)...")
+    logs = [f"🎯 Starting follower extraction for @{clean_target} (Target: {target_count})"]
+
+    try:
+        driver = browser.navigate("instagram", f"https://www.instagram.com/{clean_target}/", refresh_first=False)
+        time.sleep(random.uniform(2.0, 3.0))
+
+        ok, err_msg = _open_instagram_followers_dialog(driver, clean_target)
+        if not ok:
+            return {"status": "error", "message": err_msg, "sent": 0}
+
+        sent_count = 0
+        skipped_count = 0
+        consecutive_empty_reloads = 0
+        batch_follow_count = 0
+        processed_users = set()
+        followed_list = []
+
+        while sent_count < target_count and consecutive_empty_reloads < 6:
+            if stop_event and stop_event.is_set():
+                logs.append("🛑 Follower outreach stopped by user.")
+                break
+
+            active_dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
+            if not active_dialogs:
+                time.sleep(1.5)
+                active_dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
+                if not active_dialogs:
+                    ok_reopen, _ = _open_instagram_followers_dialog(driver, clean_target)
+                    if not ok_reopen:
+                        break
+                    active_dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
+
+            if not active_dialogs:
+                break
+            dialog = active_dialogs[0]
+            scroll_container = _get_dialog_scroll_container(driver, dialog)
+
+            # Fast-slide down if resuming after an auto-refresh and sent_count > 0
+            if sent_count > 0 and len(processed_users) > 0 and getattr(driver, "_just_reloaded_followers", False):
+                driver._just_reloaded_followers = False
+                fast_scrolls = min(max(3, (sent_count // 10) + 1), 10)
+                logger.info(f"Fast-sliding down past ~{sent_count} followed accounts ({fast_scrolls} slides)...")
+                for _ in range(fast_scrolls):
+                    driver.execute_script("arguments[0].scrollTop += 850;", scroll_container)
+                    time.sleep(0.7)
+
+            # ── Minimum 5 Accounts Deep-Slide Sweep ──
+            # Slide down dynamically until at least 5 fresh un-followed candidates are loaded,
+            # or until the absolute bottom of the list is reached.
+            valid_candidates = []
+            slide_count = 0
+
+            while len(valid_candidates) < 5 and slide_count < 15:
+                if stop_event and stop_event.is_set():
+                    break
+
+                # Re-fetch active dialog and buttons safely
+                try:
+                    active_dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog']")
+                    if not active_dialogs:
+                        break
+                    dialog = active_dialogs[0]
+                    scroll_container = _get_dialog_scroll_container(driver, dialog)
+
+                    raw_buttons = dialog.find_elements(
+                        By.XPATH,
+                        ".//button[.//div[text()='Follow'] or text()='Follow'][not(@data-bot-sent='true')]"
+                    )
+                except Exception as e_btns:
+                    logger.debug(f"Buttons fetch error: {e_btns}")
+                    raw_buttons = []
+
+                # Extract and filter candidates
+                for btn in raw_buttons:
+                    try:
+                        u_cand, row_elem = _extract_username_from_follow_button(btn, clean_target)
+                        if not u_cand or u_cand.lower() in processed_users:
+                            driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
+                            continue
+
+                        # Check if candidate already in current valid_candidates buffer
+                        if not any(c[1].lower() == u_cand.lower() for c in valid_candidates):
+                            valid_candidates.append((btn, u_cand, row_elem))
+                    except Exception:
+                        continue
+
+                if len(valid_candidates) >= 5 or (len(valid_candidates) > 0 and (sent_count + len(valid_candidates) >= target_count)):
+                    break
+
+                # Check if bottom of modal reached
+                try:
+                    reached_bottom = driver.execute_script("""
+                        const el = arguments[0];
+                        return (el.scrollTop + el.clientHeight >= el.scrollHeight - 30);
+                    """, scroll_container)
+                except Exception:
+                    reached_bottom = False
+
+                if reached_bottom and len(valid_candidates) > 0:
+                    logger.info(f"Reached bottom of modal with {len(valid_candidates)} candidates available.")
+                    break
+                elif reached_bottom and len(valid_candidates) == 0:
+                    logger.info("Reached bottom of modal with 0 candidates remaining.")
+                    break
+
+                # Slide down deeper to reveal more accounts
+                slide_count += 1
+                logger.info(f"Sliding down modal past followed accounts (Slide {slide_count}/15, buffered {len(valid_candidates)} candidates)...")
+                if on_progress:
+                    try:
+                        on_progress(sent_count, target_count, {
+                            "user": "",
+                            "target_account": clean_target,
+                            "sent": sent_count,
+                            "target": target_count,
+                            "status": "sliding",
+                            "slide_count": slide_count,
+                            "buffered": len(valid_candidates)
+                        })
+                    except Exception:
+                        pass
+
+                driver.execute_script("arguments[0].scrollTop += 850;", scroll_container)
+                time.sleep(random.uniform(1.2, 1.8))
+
+            # If no candidates found after 15 slides and reached bottom, trigger reload
+            if not valid_candidates:
+                consecutive_empty_reloads += 1
+                if consecutive_empty_reloads >= 6:
+                    logs.append(f"🏁 Reached end of available followers for @{clean_target} after {consecutive_empty_reloads} reload cycles. Total: {sent_count}/{target_count}.")
+                    break
+
+                reload_log = f"🔄 Scanned full modal depth without finding un-followed accounts ({sent_count}/{target_count}). Refreshing @{clean_target} profile (Attempt {consecutive_empty_reloads}/6)..."
+                logs.append(reload_log)
+                logger.info(reload_log)
+
+                if on_progress:
+                    try:
+                        on_progress(sent_count, target_count, {
+                            "user": "",
+                            "target_account": clean_target,
+                            "sent": sent_count,
+                            "target": target_count,
+                            "status": "refreshing",
+                            "reload_attempt": consecutive_empty_reloads,
+                            "message": f"🔄 Refreshing @{clean_target} to load next fresh follower batch ({sent_count}/{target_count})..."
+                        })
+                    except Exception:
+                        pass
+
+                ok_reload, _ = _open_instagram_followers_dialog(driver, clean_target)
+                if ok_reload:
+                    driver._just_reloaded_followers = True
+                    time.sleep(2.0)
+                else:
+                    time.sleep(3.0)
+                continue
+
+            # ── Follow Valid Candidates ──
+            for btn, curr_user, row_elem in valid_candidates:
+                if stop_event and stop_event.is_set():
+                    break
+                if sent_count >= target_count:
+                    break
+                if curr_user.lower() in processed_users:
+                    continue
+
+                try:
+                    processed_users.add(curr_user.lower())
+
+                    # Channel/brand account filter
+                    if skip_if_channel:
+                        is_ch, ch_reason = is_channel_or_non_person_account(curr_user)
+                        if is_ch:
+                            driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
+                            skipped_count += 1
+                            logger.info(f"🛡️ Skipped @{curr_user}: Channel/brand pattern ({ch_reason})")
+                            continue
+
+                    # Verified badge filter
+                    if skip_if_verified and row_elem:
+                        is_ver, ver_reason = is_verified_account(row_elem)
+                        if is_ver:
+                            driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
+                            skipped_count += 1
+                            logger.info(f"🛡️ Skipped @{curr_user}: Verified account ({ver_reason})")
+                            continue
+
+                    # Scroll button smoothly into viewport center
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", btn)
+                    time.sleep(0.5)
+
+                    # Click follow button
+                    try:
+                        ActionChains(driver).move_to_element(btn).pause(0.2).click().perform()
+                    except Exception:
+                        driver.execute_script("arguments[0].click();", btn)
+
+                    driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
+                    sent_count += 1
+                    consecutive_empty_reloads = 0
+                    followed_list.append(curr_user)
+                    logger.info(f"✅ Followed @{curr_user} from @{clean_target}'s followers ({sent_count}/{target_count})")
+
+                    if on_progress:
+                        try:
+                            on_progress(sent_count, target_count, {
+                                "user": curr_user,
+                                "target_account": clean_target,
+                                "sent": sent_count,
+                                "target": target_count,
+                                "status": "followed"
+                            })
+                        except Exception as e_p:
+                            logger.debug(f"Progress error: {e_p}")
+
+                    # Micro-Batch Resting Cooldown (Safeguard for up to 1000 Follows)
+                    batch_follow_count += 1
+                    if batch_follow_count >= 30 and sent_count < target_count:
+                        cooldown_seconds = int(random.uniform(180, 240))  # 3-4 minutes cooldown
+                        logger.info(f"Micro-batch of 30 follows reached ({sent_count}/{target_count}). Entering rest cooldown of {cooldown_seconds}s to safeguard account...")
+                        if on_progress:
+                            try:
+                                on_progress(sent_count, target_count, {
+                                    "user": curr_user,
+                                    "target_account": clean_target,
+                                    "sent": sent_count,
+                                    "target": target_count,
+                                    "status": "resting",
+                                    "cooldown": cooldown_seconds,
+                                    "message": f"⏳ Resting cooldown: pausing {cooldown_seconds//60} mins to protect account from Instagram rate-limits..."
+                                })
+                            except Exception:
+                                pass
+
+                        for _ in range(cooldown_seconds):
+                            if stop_event and stop_event.is_set():
+                                break
+                            time.sleep(1.0)
+                        batch_follow_count = 0
+                        if stop_event and stop_event.is_set():
+                            break
+
+                    # Human safety delay between follows
+                    pause = random.uniform(max(10.0, safety_delay * 0.8), max(15.0, safety_delay * 1.3))
+                    logger.info(f"Human delay: {pause:.1f}s before next follow...")
+                    time.sleep(pause)
+
+                except Exception as e_btn:
+                    logger.debug(f"Row click error for @{curr_user}: {e_btn}")
+                    continue
+
+        return {
+            "status": "completed" if sent_count >= target_count else "stopped" if (stop_event and stop_event.is_set()) else "finished",
+            "target_account": clean_target,
+            "sent": sent_count,
+            "target": target_count,
+            "skipped": skipped_count,
+            "followed_accounts": followed_list,
+            "logs": logs
+        }
+    except Exception as e_fol:
+        logger.error(f"Follow target followers error: {e_fol}", exc_info=True)
+        return {"status": "error", "message": str(e_fol), "sent": 0}
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     if len(sys.argv) > 1 and sys.argv[1].startswith("@"):

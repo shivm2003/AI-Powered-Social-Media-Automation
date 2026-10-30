@@ -1066,6 +1066,200 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
         )
 
 
+def launch_ig_target_followers_task(chat_id: str, target_username: str, target_count: int = 15, message_id: int = None, account_id: str = None):
+    """
+    Executes Instagram following on the followers of a target account (e.g. competitor/niche account).
+    Streams live progress to Telegram with safety stop button and profile metrics.
+    """
+    import threading
+    import uuid
+    from social.instagram_follow import clean_instagram_username, follow_target_account_followers
+
+    clean_target = clean_instagram_username(target_username)
+    if not clean_target:
+        send_text_message(chat_id, "⚠️ <b>Invalid target username.</b> Please provide a valid handle (e.g. <code>@lucknow_hearts</code>).")
+        return
+
+    # Clamp target count to maximum 1,000
+    target_count = min(max(1, int(target_count)), 1000)
+
+    if not account_id:
+        account_id = chat_sessions.get(chat_id, {}).get("selected_account_id")
+
+    from db_campaigns import get_chrome_account
+    acc_info = get_chrome_account(account_id) or {}
+    acc_name = acc_info.get("google_name") or acc_info.get("name", "Shivam Mishra")
+    acc_email = acc_info.get("google_email") or acc_info.get("email", "2003shivam1990@gmail.com")
+    acc_pdir = acc_info.get("profile_dir") or acc_info.get("profile_directory", "Default")
+    acc_ig = acc_info.get("instagram_username", "loansolutions2026")
+    acc_id = str(acc_info.get("id") or account_id or "1")
+
+    job_id = str(uuid.uuid4())[:8]
+    stop_flag = BASE_DIR / "data" / f"stop_{job_id}.flag"
+
+    init_text = (
+        f"👥 <b>Instagram Target Follower Sequence Initiated!</b>\n\n"
+        f"🎯 <b>Target Account:</b> <code>@{clean_target}</code>\n"
+        f"🎯 <b>Followers Goal:</b> <code>{target_count} Accounts</code> (Max Cap: 1000)\n"
+        f"👤 <b>Chrome Profile:</b> {acc_name} (<code>{acc_pdir}</code>)\n"
+        f"📸 <b>Active Handle:</b> @{acc_ig}\n"
+        f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n\n"
+        f"⏳ <b>Status:</b> Opening <code>@{clean_target}</code> followers dialog in authenticated Chrome..."
+    )
+
+    stop_keyboard = {
+        "inline_keyboard": [
+            [{"text": "🛑 Stop Follow Task", "callback_data": f"ig_flw:stop:{job_id}"}]
+        ]
+    }
+
+    sent_msg_id = None
+    if message_id:
+        try:
+            res = edit_message_text(chat_id, message_id, init_text, keyboard=stop_keyboard)
+            if res.get("ok"):
+                sent_msg_id = message_id
+        except Exception:
+            pass
+
+    if not sent_msg_id:
+        res_msg = send_text_message(chat_id, init_text, reply_markup=stop_keyboard)
+        if res_msg.get("response", {}).get("result"):
+            sent_msg_id = res_msg["response"]["result"].get("message_id")
+
+    def _exec_target_followers():
+        try:
+            stop_evt = threading.Event()
+
+            def _on_progress(sent, target, details):
+                if stop_flag.exists():
+                    stop_evt.set()
+                if sent_msg_id:
+                    u_curr = details.get("user", "")
+                    st = details.get("status", "")
+                    progress_pct = int((sent / max(target, 1)) * 100)
+                    bar_len = 10
+                    filled = int(bar_len * sent // max(target, 1))
+                    bar = "█" * filled + "░" * (bar_len - filled)
+
+                    if st == "resting":
+                        cd = details.get("cooldown", 180)
+                        prog_text = (
+                            f"👥 <b>Target Follower Outreach — Cooldown Active</b>\n\n"
+                            f"🎯 <b>Target Account:</b> <code>@{clean_target}</code>\n"
+                            f"📈 <b>Progress:</b> <code>[{bar}] {sent}/{target}</code> ({progress_pct}%)\n"
+                            f"🏆 <b>Followed So Far:</b> <code>{sent} accounts</code>\n\n"
+                            f"⏳ <b>Account Protection Cooldown:</b>\n"
+                            f"<i>Pausing ~{cd//60} mins to keep account safe from Instagram rate-limits...</i>\n"
+                            f"Will automatically resume next batch shortly."
+                        )
+                    elif st == "sliding":
+                        s_num = details.get("slide_count", 1)
+                        buff = details.get("buffered", 0)
+                        prog_text = (
+                            f"👥 <b>Target Follower Outreach — Scanning Followers</b>\n\n"
+                            f"🎯 <b>Target Account:</b> <code>@{clean_target}</code>\n"
+                            f"📈 <b>Progress:</b> <code>[{bar}] {sent}/{target}</code> ({progress_pct}%)\n"
+                            f"🏆 <b>Followed So Far:</b> <code>{sent} accounts</code>\n\n"
+                            f"⏬ <b>Deep Sliding Past Followed Accounts:</b>\n"
+                            f"<i>Sliding down modal to uncover un-followed accounts (Slide {s_num}/15 | Buffered: {buff}/5)...</i>"
+                        )
+                    elif st == "refreshing":
+                        atm = details.get("reload_attempt", 1)
+                        prog_text = (
+                            f"👥 <b>Target Follower Outreach — Refreshing Batch</b>\n\n"
+                            f"🎯 <b>Target Account:</b> <code>@{clean_target}</code>\n"
+                            f"📈 <b>Progress:</b> <code>[{bar}] {sent}/{target}</code> ({progress_pct}%)\n"
+                            f"🏆 <b>Followed So Far:</b> <code>{sent} accounts</code>\n\n"
+                            f"🔄 <b>Reloading Fresh Followers:</b>\n"
+                            f"<i>Full modal depth scanned without new un-followed accounts. Refreshing @{clean_target} profile & re-opening dialog (Attempt {atm}/6)...</i>"
+                        )
+                    else:
+                        prog_text = (
+                            f"👥 <b>Target Follower Outreach in Progress...</b>\n\n"
+                            f"🎯 <b>Target Account:</b> <code>@{clean_target}</code>\n"
+                            f"📈 <b>Progress:</b> <code>[{bar}] {sent}/{target}</code> ({progress_pct}%)\n"
+                            f"✅ <b>Latest Followed:</b> <code>@{u_curr}</code>\n\n"
+                            f"⏳ <i>Human safety delay between follows to safeguard account...</i>"
+                        )
+                    try:
+                        edit_message_text(chat_id, sent_msg_id, prog_text, keyboard=stop_keyboard)
+                    except Exception:
+                        pass
+
+            res = follow_target_account_followers(
+                target_username=clean_target,
+                target_count=target_count,
+                safety_delay=14,
+                on_progress=_on_progress,
+                stop_event=stop_evt,
+                skip_if_verified=False,
+                skip_if_channel=True
+            )
+
+            if stop_flag.exists():
+                try:
+                    stop_flag.unlink()
+                except Exception:
+                    pass
+
+            followed_ppl = res.get("followed_accounts", [])
+            s_count = res.get("sent", 0)
+
+            done_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "👥 Follow Another Target's Followers", "callback_data": "outreach:ig_mode:target_followers"}],
+                    [{"text": "📸 Instagram Steps Menu", "callback_data": "outreach:plat:instagram"}],
+                    [{"text": "🔙 Main Menu", "callback_data": "root:main"}]
+                ]
+            }
+
+            lines = [f"• ✅ <b>@{u}</b>" for u in followed_ppl[:15]]
+            summary_preview = "\n".join(lines) if lines else "<i>No new followers dispatched.</i>"
+            if len(followed_ppl) > 15:
+                summary_preview += f"\n<i>...and {len(followed_ppl)-15} more</i>"
+
+            final_text = (
+                f"🎉 <b>Target Follower Outreach Complete!</b>\n\n"
+                f"🎯 <b>Target Account:</b> <code>@{clean_target}</code>\n"
+                f"🏆 <b>Followers Followed:</b> <code>{s_count}/{target_count}</code>\n"
+                f"🛡️ <b>Channels/Bots Filtered:</b> <code>{res.get('skipped', 0)}</code>\n\n"
+                f"📋 <b>Followed Profiles:</b>\n"
+                f"{summary_preview}"
+            )
+
+            if sent_msg_id:
+                try:
+                    edit_message_text(chat_id, sent_msg_id, final_text, keyboard=done_keyboard)
+                except Exception:
+                    send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+            else:
+                send_text_message(chat_id, final_text, reply_markup=done_keyboard)
+
+        except Exception as e_tgt:
+            logger.error(f"Error in target followers task: {e_tgt}", exc_info=True)
+            send_text_message(chat_id, f"⚠️ Instagram follower task error: {e_tgt}")
+
+    task_obj = AutomationTask(
+        name=f"IG Follow Followers of @{clean_target} ({target_count})",
+        task_type="growth",
+        platform="instagram",
+        account_id=acc_id,
+        tg_chat_id=chat_id,
+        tg_message_id=sent_msg_id,
+        run_fn=lambda t: _exec_target_followers()
+    )
+    submit_res = orchestrator.submit_task(task_obj)
+    if submit_res.get("status") == "queued":
+        send_queue_collision_notice(
+            chat_id=chat_id,
+            task_name=task_obj.name,
+            lock_key=task_obj.lock_key,
+            position=submit_res.get("position", 1),
+            active_ahead=submit_res.get("active_ahead_name")
+        )
+
+
 def launch_post_share_task(
     chat_id: str,
     campaign_id: str,
@@ -2019,7 +2213,10 @@ def handle_callback_query(callback: dict):
         platform = callback_data.split(":", 2)[2].lower()
         if callback_id:
             answer_callback_query(callback_id)
-        send_outreach_strategy_menu(chat_id, platform=platform, message_id=message_id)
+        if platform == "instagram":
+            send_instagram_steps_menu(chat_id, message_id=message_id)
+        else:
+            send_outreach_strategy_menu(chat_id, platform=platform, message_id=message_id)
 
     # 15a. Outreach Strategy Selected -> Route to Count or Location
     elif callback_data.startswith("outreach:strat:"):
@@ -2070,6 +2267,38 @@ def handle_callback_query(callback: dict):
             "• <code>@rahul_verma, @priya_sharma</code>\n\n"
             "<i>(Type /cancel anytime to return to the menu)</i>"
         )
+
+    # 15c2. Instagram Mode: Target Account's Followers
+    elif callback_data == "outreach:ig_mode:target_followers":
+        if callback_id:
+            answer_callback_query(callback_id)
+        chat_sessions[chat_id] = {
+            "action": "AWAITING_IG_TARGET_FOLLOWERS_USERNAME",
+            "message_id": message_id
+        }
+        send_text_message(
+            chat_id,
+            "👥 <b>Instagram Target Followers Engine</b>\n\n"
+            "Please enter the Instagram <code>User ID</code> or <code>@username</code> whose followers you want to follow:\n\n"
+            "⚡ <b>Automated Workflow:</b>\n"
+            "1. Manvix AI navigates to the target user's profile\n"
+            "2. Opens their <b>Followers</b> dialog in authenticated Chrome\n"
+            "3. Scrolls and sends follow requests to real followers with safety pacing\n"
+            "4. Automatically filters out channels, news, and inactive accounts!\n\n"
+            "<i>Examples:</i>\n"
+            "• <code>@lucknow_hearts</code>\n"
+            "• <code>@lucknow_hearts 25</code> (to follow 25 followers directly)\n\n"
+            "<i>(Type /cancel anytime to return to the menu)</i>"
+        )
+
+    # 15c3. Follow Target Followers - Count Selection Callback
+    elif callback_data.startswith("ig_tgt_cnt:"):
+        parts = callback_data.split(":")
+        target_u = parts[1]
+        target_c = int(parts[2]) if len(parts) > 2 else 20
+        if callback_id:
+            answer_callback_query(callback_id)
+        launch_ig_target_followers_task(chat_id, target_u, target_count=target_c, message_id=message_id)
 
     # 15d. Instagram Mode: Location
     elif callback_data == "outreach:ig_mode:location":
@@ -2512,6 +2741,49 @@ def handle_text_message(message: dict):
                 chat_id,
                 "⚠️ <b>Invalid format.</b> Please specify an account with @username (e.g. <code>@rahul_verma</code>) or use /cancel."
             )
+        return
+
+    # User provided target Instagram username to follow their followers
+    if session.get("action") == "AWAITING_IG_TARGET_FOLLOWERS_USERNAME":
+        target_msg_id = session.get("message_id")
+        del chat_sessions[chat_id]
+        parts = [p.strip() for p in text.split() if p.strip()]
+        if parts:
+            tgt_user = parts[0].lstrip("@").strip()
+            if len(parts) > 1 and parts[1].isdigit():
+                req_count = min(max(1, int(parts[1])), 1000)
+                launch_ig_target_followers_task(chat_id, tgt_user, target_count=req_count, message_id=target_msg_id)
+            else:
+                cnt_keyboard = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "25 Followers", "callback_data": f"ig_tgt_cnt:{tgt_user}:25"},
+                            {"text": "50 Followers", "callback_data": f"ig_tgt_cnt:{tgt_user}:50"}
+                        ],
+                        [
+                            {"text": "100 Followers", "callback_data": f"ig_tgt_cnt:{tgt_user}:100"},
+                            {"text": "250 Followers", "callback_data": f"ig_tgt_cnt:{tgt_user}:250"}
+                        ],
+                        [
+                            {"text": "500 Followers", "callback_data": f"ig_tgt_cnt:{tgt_user}:500"},
+                            {"text": "1000 Followers (Max)", "callback_data": f"ig_tgt_cnt:{tgt_user}:1000"}
+                        ],
+                        [{"text": "🔙 Cancel", "callback_data": "outreach:plat:instagram"}]
+                    ]
+                }
+                send_text_message(
+                    chat_id,
+                    f"👥 <b>Target Account:</b> <code>@{tgt_user}</code>\n\n"
+                    "Choose how many followers to follow (up to 1,000 max):\n\n"
+                    "⚡ <b>Safety Guardrails:</b>\n"
+                    "• 12s–22s human delay between follows\n"
+                    "• 3–4 min rest cooldown every 30 follows (safeguards account from rate-limits)\n"
+                    "• Automatically filters out channels and commercial pages\n\n"
+                    f"<i>💡 Or type any number directly (e.g. <code>@{tgt_user} 350</code>).</i>",
+                    reply_markup=cnt_keyboard
+                )
+        else:
+            send_text_message(chat_id, "⚠️ <b>Invalid format.</b> Please specify an account (e.g. <code>@lucknow_hearts</code>) or /cancel.")
         return
 
     # If session is Antigravity prompt but user entered an Instagram handle or follow command
