@@ -1977,6 +1977,7 @@ def follow_target_account_followers(
                 for _ in range(fast_scrolls):
                     driver.execute_script("arguments[0].scrollTop += 850;", scroll_container)
                     time.sleep(0.7)
+                time.sleep(2.0)  # Allow Instagram AJAX infinite scroll to hydrate next follower chunk
 
             # ── Minimum 5 Accounts Deep-Slide Sweep ──
             # Slide down dynamically until at least 5 fresh un-followed candidates are loaded,
@@ -2034,8 +2035,21 @@ def follow_target_account_followers(
                     logger.info(f"Reached bottom of modal with {len(valid_candidates)} candidates available.")
                     break
                 elif reached_bottom and len(valid_candidates) == 0:
-                    logger.info("Reached bottom of modal with 0 candidates remaining.")
-                    break
+                    # Give Instagram AJAX infinite scroll a moment to fetch and expand
+                    time.sleep(2.0)
+                    old_sh = driver.execute_script("return arguments[0].scrollHeight;", scroll_container)
+                    driver.execute_script("arguments[0].scrollTop += 200;", scroll_container)
+                    time.sleep(1.0)
+                    new_sh = driver.execute_script("return arguments[0].scrollHeight;", scroll_container)
+                    if new_sh > old_sh:
+                        logger.info(f"Instagram dynamically loaded more followers (scrollHeight {old_sh} -> {new_sh}). Continuing sweep...")
+                        continue
+                    elif slide_count < 4:
+                        slide_count += 1
+                        continue
+                    else:
+                        logger.info("Reached bottom of modal with 0 candidates remaining after AJAX verification.")
+                        break
 
                 # Slide down deeper to reveal more accounts
                 slide_count += 1
