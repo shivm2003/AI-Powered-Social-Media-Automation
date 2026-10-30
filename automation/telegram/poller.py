@@ -473,15 +473,7 @@ def launch_outreach_campaign(chat_id: str, platform: str, location: str, target_
         tg_message_id=sent_msg_id,
         run_fn=lambda t: _exec_growth(t)
     )
-    submit_res = orchestrator.submit_task(task_obj)
-    if submit_res.get("status") == "queued":
-        send_queue_collision_notice(
-            chat_id=chat_id,
-            task_name=task_obj.name,
-            lock_key=task_obj.lock_key,
-            position=submit_res.get("position", 1),
-            active_ahead=submit_res.get("active_ahead_name")
-        )
+    orchestrator.submit_task(task_obj)
 
 
 def launch_social_group_creation(chat_id: str, platform: str, group_type: str, group_name: str, message_id: int = None, account_id: str = None):
@@ -572,15 +564,7 @@ def launch_social_group_creation(chat_id: str, platform: str, group_type: str, g
         tg_message_id=sent_msg_id,
         run_fn=lambda t: _exec_grp()
     )
-    submit_res = orchestrator.submit_task(task_obj)
-    if submit_res.get("status") == "queued":
-        send_queue_collision_notice(
-            chat_id=chat_id,
-            task_name=task_obj.name,
-            lock_key=task_obj.lock_key,
-            position=submit_res.get("position", 1),
-            active_ahead=submit_res.get("active_ahead_name")
-        )
+    orchestrator.submit_task(task_obj)
 
 
 def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, message_id: int = None, account_id: str = None):
@@ -716,15 +700,7 @@ def launch_fb_accept_task(chat_id: str, target_count: int, like_recent: bool, me
         tg_message_id=sent_msg_id,
         run_fn=lambda t: _exec_accept()
     )
-    submit_res = orchestrator.submit_task(task_obj)
-    if submit_res.get("status") == "queued":
-        send_queue_collision_notice(
-            chat_id=chat_id,
-            task_name=task_obj.name,
-            lock_key=task_obj.lock_key,
-            position=submit_res.get("position", 1),
-            active_ahead=submit_res.get("active_ahead_name")
-        )
+    orchestrator.submit_task(task_obj)
 
 
 def launch_ig_unfollow_task(chat_id: str, target_count: int, message_id: int = None, account_id: str = None):
@@ -1055,15 +1031,7 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
         tg_message_id=sent_msg_id,
         run_fn=lambda t: _exec_follow_users()
     )
-    submit_res = orchestrator.submit_task(task_obj)
-    if submit_res.get("status") == "queued":
-        send_queue_collision_notice(
-            chat_id=chat_id,
-            task_name=task_obj.name,
-            lock_key=task_obj.lock_key,
-            position=submit_res.get("position", 1),
-            active_ahead=submit_res.get("active_ahead_name")
-        )
+    orchestrator.submit_task(task_obj)
 
 
 def launch_ig_target_followers_task(chat_id: str, target_username: str, target_count: int = 15, message_id: int = None, account_id: str = None):
@@ -1249,15 +1217,7 @@ def launch_ig_target_followers_task(chat_id: str, target_username: str, target_c
         tg_message_id=sent_msg_id,
         run_fn=lambda t: _exec_target_followers()
     )
-    submit_res = orchestrator.submit_task(task_obj)
-    if submit_res.get("status") == "queued":
-        send_queue_collision_notice(
-            chat_id=chat_id,
-            task_name=task_obj.name,
-            lock_key=task_obj.lock_key,
-            position=submit_res.get("position", 1),
-            active_ahead=submit_res.get("active_ahead_name")
-        )
+    orchestrator.submit_task(task_obj)
 
 
 def launch_post_share_task(
@@ -1418,15 +1378,7 @@ def launch_post_share_task(
         tg_message_id=sent_msg_id,
         run_fn=lambda t: _exec_share()
     )
-    submit_res = orchestrator.submit_task(task_obj)
-    if submit_res.get("status") == "queued":
-        send_queue_collision_notice(
-            chat_id=chat_id,
-            task_name=task_obj.name,
-            lock_key=task_obj.lock_key,
-            position=submit_res.get("position", 1),
-            active_ahead=submit_res.get("active_ahead_name")
-        )
+    orchestrator.submit_task(task_obj)
 
 
 def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms: list, message_id: int = None):
@@ -1658,15 +1610,7 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
         tg_message_id=message_id,
         run_fn=lambda t: _exec()
     )
-    submit_res = orchestrator.submit_task(task_obj)
-    if submit_res.get("status") == "queued":
-        send_queue_collision_notice(
-            chat_id=chat_id,
-            task_name=task_obj.name,
-            lock_key=task_obj.lock_key,
-            position=submit_res.get("position", 1),
-            active_ahead=submit_res.get("active_ahead_name")
-        )
+    orchestrator.submit_task(task_obj)
 
 
 def handle_callback_query(callback: dict):

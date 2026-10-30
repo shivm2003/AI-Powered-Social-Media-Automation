@@ -115,48 +115,39 @@ class TaskQueueOrchestrator:
 
     def submit_task(self, task: AutomationTask) -> Dict[str, Any]:
         """
-        Submits a task for execution.
-        - If the account/lock_key is currently active, queues it sequentially (FIFO).
-        - If the account/lock_key is free, assigns a worker thread and runs concurrently immediately.
+        Submits a task for direct immediate execution (Queuing logic removed).
+        - If a previous task is running on the same account/platform, it signals it to stop and overrides it immediately.
+        - Immediately runs the task on a worker thread with zero queuing delay.
         """
         with self.global_lock:
             self.all_tasks[task.task_id] = task
             lock_key = task.lock_key
 
-            # Case A: Same Account Collision -> Enqueue sequentially
+            # Direct Override: If an existing task is active on this account, stop it immediately
             if lock_key in self.account_locks:
                 active_task_id = self.account_locks[lock_key]
-                queue_list = self.account_queues.setdefault(lock_key, [])
-                queue_list.append(task)
-                position = len(queue_list)
-                task.state = TaskState.QUEUED
+                active_task = self.active_tasks.get(active_task_id) or self.all_tasks.get(active_task_id)
+                if active_task and active_task.task_id != task.task_id:
+                    logger.info(
+                        f"⚡ [DIRECT OVERRIDE] Stopping prior task {active_task.task_id} ('{active_task.name}') "
+                        f"to execute new request '{task.name}' immediately without queuing."
+                    )
+                    active_task.stop_event.set()
+                    active_task.state = TaskState.CANCELLED
+                    self.active_tasks.pop(active_task_id, None)
 
-                active_task = self.all_tasks.get(active_task_id)
-                active_name = active_task.name if active_task else active_task_id
+            # Clear any pending queues
+            self.account_queues.pop(lock_key, None)
 
-                logger.info(
-                    f"🔒 [COLLISION DETECTED] Task {task.task_id} ('{task.name}') locked by "
-                    f"'{active_name}'. Enqueued at position #{position} for key: '{lock_key}'."
-                )
-                return {
-                    "status": "queued",
-                    "task_id": task.task_id,
-                    "lock_key": lock_key,
-                    "position": position,
-                    "active_ahead": active_task_id,
-                    "active_ahead_name": active_name,
-                    "message": f"Account '{lock_key}' is active. Task placed in queue position #{position}."
-                }
-
-            # Case B: Distinct Account / Platform -> Run concurrently in parallel
+            # Run immediately on worker thread
             self.account_locks[lock_key] = task.task_id
             self.active_tasks[task.task_id] = task
             task.state = TaskState.RUNNING
             task.started_at = time.time()
 
             logger.info(
-                f"⚡ [PARALLEL WORKER ACQUIRED] Task {task.task_id} ('{task.name}') "
-                f"started on worker thread. Active tasks: {len(self.active_tasks)}/{self.max_workers}."
+                f"⚡ [IMMEDIATE WORKER ACQUIRED] Task {task.task_id} ('{task.name}') "
+                f"started immediately. Active tasks: {len(self.active_tasks)}/{self.max_workers}."
             )
             self.executor.submit(self._worker_wrapper, task)
             return {
@@ -165,11 +156,11 @@ class TaskQueueOrchestrator:
                 "lock_key": lock_key,
                 "position": 0,
                 "active_count": len(self.active_tasks),
-                "message": f"Task '{task.name}' is now running in parallel (Slot: {len(self.active_tasks)})."
+                "message": f"Task '{task.name}' started immediately."
             }
 
     def _worker_wrapper(self, task: AutomationTask):
-        """Worker lifecycle execution wrapper with guaranteed lock cleanup and queue promotion."""
+        """Worker lifecycle execution wrapper with guaranteed cleanup."""
         try:
             logger.info(f"▶️ [RUNNING] Task {task.task_id} [{task.lock_key}] started execution.")
             if task.run_fn:
@@ -187,10 +178,8 @@ class TaskQueueOrchestrator:
             self._release_and_promote(task)
 
     def _release_and_promote(self, finished_task: AutomationTask):
-        """Releases the lock for finished_task's lock_key and auto-promotes the next queued task."""
+        """Releases the lock for finished_task's lock_key."""
         lock_key = finished_task.lock_key
-        promoted_task = None
-
         with self.global_lock:
             # Remove from active tasks
             self.active_tasks.pop(finished_task.task_id, None)
@@ -198,33 +187,6 @@ class TaskQueueOrchestrator:
             # Clear lock if still held by this finished task
             if self.account_locks.get(lock_key) == finished_task.task_id:
                 self.account_locks.pop(lock_key, None)
-
-            # Check if pending tasks exist in this account's FIFO queue
-            pending_queue = self.account_queues.get(lock_key, [])
-            while pending_queue:
-                candidate = pending_queue.pop(0)
-                if candidate.state == TaskState.CANCELLED:
-                    continue
-                promoted_task = candidate
-                break
-
-            if promoted_task:
-                self.account_locks[lock_key] = promoted_task.task_id
-                self.active_tasks[promoted_task.task_id] = promoted_task
-                promoted_task.state = TaskState.RUNNING
-                promoted_task.started_at = time.time()
-                logger.info(
-                    f"🚀 [AUTO-PROMOTED] Next task in queue: {promoted_task.task_id} ('{promoted_task.name}') "
-                    f"promoted to active worker for '{lock_key}'."
-                )
-
-        if promoted_task:
-            if promoted_task.on_promoted:
-                try:
-                    promoted_task.on_promoted(promoted_task)
-                except Exception as e_prom:
-                    logger.debug(f"on_promoted callback error: {e_prom}")
-            self.executor.submit(self._worker_wrapper, promoted_task)
 
     def cancel_task(self, task_id: str) -> bool:
         """Cancels a running or queued task safely."""
