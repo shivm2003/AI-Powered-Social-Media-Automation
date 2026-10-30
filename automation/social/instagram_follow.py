@@ -1327,17 +1327,14 @@ def _follow_instagram_by_location(
     skip_if_verified: bool = True
 ) -> tuple[int, int]:
     """
-    Discovers and follows REAL INDIVIDUAL PEOPLE in a specific target location (e.g. Lucknow).
-    Strictly filters out and skips all channels, broadcast channels, media/news outlets,
-    city directories, meme pages, and brand/business accounts.
-
-    Workflow:
-    1. Loads Instagram keyword search feed (https://www.instagram.com/explore/search/keyword/?q=<location>)
-       and location hashtags (#lucknow).
-    2. Opens post lightbox modal and scans geotagged post creators via Arrow Right.
-    3. Strictly filters out all channels, city pages, and commercial entities using is_channel_or_non_person_account.
-    4. For verified real residents, visits their profile to inspect bio and click the real Follow button.
-    5. Streams real-time telemetry to Telegram bot and respects human safety pauses.
+    Discovers and follows real residents in a specific target location (e.g. Lucknow).
+    Zero Queuing Architecture:
+    1. Loads Instagram keyword search feed and location hashtags.
+    2. Opens post lightbox modal and inspects geotagged creators.
+    3. Skips verified creators/celebrities.
+    4. Follows accounts directly and immediately on the spot inside the post modal.
+    5. Zero profile page loads, zero queuing/buffering, avoiding bot detection.
+    6. Streams real-time telemetry to Telegram and respects human safety pauses.
     """
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
@@ -1358,7 +1355,6 @@ def _follow_instagram_by_location(
     sent_count = 0
     skipped_count = 0
     processed_users = set()
-    candidate_people = []
 
     if not driver:
         driver = browser.get_driver("instagram")
@@ -1421,11 +1417,11 @@ def _follow_instagram_by_location(
                 logger.warning(f"Could not open first thumbnail on {source_label}: {e_th}")
                 continue
 
-            # Scan posts inside the modal lightbox using Arrow Right
+            # Scan posts inside modal and follow immediately on the spot (NO QUEUE)
             scan_cycles = 0
             max_scan = max(30, (target_count - sent_count) * 8)
 
-            while scan_cycles < max_scan and len(candidate_people) < max(12, (target_count - sent_count) * 2):
+            while scan_cycles < max_scan and sent_count < target_count:
                 if stop_event and stop_event.is_set():
                     break
 
@@ -1451,14 +1447,13 @@ def _follow_instagram_by_location(
                 except Exception:
                     pass
 
-                # Move to next post via Arrow Right
-                try:
-                    driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
-                    time.sleep(random.uniform(0.7, 1.1))
-                except Exception:
-                    pass
-
+                # If author already processed or invalid, cycle to next post immediately
                 if not author_name or author_name.lower() in processed_users:
+                    try:
+                        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
+                        time.sleep(random.uniform(0.6, 1.0))
+                    except Exception:
+                        pass
                     continue
 
                 processed_users.add(author_name.lower())
@@ -1487,117 +1482,108 @@ def _follow_instagram_by_location(
                             })
                         except Exception:
                             pass
-                    continue
-
-                # Candidate account found (verified creators already excluded)
-                candidate_people.append(author_name)
-                logger.info(f"👤 Found candidate to follow: @{author_name} ({loc_name})")
-                if on_progress:
                     try:
-                        on_progress(sent_count, target_count, {
-                            "activity": f"👤 Discovered @{author_name} ({len(candidate_people)} queued)"
-                        })
+                        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
+                        time.sleep(random.uniform(0.6, 1.0))
                     except Exception:
                         pass
+                    continue
 
-        # Follow candidate accounts by navigating directly to their profiles
-        while candidate_people and sent_count < target_count:
-            if stop_event and stop_event.is_set():
-                break
+                # Locate Follow button directly inside modal
+                follow_btn = None
+                modal_btns = active_dialog.find_elements(
+                    By.XPATH,
+                    ".//header//button | .//header//div[@role='button'] | .//button | .//div[@role='button']"
+                )
+                for mb in modal_btns:
+                    try:
+                        mtxt = (mb.text or mb.get_attribute("innerText") or "").strip().lower()
+                        if mtxt == "follow":
+                            follow_btn = mb
+                            break
+                        elif mtxt in ["following", "requested"]:
+                            follow_btn = None
+                            break
+                    except Exception:
+                        continue
 
-            cand_u = candidate_people.pop(0)
-            if on_progress:
+                clicked = False
+                if follow_btn:
+                    try:
+                        ActionChains(driver).move_to_element(follow_btn).pause(0.2).click().perform()
+                        clicked = True
+                    except Exception:
+                        try:
+                            driver.execute_script("arguments[0].click();", follow_btn)
+                            clicked = True
+                        except Exception:
+                            pass
+
+                # Move to next post via Arrow Right
                 try:
-                    on_progress(sent_count, target_count, {
-                        "activity": f"👤 Visiting profile of @{cand_u} ({loc_name})..."
-                    })
+                    driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
+                    time.sleep(random.uniform(0.7, 1.2))
                 except Exception:
                     pass
 
-            res = follow_specific_instagram_user(cand_u, driver=driver, skip_if_channel=False, target_location=loc_name, skip_if_verified=skip_if_verified)
-            res_status = res.get("status")
+                if clicked:
+                    sent_count += 1
+                    log_entry = f"✅ Followed #{sent_count}: '@{author_name}' ({loc_name} Resident)"
+                    logs.append(log_entry)
+                    logger.info(log_entry)
 
-            if res_status in ["success", "requested"]:
-                sent_count += 1
-                follow_type = "Resident" if res_status == "success" else "Private Resident Profile"
-                log_entry = f"✅ Followed #{sent_count}: '@{cand_u}' ({loc_name} {follow_type})"
-                logs.append(log_entry)
-                logger.info(log_entry)
-
-                if on_progress:
-                    try:
-                        on_progress(sent_count, target_count, {
-                            "platform": "instagram",
-                            "user": cand_u,
-                            "url": res.get("url") or f"https://www.instagram.com/{cand_u}/",
-                            "location": loc_name,
-                            "mode": "location",
-                            "sent": sent_count,
-                            "target": target_count,
-                            "activity": f"✅ Followed real resident @{cand_u} ({sent_count}/{target_count})"
-                        })
-                    except Exception:
-                        pass
-
-                # 2-minute safety break after every 250 follows
-                if sent_count > 0 and sent_count % 250 == 0 and sent_count < target_count:
-                    cooldown_secs = 120
-                    cooldown_msg = f"⏸️ Reached {sent_count} Instagram follows milestone. Taking a 2-minute safety break..."
-                    logs.append(cooldown_msg)
-                    logger.info(cooldown_msg)
                     if on_progress:
                         try:
                             on_progress(sent_count, target_count, {
                                 "platform": "instagram",
-                                "user": cand_u,
-                                "cooldown": True,
-                                "cooldown_seconds": cooldown_secs,
-                                "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
-                                "activity": f"☕ 2-minute safety cooldown active ({sent_count}/{target_count})"
+                                "user": author_name,
+                                "url": f"https://www.instagram.com/{author_name}/",
+                                "location": loc_name,
+                                "mode": "location",
+                                "sent": sent_count,
+                                "target": target_count,
+                                "activity": f"✅ Followed real resident @{author_name} ({sent_count}/{target_count})"
                             })
                         except Exception:
                             pass
-                    for _ in range(cooldown_secs):
-                        if stop_event and stop_event.is_set():
-                            break
-                        time.sleep(1.0)
-                    logs.append(f"▶️ 2-minute safety cooldown completed. Resuming follows ({sent_count}/{target_count})...")
 
-                pause = random.uniform(max(6.0, safety_delay * 0.7), max(9.0, safety_delay * 1.15))
-                logger.info(f"Human safety pause: {pause:.1f}s before next follow ({sent_count}/{target_count})...")
-                if on_progress:
-                    try:
-                        on_progress(sent_count, target_count, {
-                            "activity": f"⏱️ Safety pause: {pause:.1f}s before next profile..."
-                        })
-                    except Exception:
-                        pass
-                time.sleep(pause)
+                    # 2-minute safety break after every 250 follows
+                    if sent_count > 0 and sent_count % 250 == 0 and sent_count < target_count:
+                        cooldown_secs = 120
+                        cooldown_msg = f"⏸️ Reached {sent_count} Instagram follows milestone. Taking a 2-minute safety break..."
+                        logs.append(cooldown_msg)
+                        logger.info(cooldown_msg)
+                        if on_progress:
+                            try:
+                                on_progress(sent_count, target_count, {
+                                    "platform": "instagram",
+                                    "user": author_name,
+                                    "cooldown": True,
+                                    "cooldown_seconds": cooldown_secs,
+                                    "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
+                                    "activity": f"☕ 2-minute safety cooldown active ({sent_count}/{target_count})"
+                                })
+                            except Exception:
+                                pass
+                        for _ in range(cooldown_secs):
+                            if stop_event and stop_event.is_set():
+                                break
+                            time.sleep(1.0)
+                        logs.append(f"▶️ 2-minute safety cooldown completed. Resuming follows ({sent_count}/{target_count})...")
 
-            elif res_status == "already_following":
-                logger.info(f"ℹ️ Already following @{cand_u}, continuing...")
-                if on_progress:
-                    try:
-                        on_progress(sent_count, target_count, {
-                            "activity": f"ℹ️ Already following resident @{cand_u}"
-                        })
-                    except Exception:
-                        pass
-                time.sleep(random.uniform(1.0, 1.8))
-
-            else:
-                skipped_count += 1
-                skip_msg = res.get("message") or "Profile not eligible"
-                logger.info(f"🛡️ Skipped @{cand_u}: {skip_msg}")
-                if on_progress:
-                    try:
-                        on_progress(sent_count, target_count, {
-                            "activity": f"🛡️ Skipped @{cand_u}: {skip_msg}",
-                            "skipped_channel": True
-                        })
-                    except Exception:
-                        pass
-                time.sleep(random.uniform(1.0, 1.8))
+                    pause = random.uniform(max(10.0, safety_delay * 0.8), max(16.0, safety_delay * 1.2))
+                    logger.info(f"Human safety pause: {pause:.1f}s before next follow ({sent_count}/{target_count})...")
+                    if on_progress:
+                        try:
+                            on_progress(sent_count, target_count, {
+                                "activity": f"⏱️ Safety pause: {pause:.1f}s before next post..."
+                            })
+                        except Exception:
+                            pass
+                    time.sleep(pause)
+                else:
+                    skipped_count += 1
+                    time.sleep(random.uniform(0.5, 0.8))
 
     return sent_count, skipped_count
 
