@@ -1489,8 +1489,9 @@ def _follow_instagram_by_location(
                         pass
                     continue
 
-                # Locate Follow button directly inside modal
+                # Locate Follow button directly inside modal (only skip if verified creator or already following)
                 follow_btn = None
+                already_following = False
                 modal_btns = active_dialog.find_elements(
                     By.XPATH,
                     ".//header//button | .//header//div[@role='button'] | .//button | .//div[@role='button']"
@@ -1498,19 +1499,26 @@ def _follow_instagram_by_location(
                 for mb in modal_btns:
                     try:
                         mtxt = (mb.text or mb.get_attribute("innerText") or "").strip().lower()
-                        if mtxt == "follow":
+                        aria = (mb.get_attribute("aria-label") or "").strip().lower()
+                        label = mtxt or aria
+                        if label in ["follow", "follow back"] or re.match(r"^follow(\s+back)?$", label):
                             follow_btn = mb
                             break
-                        elif mtxt in ["following", "requested"]:
+                        elif label in ["following", "requested"]:
+                            already_following = True
                             follow_btn = None
                             break
                     except Exception:
                         continue
 
                 clicked = False
-                if follow_btn:
+                if already_following:
+                    logger.info(f"ℹ️ Already following @{author_name}, cycling to next post...")
+                elif follow_btn:
                     try:
-                        ActionChains(driver).move_to_element(follow_btn).pause(0.2).click().perform()
+                        # Human hesitation before clicking
+                        time.sleep(random.uniform(0.3, 0.7))
+                        ActionChains(driver).move_to_element(follow_btn).pause(random.uniform(0.15, 0.35)).click().perform()
                         clicked = True
                     except Exception:
                         try:
@@ -1521,6 +1529,7 @@ def _follow_instagram_by_location(
 
                 # Move to next post via Arrow Right
                 try:
+                    time.sleep(random.uniform(0.5, 0.9))
                     driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
                     time.sleep(random.uniform(0.7, 1.2))
                 except Exception:
