@@ -939,7 +939,7 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
                         pass
                     break
 
-                res = follow_specific_instagram_user(u, skip_if_channel=True)
+                res = follow_specific_instagram_user(u, skip_if_channel=False)
                 results.append(res)
                 st = res.get("status")
 
@@ -1194,7 +1194,7 @@ def launch_ig_target_followers_task(chat_id: str, target_username: str, target_c
                 on_progress=_on_progress,
                 stop_event=stop_evt,
                 skip_if_verified=False,
-                skip_if_channel=True
+                skip_if_channel=False
             )
 
             if stop_flag.exists():

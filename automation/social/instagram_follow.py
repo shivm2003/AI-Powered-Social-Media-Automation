@@ -484,22 +484,6 @@ def process_instagram_user_target(
             "followers_text": "0"
         }
 
-    # Pre-check channel if requested
-    if skip_if_channel:
-        is_ch, ch_reason = is_channel_or_non_person_account(clean_user, target_location=target_location)
-        if is_ch:
-            msg = f"Skipped @{clean_user}: Matches channel/commercial pattern ({ch_reason})."
-            logger.info(f"🛡️ {msg}")
-            return {
-                "status": "skipped",
-                "username": clean_user,
-                "url": f"https://www.instagram.com/{clean_user}/",
-                "message": msg,
-                "reason": "channel",
-                "followers_count": 0,
-                "followers_text": "0"
-            }
-
     profile_url = f"https://www.instagram.com/{clean_user}/"
     logger.info(f"🚀 Navigating inside Instagram profile: @{clean_user} ({profile_url})")
 
@@ -1505,37 +1489,18 @@ def _follow_instagram_by_location(
                             pass
                     continue
 
-                # Channel / non-person account filter
-                is_ch, ch_reason = is_channel_or_non_person_account(
-                    username=author_name,
-                    target_location=loc_name
-                )
-                if is_ch:
-                    skipped_count += 1
-                    logger.info(f"🛡️ Skipped channel/media page: @{author_name} ({ch_reason})")
-                    logs.append(f"🛡️ Skipped non-person account: '@{author_name}' ({ch_reason})")
-                    if on_progress:
-                        try:
-                            on_progress(sent_count, target_count, {
-                                "activity": f"🛡️ Excluded channel '@{author_name}' ({ch_reason})",
-                                "skipped_channel": True
-                            })
-                        except Exception:
-                            pass
-                    continue
-
-                # Real resident candidate found
+                # Candidate account found (verified creators already excluded)
                 candidate_people.append(author_name)
-                logger.info(f"👤 Found real resident candidate: @{author_name} ({loc_name})")
+                logger.info(f"👤 Found candidate to follow: @{author_name} ({loc_name})")
                 if on_progress:
                     try:
                         on_progress(sent_count, target_count, {
-                            "activity": f"👤 Discovered local resident @{author_name} ({len(candidate_people)} queued)"
+                            "activity": f"👤 Discovered @{author_name} ({len(candidate_people)} queued)"
                         })
                     except Exception:
                         pass
 
-        # Follow verified candidate residents by navigating directly to their profiles
+        # Follow candidate accounts by navigating directly to their profiles
         while candidate_people and sent_count < target_count:
             if stop_event and stop_event.is_set():
                 break
@@ -1544,12 +1509,12 @@ def _follow_instagram_by_location(
             if on_progress:
                 try:
                     on_progress(sent_count, target_count, {
-                        "activity": f"👤 Visiting profile of resident @{cand_u} ({loc_name})..."
+                        "activity": f"👤 Visiting profile of @{cand_u} ({loc_name})..."
                     })
                 except Exception:
                     pass
 
-            res = follow_specific_instagram_user(cand_u, driver=driver, skip_if_channel=True, target_location=loc_name, skip_if_verified=skip_if_verified)
+            res = follow_specific_instagram_user(cand_u, driver=driver, skip_if_channel=False, target_location=loc_name, skip_if_verified=skip_if_verified)
             res_status = res.get("status")
 
             if res_status in ["success", "requested"]:
@@ -2116,16 +2081,7 @@ def follow_target_account_followers(
                 try:
                     processed_users.add(curr_user.lower())
 
-                    # Channel/brand account filter
-                    if skip_if_channel:
-                        is_ch, ch_reason = is_channel_or_non_person_account(curr_user)
-                        if is_ch:
-                            driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
-                            skipped_count += 1
-                            logger.info(f"🛡️ Skipped @{curr_user}: Channel/brand pattern ({ch_reason})")
-                            continue
-
-                    # Verified badge filter
+                    # Verified badge / celebrity filter (skip only verified creators)
                     if skip_if_verified and row_elem:
                         is_ver, ver_reason = is_verified_account(row_elem)
                         if is_ver:
