@@ -1225,7 +1225,7 @@ def launch_post_share_task(
     campaign_id: str,
     platform: str = "both",
     share_all: bool = True,
-    target_count: int = 25,
+    target_count: int = 100,
     message_id: int = None
 ):
     """
@@ -2544,16 +2544,28 @@ def handle_text_message(message: dict):
         send_post_shares_overall_stats_menu(chat_id)
         return
 
-    if clean_text.startswith("/shareall") or clean_text.startswith("shareall"):
+    if clean_text in ["/share", "share", "/sharepost", "sharepost"]:
+        send_posted_content_gallery(chat_id, page_index=0)
+        return
+
+    if clean_text.startswith("/shareall") or clean_text.startswith("shareall") or \
+       clean_text.startswith("/share_ig") or clean_text.startswith("/share_fb") or \
+       clean_text.startswith("/share_instagram") or clean_text.startswith("/share_facebook"):
         parts = text.split()
-        target_camp = parts[1] if len(parts) > 1 else None
+        plat = "both"
+        if "ig" in clean_text or "instagram" in clean_text:
+            plat = "instagram"
+        elif "fb" in clean_text or "facebook" in clean_text:
+            plat = "facebook"
+
+        target_camp = parts[1] if len(parts) > 1 and not parts[1].startswith("/") else None
         if not target_camp:
             from db_campaigns import get_all_published_posts
             all_p = get_all_published_posts(limit=1)
             if all_p:
                 target_camp = all_p[0]["id"]
         if target_camp:
-            launch_post_share_task(chat_id=chat_id, campaign_id=target_camp, platform="both", share_all=True)
+            launch_post_share_task(chat_id=chat_id, campaign_id=target_camp, platform=plat, share_all=True)
         else:
             send_text_message(chat_id, "⚠️ No published posts found to share. Publish a post first or check /posts.")
         return
