@@ -1335,6 +1335,21 @@ def launch_post_share_task(
                     pass
 
             total_shares = res.get("total_shares") or res.get("sent_count") or 0
+            ig_shares = res.get("instagram_shares")
+            fb_shares = res.get("facebook_shares")
+            if ig_shares is None and platform.lower() == "instagram":
+                ig_shares = total_shares
+            if fb_shares is None and platform.lower() == "facebook":
+                fb_shares = total_shares
+            ig_shares = ig_shares or 0
+            fb_shares = fb_shares or 0
+
+            from db_campaigns import get_post_shares_stats
+            camp_stats = get_post_shares_stats(campaign_id)
+            c_ig = camp_stats.get("instagram_shares", 0)
+            c_fb = camp_stats.get("facebook_shares", 0)
+            c_tot = camp_stats.get("total_shares", 0)
+
             recipients = res.get("all_recipients") or res.get("recipients") or []
             rec_sample = ", ".join(recipients[:8]) if recipients else "Friends & Connections"
             if len(recipients) > 8:
@@ -1351,9 +1366,16 @@ def launch_post_share_task(
             final_text = (
                 f"🎉 <b>Post Sharing to Friends Completed!</b>\n\n"
                 f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code>\n"
-                f"📱 <b>Platforms:</b> {plat_label}\n"
-                f"🚀 <b>Total Friends Shared:</b> <code>{total_shares}</code>\n"
-                f"👥 <b>Recipients:</b> <i>{rec_sample}</i>\n\n"
+                f"📱 <b>Target Platforms:</b> {plat_label}\n\n"
+                f"📊 <b>Dispatched in This Task:</b>\n"
+                f"   • 📸 <b>Instagram Followers:</b> <code>{ig_shares} sent</code>\n"
+                f"   • 📘 <b>Facebook Friends:</b> <code>{fb_shares} sent</code>\n"
+                f"   • 🚀 <b>Total Sent Now:</b> <code>{total_shares} recipients</code>\n\n"
+                f"📈 <b>Campaign All-Time Total:</b>\n"
+                f"   • 📸 Instagram: <code>{c_ig} followers</code>\n"
+                f"   • 📘 Facebook: <code>{c_fb} friends</code>\n"
+                f"   • 👥 Grand Total: <code>{c_tot} shares</code>\n\n"
+                f"👥 <b>Recent Recipients:</b> <i>{rec_sample}</i>\n\n"
                 f"💾 <i>Every share is permanently logged in <code>post_shares_log</code> database table.</i>"
             )
 

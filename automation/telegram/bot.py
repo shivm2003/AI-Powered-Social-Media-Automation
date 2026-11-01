@@ -1069,7 +1069,9 @@ def send_posted_content_gallery(
     plats = [p.capitalize() for p in camp.get("platforms", ["Facebook", "Instagram"])]
     caption = camp.get("caption") or ""
     p_name = camp.get("product_name") or "Loan Solutions"
-    total_shares = camp.get("total_shares") or 0
+    ig_shares = camp.get("instagram_shares") or 0
+    fb_shares = camp.get("facebook_shares") or 0
+    total_shares = camp.get("total_shares") or (ig_shares + fb_shares)
     updated_at = camp.get("updated_at") or "Recently"
 
     import html
@@ -1080,8 +1082,11 @@ def send_posted_content_gallery(
         f"🖼️ <b>MANVIX AI — POSTED CONTENT VIEWER ({page_index + 1}/{len(posts)})</b>\n\n"
         f"🏷️ <b>Product:</b> {p_name}\n"
         f"📱 <b>Published On:</b> {' + '.join(plats)}\n"
-        f"📅 <b>Posted Date:</b> <code>{updated_at}</code>\n"
-        f"👥 <b>Friends Shared With:</b> <code>{total_shares} friends</code>\n\n"
+        f"📅 <b>Posted Date:</b> <code>{updated_at}</code>\n\n"
+        f"👥 <b>Friends Shared (Separate Counts):</b>\n"
+        f"   • 📸 <b>Instagram:</b> <code>{ig_shares} followers</code>\n"
+        f"   • 📘 <b>Facebook:</b> <code>{fb_shares} friends</code>\n"
+        f"   • 🚀 <b>Total:</b> <code>{total_shares} people</code>\n\n"
         f"📝 <b>Post Caption / Copy:</b>\n"
         f"<i>\"{cap_preview}\"</i>\n\n"
         f"👇 <b>Select an action to share this post to your friends:</b>"
@@ -1092,10 +1097,10 @@ def send_posted_content_gallery(
 
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🚀 Share to ALL Friends (Instagram + Facebook)", "callback_data": f"post_shr:all:{camp_id}"}],
+            [{"text": f"🚀 Share to ALL Friends ({total_shares} sent)", "callback_data": f"post_shr:all:{camp_id}"}],
             [
-                {"text": "📸 Share to Instagram Friends", "callback_data": f"post_shr:ig:{camp_id}"},
-                {"text": "📘 Share to Facebook Friends", "callback_data": f"post_shr:fb:{camp_id}"}
+                {"text": f"📸 Share to Instagram ({ig_shares} sent)", "callback_data": f"post_shr:ig:{camp_id}"},
+                {"text": f"📘 Share to Facebook ({fb_shares} sent)", "callback_data": f"post_shr:fb:{camp_id}"}
             ],
             [
                 {"text": "⬅️ Prev", "callback_data": f"post_page:{prev_idx}"},
@@ -1181,10 +1186,11 @@ def send_post_shares_overall_stats_menu(chat_id: str, message_id: int = None) ->
     recent_text = "\n".join(lines) if lines else "<i>No shares recorded yet. Share a post to get started!</i>"
 
     text = (
-        "📊 <b>MANVIX AI — POST SHARING TO FRIENDS DASHBOARD</b>\n\n"
-        f"🚀 <b>Total Friend Shares Dispatched:</b> <code>{stats.get('total_shares', 0)}</code>\n"
-        f"📸 <b>Instagram Direct Shares:</b> <code>{stats.get('instagram_shares', 0)}</code>\n"
-        f"📘 <b>Facebook Messenger Shares:</b> <code>{stats.get('facebook_shares', 0)}</code>\n\n"
+        "📊 <b>MANVIX AI — POST SHARING DASHBOARD</b>\n\n"
+        f"🚀 <b>Total Friend Shares Dispatched:</b> <code>{stats.get('total_shares', 0)} recipients</code>\n\n"
+        f"📱 <b>Separate Platform Breakdown:</b>\n"
+        f"   • 📸 <b>Instagram Direct:</b> <code>{stats.get('instagram_shares', 0)} followers</code>\n"
+        f"   • 📘 <b>Facebook Messenger:</b> <code>{stats.get('facebook_shares', 0)} friends</code>\n\n"
         f"📋 <b>Recent Friend Recipients:</b>\n"
         f"{recent_text}\n\n"
         "💾 <i>Logged in <code>post_shares_log</code> database table with human safety timestamps.</i>"

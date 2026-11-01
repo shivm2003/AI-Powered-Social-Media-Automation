@@ -898,7 +898,9 @@ def get_all_published_posts(platform: str = None, limit: int = 25) -> list:
             cur.execute("""
                 SELECT c.id, c.status, c.platforms, c.media_paths, c.generated_caption,
                        c.content_type, c.updated_at, c.created_at, p.name as product_name,
-                       (SELECT COUNT(*) FROM post_shares_log s WHERE s.campaign_id = c.id AND s.status = 'sent') as total_shares
+                       (SELECT COUNT(*) FROM post_shares_log s WHERE s.campaign_id = c.id AND s.status = 'sent') as total_shares,
+                       (SELECT COUNT(*) FROM post_shares_log s WHERE s.campaign_id = c.id AND s.status = 'sent' AND s.platform = 'instagram') as instagram_shares,
+                       (SELECT COUNT(*) FROM post_shares_log s WHERE s.campaign_id = c.id AND s.status = 'sent' AND s.platform = 'facebook') as facebook_shares
                 FROM campaigns c
                 LEFT JOIN products p ON c.product_id = p.id
                 WHERE c.media_paths IS NOT NULL
@@ -949,7 +951,9 @@ def get_all_published_posts(platform: str = None, limit: int = 25) -> list:
                     "caption": r.get("generated_caption") or "",
                     "product_name": r.get("product_name") or "Loan Solutions",
                     "updated_at": r.get("updated_at") or "",
-                    "total_shares": r.get("total_shares") or 0
+                    "total_shares": r.get("total_shares") or 0,
+                    "instagram_shares": r.get("instagram_shares") or 0,
+                    "facebook_shares": r.get("facebook_shares") or 0
                 })
 
                 if len(posts) >= limit:
