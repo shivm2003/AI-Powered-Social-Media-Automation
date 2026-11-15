@@ -337,7 +337,8 @@ def send_facebook_direct_text_messages(
     stop_event=None
 ) -> dict:
     """
-    Sends pure custom text messages directly into 1-on-1 Messenger chat inboxes.
+    Sends custom text messages (including non-Facebook URLs like Instagram links)
+    directly into 1-on-1 Messenger chat inboxes via facebook.com/messages/t/.
     Includes human typing delays, 8-14s inter-friend pauses, and anti-spam detection.
     """
     from selenium.webdriver.common.by import By
@@ -349,58 +350,161 @@ def send_facebook_direct_text_messages(
     screenshot_path = None
     effective_target = min(target_count, MAX_SAFE_FB_MESSAGES_PER_SESSION)
 
-    friends_url = "https://www.facebook.com/me/friends"
-    logs.append(f"📘 Opening Facebook Friends Directory: {friends_url} (Target: {effective_target} friends)")
+    logs.append(f"📘 Starting Messenger direct outreach (Target: {effective_target} friends)")
     logger.info(f"Starting 1-on-1 Facebook Messenger outreach | Target: {effective_target} friends")
 
     if on_progress:
         try:
-            on_progress(0, effective_target, {"activity": "Scanning Facebook friends list..."})
+            on_progress(0, effective_target, {"activity": "Opening Facebook Messenger..."})
         except Exception:
             pass
 
     try:
-        browser.switch_to_platform_tab("facebook", target_url=friends_url, driver=driver)
-        with browser.tab_focus("facebook", url=friends_url) as active_driver:
+        # ── Strategy: Use Messenger's own chat list to find recent contacts ──
+        messenger_url = "https://www.facebook.com/messages/t/"
+        browser.switch_to_platform_tab("facebook", target_url=messenger_url, driver=driver)
+        with browser.tab_focus("facebook", url=messenger_url) as active_driver:
             driver = active_driver or driver
-            time.sleep(random.uniform(3.0, 4.0))
+            time.sleep(random.uniform(3.5, 5.0))
 
             # Check action block
             blk = detect_facebook_action_block(driver)
             if blk.get("blocked"):
                 return {"status": "rate_limited", "platform": "facebook", "message": blk.get("reason"), "screenshot": blk.get("screenshot")}
 
-            # Scroll slightly to trigger friends list rendering
-            driver.execute_script("window.scrollBy(0, 800);")
-            time.sleep(2.0)
+            # ── Harvest friend chat threads from Messenger sidebar ──
+            # Scroll the Messenger chat list sidebar to load more conversations
+            for scroll_pass in range(5):
+                driver.execute_script("""
+                    var sidebar = document.querySelector('div[aria-label="Chats"]') ||
+                                  document.querySelector('nav[aria-label="Chats"]') ||
+                                  document.querySelector('div[role="navigation"]');
+                    if (sidebar) {
+                        sidebar.scrollTop = sidebar.scrollTop + 600;
+                    } else {
+                        window.scrollBy(0, 600);
+                    }
+                """)
+                time.sleep(1.0)
 
-            # Harvest friend links / profiles
-            js_get_friends = """
-            var links = Array.from(document.querySelectorAll('a[role="link"]'));
-            var friends = [];
+            time.sleep(1.5)
+
+            # Extract chat threads from Messenger sidebar
+            js_get_messenger_chats = """
+            var results = [];
             var seen = new Set();
-            for (var a of links) {
+
+            // Strategy 1: Messenger sidebar chat links
+            var chatLinks = Array.from(document.querySelectorAll('a[href*="/messages/t/"], a[href*="messenger.com/t/"]'));
+            for (var a of chatLinks) {
                 var href = a.href || '';
-                var txt = (a.innerText || '').trim();
-                if ((href.includes('facebook.com/') && !href.includes('/friends') && !href.includes('/groups')) && txt.length > 2 && !txt.includes('\\n')) {
-                    if (!seen.has(href)) {
-                        seen.add(href);
-                        friends.push({name: txt, url: href});
+                var name = '';
+
+                // Get the visible name from the chat entry
+                var spans = a.querySelectorAll('span');
+                for (var s of spans) {
+                    var txt = (s.innerText || '').trim();
+                    if (txt.length > 1 && txt.length < 50 && !txt.match(/^\\d/) && txt !== 'You' && !txt.includes('sent') && !txt.includes('ago') && !txt.includes('Active')) {
+                        name = txt;
+                        break;
+                    }
+                }
+                if (!name) {
+                    name = (a.getAttribute('aria-label') || '').replace(/^Chat with /, '').replace(/, .*/, '').trim();
+                }
+
+                if (name && name.length > 1 && !seen.has(name)) {
+                    seen.add(name);
+                    results.push({name: name, url: href});
+                }
+            }
+
+            // Strategy 2: Chat list items with role="row" or role="listitem"
+            if (results.length < 5) {
+                var rows = Array.from(document.querySelectorAll('div[role="row"], div[role="listitem"], div[data-testid*="mwthreadlist"]'));
+                for (var r of rows) {
+                    var link = r.querySelector('a[href*="/messages/"], a[href*="/t/"]');
+                    if (!link) continue;
+                    var href = link.href || '';
+                    var name = '';
+                    var nameSpans = r.querySelectorAll('span[dir="auto"]');
+                    for (var ns of nameSpans) {
+                        var t = (ns.innerText || '').trim();
+                        if (t.length > 1 && t.length < 50 && !t.match(/^\\d/) && t !== 'You') {
+                            name = t;
+                            break;
+                        }
+                    }
+                    if (name && !seen.has(name)) {
+                        seen.add(name);
+                        results.push({name: name, url: href});
                     }
                 }
             }
-            return friends;
+
+            return results;
             """
-            friend_candidates = driver.execute_script(js_get_friends) or []
-            logs.append(f"📋 Detected {len(friend_candidates)} friend profiles from page.")
+            friend_candidates = driver.execute_script(js_get_messenger_chats) or []
+            logs.append(f"📋 Found {len(friend_candidates)} Messenger chat threads.")
+            logger.info(f"Harvested {len(friend_candidates)} Messenger chat threads from sidebar.")
+
+            # ── Fallback: if Messenger sidebar yielded nothing, try friends list ──
+            if len(friend_candidates) < 3:
+                logs.append("ℹ️ Messenger sidebar yield low. Trying Facebook friends list as fallback...")
+                friends_url = "https://www.facebook.com/me/friends"
+                driver.get(friends_url)
+                time.sleep(random.uniform(3.0, 4.5))
+
+                # Scroll multiple times to render more friends
+                for _ in range(6):
+                    driver.execute_script("window.scrollBy(0, 800);")
+                    time.sleep(1.2)
+
+                js_get_friends_fallback = """
+                var results = [];
+                var seen = new Set();
+                var links = Array.from(document.querySelectorAll('a'));
+                for (var a of links) {
+                    var href = a.href || '';
+                    var txt = (a.innerText || '').trim();
+                    // Match friend profile links but exclude navigation/utility links
+                    if (href.includes('facebook.com/') &&
+                        !href.includes('/friends') && !href.includes('/groups') &&
+                        !href.includes('/photo') && !href.includes('/hashtag') &&
+                        !href.includes('/events') && !href.includes('/pages') &&
+                        !href.includes('/marketplace') && !href.includes('/gaming') &&
+                        !href.includes('/watch') && !href.includes('/settings') &&
+                        !href.includes('/notifications') && !href.includes('/bookmarks') &&
+                        !href.includes('?') &&
+                        txt.length > 2 && txt.length < 50 &&
+                        !txt.includes('\\n') && !txt.match(/^\\d/)) {
+                        if (!seen.has(href)) {
+                            seen.add(href);
+                            results.push({name: txt, url: href, source: 'friends_list'});
+                        }
+                    }
+                }
+                return results;
+                """
+                fallback_friends = driver.execute_script(js_get_friends_fallback) or []
+                logs.append(f"📋 Fallback: detected {len(fallback_friends)} friend profiles from /me/friends.")
+
+                # Merge but deduplicate by name
+                existing_names = {f.get("name", "").lower() for f in friend_candidates}
+                for ff in fallback_friends:
+                    if ff.get("name", "").lower() not in existing_names:
+                        friend_candidates.append(ff)
+                        existing_names.add(ff.get("name", "").lower())
 
             if not friend_candidates:
-                # Fallback to direct Messenger web interface
-                logs.append("ℹ️ Friends list empty or layout variant. Using Messenger web directory...")
-                driver.get("https://www.facebook.com/messages/t/")
-                time.sleep(3.5)
+                err_msg = "Could not find any friends/chat threads to message. Please ensure you're logged into Facebook."
+                logs.append(f"❌ {err_msg}")
+                logger.warning(err_msg)
+                return {"status": "error", "platform": "facebook", "message": err_msg, "sent_count": 0, "recipients": [], "logs": logs}
 
-            # Iterate through friends up to effective_target
+            logs.append(f"📋 Total unique candidates for messaging: {len(friend_candidates)}")
+
+            # ── Send messages one by one ──
             count = 0
             for item in friend_candidates:
                 if stop_event and stop_event.is_set():
@@ -411,7 +515,8 @@ def send_facebook_direct_text_messages(
 
                 fname = item.get("name", "Friend")
                 furl = item.get("url", "")
-                logs.append(f"💬 [{count+1}/{effective_target}] Messaging friend: {fname}...")
+                source = item.get("source", "messenger")
+                logs.append(f"💬 [{count+1}/{effective_target}] Messaging: {fname}...")
 
                 if on_progress:
                     try:
@@ -419,33 +524,98 @@ def send_facebook_direct_text_messages(
                     except Exception:
                         pass
 
-                # Open friend's profile and click Message button
                 try:
-                    driver.get(furl)
-                    time.sleep(random.uniform(2.5, 3.5))
+                    # ── Route A: Direct Messenger thread URL ──
+                    if "/messages/t/" in furl or "messenger.com/t/" in furl:
+                        driver.get(furl)
+                        time.sleep(random.uniform(2.5, 4.0))
 
-                    # Click 'Message' button on profile
-                    msg_btn = None
-                    for sel in [
-                        "//div[@aria-label='Message' and @role='button']",
-                        "//span[text()='Message']/ancestor::div[@role='button']",
-                        "//div[contains(@aria-label, 'Message') and @role='button']"
-                    ]:
-                        elems = driver.find_elements(By.XPATH, sel)
-                        for el in elems:
-                            if el.is_displayed():
-                                msg_btn = el
+                        # Find the message composer
+                        composer_found = False
+                        for comp_sel in [
+                            "div[aria-label='Message'][role='textbox']",
+                            "div[aria-label='Message'][contenteditable='true']",
+                            "div[role='textbox'][contenteditable='true']",
+                            "div[contenteditable='true']",
+                            "p[data-lexical-text='true']"
+                        ]:
+                            boxes = driver.find_elements(By.CSS_SELECTOR, comp_sel)
+                            active_boxes = [b for b in boxes if b.is_displayed()]
+                            if active_boxes:
+                                target_box = active_boxes[-1]
+                                target_box.click()
+                                time.sleep(0.5)
+
+                                # Type the message using execCommand for contenteditable
+                                driver.execute_script("""
+                                    const ed = arguments[0];
+                                    ed.focus();
+                                    document.execCommand('selectAll', false, null);
+                                    document.execCommand('delete', false, null);
+                                    document.execCommand('insertText', false, arguments[1]);
+                                    ed.dispatchEvent(new Event('input', { bubbles: true }));
+                                """, target_box, message_text)
+                                time.sleep(random.uniform(0.8, 1.5))
+
+                                # Hit Enter to send
+                                target_box.send_keys(Keys.ENTER)
+                                composer_found = True
+                                time.sleep(1.5)
                                 break
-                        if msg_btn:
-                            break
 
-                    if msg_btn:
+                        if composer_found:
+                            count += 1
+                            sent_recipients.append(fname)
+                            record_post_share(
+                                campaign_id=f"cmsg_txt_{int(time.time())}",
+                                platform="facebook",
+                                recipient_name=fname,
+                                post_url=furl,
+                                content_type="message",
+                                status="sent",
+                                share_mode="messenger_1on1"
+                            )
+                            logs.append(f"✅ Delivered to {fname} ({count}/{effective_target}).")
+                        else:
+                            logs.append(f"⚠️ Could not find message composer for {fname}. Skipping.")
+                            continue
+
+                    # ── Route B: Friend profile URL → click Message button → type & send ──
+                    else:
+                        driver.get(furl)
+                        time.sleep(random.uniform(2.5, 3.5))
+
+                        # Click 'Message' button on profile
+                        msg_btn = None
+                        for sel in [
+                            "//div[@aria-label='Message' and @role='button']",
+                            "//span[text()='Message']/ancestor::div[@role='button']",
+                            "//div[contains(@aria-label, 'Message') and @role='button']",
+                            "//a[contains(@aria-label, 'Message')]"
+                        ]:
+                            elems = driver.find_elements(By.XPATH, sel)
+                            for el in elems:
+                                if el.is_displayed():
+                                    msg_btn = el
+                                    break
+                            if msg_btn:
+                                break
+
+                        if not msg_btn:
+                            logs.append(f"⚠️ No Message button on {fname}'s profile. Skipping.")
+                            continue
+
                         driver.execute_script("arguments[0].click();", msg_btn)
-                        time.sleep(2.0)
+                        time.sleep(random.uniform(2.0, 3.0))
 
                         # Locate chat composer input
                         composer_found = False
-                        for comp_sel in ["div[aria-label='Message'][role='textbox']", "div[contenteditable='true']", "div[role='textbox']"]:
+                        for comp_sel in [
+                            "div[aria-label='Message'][role='textbox']",
+                            "div[aria-label='Message'][contenteditable='true']",
+                            "div[role='textbox'][contenteditable='true']",
+                            "div[contenteditable='true']"
+                        ]:
                             boxes = driver.find_elements(By.CSS_SELECTOR, comp_sel)
                             active_boxes = [b for b in boxes if b.is_displayed()]
                             if active_boxes:
@@ -458,6 +628,7 @@ def send_facebook_direct_text_messages(
                                     const ed = arguments[0];
                                     ed.focus();
                                     document.execCommand('selectAll', false, null);
+                                    document.execCommand('delete', false, null);
                                     document.execCommand('insertText', false, arguments[1]);
                                     ed.dispatchEvent(new Event('input', { bubbles: true }));
                                 """, target_box, message_text)
@@ -481,24 +652,28 @@ def send_facebook_direct_text_messages(
                                 status="sent",
                                 share_mode="messenger_1on1"
                             )
-                            logs.append(f"✅ Delivered message to {fname} ({count}/{effective_target}).")
+                            logs.append(f"✅ Delivered to {fname} ({count}/{effective_target}).")
+                        else:
+                            logs.append(f"⚠️ Could not find composer for {fname}. Skipping.")
+                            continue
 
-                            # Check for action block immediately
-                            blk_now = detect_facebook_action_block(driver)
-                            if blk_now.get("blocked"):
-                                return {"status": "rate_limited", "platform": "facebook", "message": blk_now.get("reason"), "sent_count": count, "recipients": sent_recipients, "screenshot": blk_now.get("screenshot")}
+                    # Check for action block after each successful send
+                    blk_now = detect_facebook_action_block(driver)
+                    if blk_now.get("blocked"):
+                        return {"status": "rate_limited", "platform": "facebook", "message": blk_now.get("reason"), "sent_count": count, "recipients": sent_recipients, "screenshot": blk_now.get("screenshot")}
 
-                            # Micro-cooldown pause every 10 messages
-                            if count % MICRO_COOLDOWN_EVERY == 0 and count < effective_target:
-                                logs.append(f"☕ Safety pause for {MICRO_COOLDOWN_SECONDS}s to keep Facebook account safe...")
-                                time.sleep(MICRO_COOLDOWN_SECONDS)
-                            else:
-                                # Normal human safety delay (8-14s)
-                                pause = random.uniform(BASE_SAFETY_DELAY_MIN, BASE_SAFETY_DELAY_MAX)
-                                time.sleep(pause)
+                    # Micro-cooldown pause every 10 messages
+                    if count % MICRO_COOLDOWN_EVERY == 0 and count < effective_target:
+                        logs.append(f"☕ Safety pause for {MICRO_COOLDOWN_SECONDS}s to keep Facebook account safe...")
+                        time.sleep(MICRO_COOLDOWN_SECONDS)
+                    else:
+                        # Normal human safety delay (8-14s)
+                        pause = random.uniform(BASE_SAFETY_DELAY_MIN, BASE_SAFETY_DELAY_MAX)
+                        time.sleep(pause)
 
                 except Exception as e_fr:
                     logger.warning(f"Could not message friend {fname}: {e_fr}")
+                    logs.append(f"⚠️ Error messaging {fname}: {str(e_fr)[:80]}")
                     continue
 
             # Capture completion screenshot
@@ -530,6 +705,15 @@ def send_facebook_direct_text_messages(
         return {"status": "error", "platform": "facebook", "message": str(e), "logs": logs}
 
 
+def _is_facebook_native_url(url: str) -> bool:
+    """Check if a URL is a Facebook-native link that can use the Share modal."""
+    if not url:
+        return False
+    url_lower = url.lower().strip()
+    fb_domains = ["facebook.com", "fb.com", "fb.watch", "m.facebook.com"]
+    return any(domain in url_lower for domain in fb_domains)
+
+
 def send_facebook_friends_outreach(
     message_text: str = None,
     reel_url: str = None,
@@ -541,19 +725,21 @@ def send_facebook_friends_outreach(
 ) -> dict:
     """
     Unified Hybrid Dispatcher:
-    - If a Reel or post link is present: uses the native Messenger Share dialog.
-    - If pure text: uses 1-on-1 Messenger chat delivery.
+    - If a Facebook Reel or Facebook post link is present: uses the native Messenger Share dialog.
+    - If non-Facebook URL (Instagram, YouTube, etc.) or pure text: uses 1-on-1 Messenger chat delivery.
     """
-    # Detect if message contains a reel or URL link
-    has_link = bool(reel_url) or (message_text and ("http://" in message_text or "https://" in message_text or "facebook.com" in message_text))
+    # Extract any URL from message
     extracted_link = reel_url
     if not extracted_link and message_text:
         urls = re.findall(r'https?://[^\s]+', message_text)
         if urls:
-            extracted_link = urls[0]
+            extracted_link = urls[0].rstrip('.,;!?')
 
-    if has_link and extracted_link:
-        logger.info(f"Hybrid Mode: Link/Reel detected ({extracted_link[:40]}). Utilizing Native Messenger Share modal.")
+    has_link = bool(extracted_link)
+
+    # Only use native Facebook Share modal for Facebook-native URLs
+    if has_link and extracted_link and _is_facebook_native_url(extracted_link):
+        logger.info(f"Hybrid Mode: Facebook-native link detected ({extracted_link[:60]}). Using Native Messenger Share modal.")
         return send_facebook_reels_or_post_to_friends(
             post_url=extracted_link,
             message_text=message_text,
@@ -564,9 +750,18 @@ def send_facebook_friends_outreach(
             stop_event=stop_event
         )
     else:
-        logger.info("Hybrid Mode: Pure text message detected. Utilizing 1-on-1 Messenger Inbox Chats.")
+        # For non-Facebook URLs (Instagram, YouTube, etc.) or pure text:
+        # Send the full message (including any link) via direct 1-on-1 Messenger chats
+        full_message = message_text or ""
+        if not full_message and extracted_link:
+            full_message = extracted_link
+        elif extracted_link and extracted_link not in (full_message or ""):
+            full_message = f"{full_message}\n{extracted_link}" if full_message else extracted_link
+
+        mode_desc = "non-Facebook URL" if has_link else "pure text"
+        logger.info(f"Hybrid Mode: {mode_desc} detected. Using 1-on-1 Messenger Inbox Chats for direct delivery.")
         return send_facebook_direct_text_messages(
-            message_text=message_text or "Hello! Wishing you a wonderful day.",
+            message_text=full_message or "Hello! Wishing you a wonderful day.",
             target_count=target_count,
             on_progress=on_progress,
             stop_event=stop_event
