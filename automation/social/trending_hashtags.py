@@ -162,6 +162,19 @@ def get_fresh_trending_hashtags(
                 selected.append(t)
             if len(selected) >= target_count:
                 break
+    elif platform_clean == "youtube":
+        target_count = max_count or random.randint(5, 8)
+        yt_pool = ["#Shorts", "#YouTubeShorts", "#Viral", "#Trending", "#Subscribe", "#IndianCreators"]
+        if cat_key == "finance":
+            yt_pool.extend(["#LoanSolutions", "#PersonalLoan", "#FinancialTips", "#InstantLoan"])
+        else:
+            yt_pool.extend(["#EveryThingRental", "#RentalService", "#SmartLiving", "#SaveMoney"])
+        random.shuffle(yt_pool)
+        for t in yt_pool:
+            if t not in selected:
+                selected.append(t)
+            if len(selected) >= target_count:
+                break
     else:
         # Instagram favors rich 12-16 tag mix: anchors + niche + community
         target_count = max_count or random.randint(12, 16)

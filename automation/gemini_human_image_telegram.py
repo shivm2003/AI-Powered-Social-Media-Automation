@@ -145,14 +145,19 @@ def run_gemini_human_image_and_telegram(custom_product=None):
 
     # Construct prompt: Divided into Task 1 and Task 2, same as ChatGPT, given at once
     product_name = (custom_product or {}).get("name", "Loan Solutions")
-    loan_solutions_file = str(BASE_DIR / "Loan Solutions.png")
+    product_logo_file = (custom_product or {}).get("logo_path")
+    if not product_logo_file or not os.path.exists(str(product_logo_file)):
+        if "everything" in product_name.lower() or "rental" in product_name.lower():
+            product_logo_file = str(BASE_DIR / "EveryThingRental.png")
+        else:
+            product_logo_file = str(BASE_DIR / "Loan Solutions.png")
 
-    # If reference image exists (Loan Solutions), attach it to Gemini composer like human
-    if os.path.exists(loan_solutions_file):
+    # If reference image exists (Loan Solutions or EveryThingRental), attach it to Gemini composer like human
+    if product_logo_file and os.path.exists(product_logo_file):
         from browser.human_operator import upload_image_to_gemini
-        uploaded = upload_image_to_gemini(driver, loan_solutions_file)
+        uploaded = upload_image_to_gemini(driver, product_logo_file)
         if uploaded:
-            print(f"📎 Uploaded reference image to Gemini composer: {os.path.basename(loan_solutions_file)}", flush=True)
+            print(f"📎 Uploaded reference image to Gemini composer: {os.path.basename(product_logo_file)}", flush=True)
         else:
             print("⚠️ Could not attach reference image to Gemini composer", flush=True)
 

@@ -328,6 +328,27 @@ def run_growth_campaign(
                 except Exception:
                     pass
 
+        if details.get("status") == "rate_limited":
+            state["is_cooldown"] = True
+            err_reason = details.get("error", "Instagram action blocked")
+            state["logs"].append(f"[Instagram RATE LIMIT] 🛑 {err_reason}")
+            update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "rate_limited", state["logs"])
+            stop_growth_campaign(campaign_id)
+            if tg_chat_id:
+                try:
+                    send_text_message(
+                        tg_chat_id,
+                        f"🛑 <b>CRITICAL SAFETY HALT: Instagram Limit Reached!</b>\n\n"
+                        f"⚠️ <b>Trigger:</b> <code>{err_reason}</code>\n"
+                        f"📝 <b>Details:</b> <i>\"{details.get('alert_text', '')[:200]}\"</i>\n\n"
+                        f"🔒 System automatically stopped outreach to protect your account from suspension.\n"
+                        f"💡 <i>Wait 24 hours before launching more Instagram follow requests.</i>"
+                    )
+                except Exception:
+                    pass
+            send_tg_live_update(force=True)
+            return
+
         if details.get("cooldown"):
             state["is_cooldown"] = True
             state["cooldown_msg"] = details.get("message", "2-minute cooldown active")
@@ -373,6 +394,27 @@ def run_growth_campaign(
                     task_obj.update_progress(state["total_sent"], total_target)
                 except Exception:
                     pass
+
+        if details.get("status") == "rate_limited":
+            state["is_cooldown"] = True
+            err_reason = details.get("error", "Instagram action blocked")
+            state["logs"].append(f"[Instagram RATE LIMIT] 🛑 {err_reason}")
+            update_db_campaign_status(campaign_id, state["fb_sent"], state["ig_sent"], "rate_limited", state["logs"])
+            stop_growth_campaign(campaign_id)
+            if tg_chat_id:
+                try:
+                    send_text_message(
+                        tg_chat_id,
+                        f"🛑 <b>CRITICAL SAFETY HALT: Instagram Limit Reached!</b>\n\n"
+                        f"⚠️ <b>Trigger:</b> <code>{err_reason}</code>\n"
+                        f"📝 <b>Details:</b> <i>\"{details.get('alert_text', '')[:200]}\"</i>\n\n"
+                        f"🔒 System automatically stopped outreach to protect your account from suspension.\n"
+                        f"💡 <i>Wait 24 hours before launching more Instagram follow requests.</i>"
+                    )
+                except Exception:
+                    pass
+            send_tg_live_update(force=True)
+            return
 
         if details.get("cooldown"):
             state["is_cooldown"] = True

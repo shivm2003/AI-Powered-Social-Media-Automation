@@ -45,6 +45,7 @@ CHROME_PROFILES_DIR = BASE_DIR / "chrome_profiles"
 MEDIA_OUTPUT_DIR = BASE_DIR / "data" / "media"
 IMAGES_DIR = MEDIA_OUTPUT_DIR / "images"
 VIDEOS_DIR = MEDIA_OUTPUT_DIR / "videos"
+FACE_REFERENCE_IMAGE = MEDIA_OUTPUT_DIR / "faces_reference.jpg"
 
 # Database path
 DATABASE_PATH = BASE_DIR / "data" / "database.sqlite"
@@ -65,6 +66,7 @@ PLATFORM_PROFILES = {
     "gemini": CHROME_PROFILES_DIR / "gemini",
     "chatgpt": CHROME_PROFILES_DIR / "chatgpt",
     "claude": CHROME_PROFILES_DIR / "claude",
+    "youtube": CHROME_PROFILES_DIR / "youtube",
 }
 
 # Platform URLs
@@ -76,6 +78,7 @@ PLATFORM_URLS = {
     "gemini": "https://gemini.google.com",
     "chatgpt": "https://chatgpt.com",
     "claude": "https://claude.ai",
+    "youtube": "https://studio.youtube.com",
 }
 
 # Browser settings

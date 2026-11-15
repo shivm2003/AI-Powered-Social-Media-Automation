@@ -46,6 +46,7 @@ next-env.d.ts
 # Automation & Sessions (Never commit cookies or profiles)
 chrome_profiles/
 /chrome_profiles/
+automation/chrome_profiles/
 
 # Local Database & Media
 /data/
@@ -54,8 +55,12 @@ data/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+*.flag
 public/uploads/*
 !public/uploads/.gitkeep
+!public/uploads/EveryThingRental.png
+!public/uploads/EveryThingRental.jpg
+!public/uploads/Loan_Solutions.png
 
 # Logs
 /logs/

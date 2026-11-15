@@ -56,6 +56,19 @@ export const PLATFORMS = {
     aspectRatios: ["1:1", "9:16"],
     loginNote: "WhatsApp requires QR code scanning. Click 'Test Login' to open WhatsApp Web and scan the QR code with your phone.",
   },
+  youtube: {
+    name: "YouTube",
+    icon: "▶️",
+    color: "hsl(0, 100%, 50%)",
+    colorMuted: "hsla(0, 100%, 50%, 0.15)",
+    fields: [
+      { key: "channel_name", label: "Channel Name", type: "text", required: false, placeholder: "Your YouTube Channel" },
+    ],
+    contentTypes: ["video", "image"],
+    maxCaption: 5000,
+    aspectRatios: ["9:16", "16:9", "1:1"],
+    loginNote: "YouTube uploads run through your authenticated Google Chrome profile on YouTube Studio.",
+  },
 };
 
 // LLM providers

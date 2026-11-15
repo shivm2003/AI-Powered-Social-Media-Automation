@@ -558,11 +558,24 @@ export default function GeneratePage() {
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <h4>{product.name}</h4>
-                        <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginTop: "var(--space-1)" }}>
-                          {product.description?.slice(0, 80)}{product.description?.length > 80 ? "..." : ""}
-                        </p>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-3)" }}>
+                        {product.logo_path && (
+                          <img
+                            src={
+                              product.logo_path.startsWith("/") || product.logo_path.startsWith("http")
+                                ? product.logo_path
+                                : `/uploads/${product.logo_path.split(/[/\\]/).pop()}`
+                            }
+                            alt={product.name}
+                            style={{ width: 38, height: 38, borderRadius: "var(--radius-sm)", objectFit: "contain", background: "#ffffff", padding: "2px", flexShrink: 0 }}
+                          />
+                        )}
+                        <div>
+                          <h4 style={{ margin: 0 }}>{product.name}</h4>
+                          <p style={{ fontSize: "var(--font-sm)", color: "var(--text-secondary)", marginTop: "var(--space-1)" }}>
+                            {product.description?.slice(0, 80)}{product.description?.length > 80 ? "..." : ""}
+                          </p>
+                        </div>
                       </div>
                       <div
                         style={{
@@ -1480,7 +1493,7 @@ export default function GeneratePage() {
                             </>
                           ) : (
                             <>
-                              <span>🚀</span> Broadcast to Both ({config.selectedPlatforms.map((p) => p.toUpperCase()).join(" + ")})
+                              <span>🚀</span> Broadcast to All ({config.selectedPlatforms.map((p) => p.toUpperCase()).join(" + ")})
                             </>
                           )}
                         </button>

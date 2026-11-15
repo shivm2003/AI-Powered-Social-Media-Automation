@@ -725,7 +725,7 @@ export default function CampaignsPage() {
                   <button
                     type="button"
                     className="btn btn-sm btn-secondary"
-                    onClick={() => setTargetPlatforms(["facebook", "instagram", "linkedin", "whatsapp"])}
+                    onClick={() => setTargetPlatforms(["facebook", "instagram", "linkedin", "whatsapp", "youtube"])}
                     style={{ fontSize: "11px", padding: "2px 8px" }}
                   >
                     Select All
@@ -747,6 +747,13 @@ export default function CampaignsPage() {
                   icon: "📸",
                   desc: "Publishes image and captions directly to your Instagram profile",
                   highlight: "✨ Direct Creator Studio & Post Pipeline",
+                },
+                {
+                  id: "youtube",
+                  name: "YouTube",
+                  icon: "▶️",
+                  desc: "Publishes video as Shorts or graphics to YouTube Community tab",
+                  highlight: "🔴 Automated YouTube Studio & Shorts Engine",
                 },
                 {
                   id: "linkedin",

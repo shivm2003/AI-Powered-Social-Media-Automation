@@ -243,13 +243,6 @@ def share_instagram_post_to_friends(
                     on_progress(0, target_count, {"activity": "Resolving Instagram followers list..."})
                 except Exception:
                     pass
-            followers_list = get_or_harvest_instagram_followers(
-                driver,
-                account_username="loansolutions2026",
-                max_count=500 if share_all else target_count
-            )
-            logs.append(f"👥 Resolved {len(followers_list)} account followers for post sharing.")
-            logger.info(f"Resolved {len(followers_list)} account followers.")
 
             # Step 2: Navigate to target post if needed
             if target_url and ("/p/" in target_url or "/reel/" in target_url):
@@ -273,6 +266,25 @@ def share_instagram_post_to_friends(
                 if post_opened:
                     time.sleep(3.0)
                     logs.append(f"🔍 Opened latest post thumbnail: {driver.current_url}")
+
+            followers_list = []
+            cache_file = BASE_DIR / "data" / "instagram_followers_cache.json"
+            if cache_file.exists():
+                try:
+                    with open(cache_file, "r", encoding="utf-8") as f:
+                        followers_list = json.load(f)
+                except Exception:
+                    followers_list = []
+
+            if not followers_list and not (target_url and ("/p/" in target_url or "/reel/" in target_url)):
+                followers_list = get_or_harvest_instagram_followers(
+                    driver,
+                    account_username="loansolutions2026",
+                    max_count=500 if share_all else target_count
+                )
+
+            logs.append(f"👥 Resolved {len(followers_list)} account followers for post sharing.")
+            logger.info(f"Resolved {len(followers_list)} account followers.")
 
             current_post_url = driver.current_url
 
@@ -994,7 +1006,8 @@ def share_facebook_post_to_friends(
 
 
 def share_post_to_all_platforms(
-    campaign_id: str,
+    campaign_id: str = None,
+    post_url: str = None,
     platforms=None,
     share_all: bool = True,
     target_count: int = 100,
@@ -1009,7 +1022,7 @@ def share_post_to_all_platforms(
     3. Aggregates results, logs every share to database, and captures verification screenshots.
     """
     if not platforms:
-        camp = get_campaign_from_db(campaign_id)
+        camp = get_campaign_from_db(campaign_id) if campaign_id else None
         platforms = camp.get("platforms", ["facebook", "instagram"]) if camp else ["facebook", "instagram"]
 
     platforms = [str(p).lower() for p in platforms]
@@ -1017,12 +1030,14 @@ def share_post_to_all_platforms(
     total_shares = 0
     all_recipients = []
     screenshots = []
-    logs = [f"🚀 Initiated 'Share to All' for campaign {campaign_id} on {', '.join(platforms)}"]
+    target_desc = post_url if post_url else f"campaign {campaign_id}"
+    logs = [f"🚀 Initiated 'Share to All' for {target_desc} on {', '.join(platforms)}"]
 
     if "instagram" in platforms:
         if stop_event and stop_event.is_set():
             return {"status": "stopped", "total_shares": total_shares, "logs": logs}
         ig_res = share_instagram_post_to_friends(
+            post_url=post_url,
             campaign_id=campaign_id,
             share_all=share_all,
             target_count=target_count,
@@ -1044,6 +1059,7 @@ def share_post_to_all_platforms(
         if stop_event and stop_event.is_set():
             return {"status": "stopped", "total_shares": total_shares, "logs": logs}
         fb_res = share_facebook_post_to_friends(
+            post_url=post_url,
             campaign_id=campaign_id,
             share_all=share_all,
             target_count=target_count,

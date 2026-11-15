@@ -1393,42 +1393,26 @@ def execute_human_generation_and_telegram_flow(
                 if skill_image_path and os.path.exists(str(skill_image_path)):
                     upload_image_to_gemini(driver, skill_image_path, logger=logger, logs=logs)
 
-                # 24-Second Indian Commercial Video Script Prompt for Gemini (Home Loan & LAP Strategic Focus)
+                # 10-Second Indian Commercial Video Script Prompt for Gemini
                 apply_instruction = f"👉 Apply Now: {LOAN_SOLUTIONS_APPLY_URL}" if is_loan_solutions else "https://loansolutions.everythingrental.in/application"
                 video_script_prompt = (
-                    f"You are an elite Indian commercial director and scriptwriter. "
-                    f"Write a high-converting, strictly policy-compliant 24-second video commercial script for '{product_name}' ({category}) adhering strictly to Google Gemini Safety Policies and Indian Culture.\n\n"
-                    f"STRATEGIC PRODUCT FOCUS:\n"
-                    f"• HERO FOCUS 1: Home Loans ('Apna Ghar') — Helping Indian middle-class and striving families realize their lifelong dream of owning their own home with low, affordable EMIs.\n"
-                    f"• HERO FOCUS 2: Loan Against Property (LAP) — Helping business owners and entrepreneurs unlock the value of their property to grow and expand their business.\n"
-                    f"• SUPPORTING PILLARS: Personal Loans & Business Loans — Retained for complete versatility (working capital, education, expansion, life milestones).\n\n"
-                    f"STRICT POLICY COMPLIANCE REQUIREMENTS (Google Gemini Generative AI Policy):\n"
-                    f"• FINANCIAL SAFETY & TRANSPARENCY: Do NOT make deceptive, exaggerated, or guaranteed financial claims.\n"
-                    f"• Focus on legitimate, transparent financial planning, authorized banking support, RBI-regulated lending partners, and customer milestone empowerment.\n"
-                    f"• POSITIVE DEMOGRAPHICS: Respectful, uplifting portrayal of Indian middle-class families, salaried professionals, and entrepreneurs achieving their goals.\n"
-                    f"• Currency: Strictly Indian Rupees (₹ INR).\n"
+                    f"You are a professional Indian commercial director and scriptwriter. "
+                    f"Write an engaging, strictly policy-compliant 10-second commercial script for '{product_name}' ({category}) in authentic Indian context.\n\n"
+                    f"KEY THEMES:\n"
+                    f"• Hero Theme: Realizing the dream of 'Apna Ghar' (Home Loans) and business growth with transparent digital guidance.\n"
+                    f"• Demographics: Hardworking Indian middle-class families and entrepreneurs.\n"
+                    f"• Currency: Indian Rupees (₹ INR).\n"
                     f"• Mandatory Link: {apply_instruction}\n\n"
-                    f"Structure the 24-second video into EXACTLY 3 sequential clips of 8 seconds each:\n\n"
-                    f"CLIP 1 (00:00 - 00:08) - The Home Loan Milestone (Apna Ghar for Middle-Class Families):\n"
-                    f"Headline: Apna Ghar: Home Loans for Families\n"
-                    f"Subheadline: Affordable EMIs & subsidized rates to own your dream home\n"
-                    f"Narration: [1-2 lines conversational Hindi/English audio script celebrating the dream of owning a home]\n"
-                    f"Badge: 🏠 Home Loan • Apna Ghar Yojana\n\n"
-                    f"CLIP 2 (00:08 - 00:16) - The Business Growth Solution (Loan Against Property - LAP):\n"
-                    f"Headline: Grow Your Business with LAP\n"
-                    f"Subheadline: Unlock up to 70% property value for business expansion\n"
-                    f"Narration: [Experience high-sanction funding by unlocking property equity to scale your business, plus Personal & Business loan flexibility]\n"
-                    f"Badge: 🏢 LAP • High Capital for Business Growth\n\n"
-                    f"CLIP 3 (00:16 - 00:24) - Climax & Call To Action (Complete Solutions):\n"
-                    f"Headline: Home Loan • LAP • Business & Personal Loans\n"
-                    f"Subheadline: Visit loansolutions.everythingrental.in/application\n"
-                    f"Narration: [Check your loan eligibility online today and take the smart step towards your home and business goals]\n"
-                    f"Badge: 👉 Check Loan Eligibility Online\n\n"
+                    f"OUTPUT FORMAT:\n"
+                    f"HEADLINE: [Engaging 4-6 words headline]\n"
+                    f"SUBHEADLINE: [Clear benefit under 12 words]\n"
+                    f"NARRATION: [1-2 lines conversational Hindi/English 10-second voiceover narration]\n"
+                    f"BADGE: [Trust badge e.g. 🏠 Apna Ghar Yojana]\n\n"
                     f"CAPTION:\n"
                     f"{apply_instruction}\n\n"
-                    f"[Engaging 2-3 paragraph marketing copy highlighting Home Loans (Apna Ghar), Loan Against Property (Business Growth), and flexible Personal & Business Loans in Indian Rupee ₹ context]\n\n"
+                    f"[2 short paragraphs high-converting social media copy]\n\n"
                     f"HASHTAGS:\n"
-                    f"#HomeLoan #ApnaGhar #LoanAgainstProperty #LAP #BusinessGrowth #MiddleClassDreams #PersonalLoan #BusinessLoan #LoanSolutions #FinancialPlanning #MakeInIndia"
+                    f"#HomeLoan #ApnaGhar #LoanAgainstProperty #LAP #BusinessGrowth #LoanSolutions"
                 )
 
                 from llm.prompt_paste_verifier_agent import PromptPasteVerifierAgent
@@ -1437,7 +1421,7 @@ def execute_human_generation_and_telegram_flow(
                     driver=driver,
                     prompt=video_script_prompt,
                     platform="gemini",
-                    required_substrings=["CLIP 1", "CLIP 2", "CLIP 3"]
+                    required_substrings=["HEADLINE", "NARRATION"]
                 )
                 logs.append(f"🤖 PromptPasteVerifierAgent verified video script prompt: {paste_res.status} ({paste_res.actual_length} chars)")
                 human_sleep(0.4, 0.8)
@@ -1837,7 +1821,7 @@ def execute_human_generation_and_telegram_flow(
     # Media Generation: Video vs Image
     media_file_path = None
     if content_type == "video":
-        logs.append("🎥 Step 4: Compiling dynamic promotional video with Gemini (Minimum 5 minutes waiting time / 300s per clip)...")
+        logs.append("🎥 Step 4: Generating 10-Second AI Video with Gemini Video Skill & Face Reference...")
         headline = content_data.get("headline") or f"Discover {product_name}"
         subheadline = content_data.get("subheadline") or (desc[:65] if desc else "The smart solution for you.")
         resolved_logo = skill_image_path or product.get("logo_path")
@@ -1851,28 +1835,27 @@ def execute_human_generation_and_telegram_flow(
         ]
         try:
             from media.gemini_video_engine import gemini_video_engine
-            logger.info("Using 24-second 3-clip Gemini video engine (Indian Standard)...")
-            res_24s = gemini_video_engine.run_full_24s_pipeline(
+            logger.info("Using 10-Second Gemini video skill engine with face reference (Indian Standard)...")
+            res_10s = gemini_video_engine.run_10s_video_pipeline(
                 prompt=prompt,
                 product_name=product_name,
                 product_category=category,
                 platforms=platforms,
                 send_to_telegram=False,
-                send_individual_clips=True,
                 logo_path=resolved_logo,
                 script_data=parsed_script if 'parsed_script' in locals() and parsed_script else None,
                 driver=driver,
                 campaign_id=campaign_id
             )
-            media_file_path = res_24s.get("master_video")
-            s_data = res_24s.get("script", {})
+            media_file_path = res_10s.get("master_video")
+            s_data = res_10s.get("script", {})
             if s_data.get("caption"):
                 content_data["caption"] = s_data["caption"]
             if s_data.get("hashtags"):
                 content_data["hashtags"] = s_data["hashtags"]
-            logs.append(f"✅ Step 4 Complete: 24-Second Indian Standard 3-Clip Video Reel ready ({os.path.basename(media_file_path)}).")
-        except Exception as e_24s:
-            logger.warning(f"24s video engine note: {e_24s}. Falling back to standard video generator.")
+            logs.append(f"✅ Step 4 Complete: 10-Second AI Video ready ({os.path.basename(media_file_path)}).")
+        except Exception as e_10s:
+            logger.warning(f"10s video engine note: {e_10s}. Falling back to standard video generator.")
             try:
                 from media.video_generator import generate_promo_video
                 video_out = generate_promo_video(

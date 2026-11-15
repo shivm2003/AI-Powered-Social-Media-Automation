@@ -216,8 +216,8 @@ export async function updateProduct(id, product) {
       name = $1, description = $2, category = $3, website_url = $4,
       target_audience = $5, key_benefits = $6, brand_colors = $7,
       tone = $8, disclaimer = $9, custom_prompt = $10, campaign_objectives = $11,
-      contact_number = $12, updated_at = NOW()
-    WHERE id = $13
+      contact_number = $12, logo_path = COALESCE($13, logo_path), updated_at = NOW()
+    WHERE id = $14
   `;
   return query(sql, [
     product.name,
@@ -232,6 +232,7 @@ export async function updateProduct(id, product) {
     product.custom_prompt || null,
     typeof product.campaign_objectives === "string" ? product.campaign_objectives : JSON.stringify(product.campaign_objectives || []),
     product.contact_number || null,
+    product.logo_path !== undefined ? product.logo_path : null,
     id,
   ]);
 }

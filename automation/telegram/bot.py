@@ -757,7 +757,7 @@ def send_root_choice_menu(chat_id: str, message_id: int = None) -> dict:
                 {"text": "🎨 1. Generate & Post Content", "callback_data": "root:content"}
             ],
             [
-                {"text": "🖼️ 2. Posted Content Gallery (Share to All)", "callback_data": "post_page:0"}
+                {"text": "✉️ 2. Custom Message & Outreach", "callback_data": "root:custom_msg"}
             ],
             [
                 {"text": "👥 3. Outreach (Follow & Friend Requests)", "callback_data": "root:outreach"}
@@ -1221,6 +1221,295 @@ def send_post_shares_overall_stats_menu(chat_id: str, message_id: int = None) ->
     return {"status": "success" if res.get("ok") else "error", "response": res}
 
 
+def send_custom_message_source_menu(chat_id: str, message_id: int = None) -> dict:
+    """Custom Message Step 1: Select between Content Gallery or Custom Message."""
+    text = (
+        "✉️ <b>Custom Message & Social Outreach</b>\n\n"
+        "How would you like to outreach your friends & audience?\n\n"
+        "• <b>🖼️ Content Gallery:</b> Pick an existing published campaign, video, or image from your gallery.\n"
+        "• <b>✍️ Custom Message:</b> Type your own personal message or paste any custom Reel/video link."
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🖼️ 1. Share from Content Gallery", "callback_data": "cmsg_wiz:mode:gallery"}],
+            [{"text": "✍️ 2. Type Custom Message / Reel Link", "callback_data": "cmsg_wiz:mode:custom"}],
+            [{"text": "🔙 Main Menu", "callback_data": "root:main"}]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_custom_message_text_prompt(chat_id: str, message_id: int = None) -> dict:
+    """Prompts the user to reply with their custom text message or reel link."""
+    text = (
+        "✍️ <b>Type Your Custom Message or Reel Link</b>\n\n"
+        "Please reply with the exact text message or Reel link you want to send to your friends:\n\n"
+        "<i>Examples:</i>\n"
+        "• <i>\"Hey! Check out our new Loan Solutions instant approval scheme: https://loansolutions.everythingrental.in/application\"</i>\n"
+        "• <i>https://www.facebook.com/reel/123456789</i>\n\n"
+        "👇 <b>Type or paste your message below:</b>"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🔙 Back", "callback_data": "root:custom_msg"}]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_custom_message_platform_menu(chat_id: str, info: dict, message_id: int = None) -> dict:
+    """Step 2: Select target platform for the custom message."""
+    msg_preview = info.get("message_text", "")
+    if len(msg_preview) > 90:
+        msg_preview = msg_preview[:87] + "..."
+
+    text = (
+        "📱 <b>Select Social Media Platform</b>\n\n"
+        f"📝 <b>Message:</b> <i>\"{msg_preview}\"</i>\n\n"
+        "Which social media platform would you like to send this message to?"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "📘 Facebook (Friends Personal Messages / Messenger)", "callback_data": "cmsg_wiz:plat:facebook"}],
+            [{"text": "📸 Instagram (Direct Messages / Followers)", "callback_data": "cmsg_wiz:plat:instagram"}],
+            [{"text": "⚡ Both (Facebook + Instagram)", "callback_data": "cmsg_wiz:plat:both"}],
+            [{"text": "🔙 Back", "callback_data": "cmsg_wiz:mode:custom"}]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_custom_message_count_menu(chat_id: str, info: dict, message_id: int = None) -> dict:
+    """Step 3: Select recipient count for custom message outreach."""
+    plat = info.get("platform", "facebook")
+    plat_name = {"facebook": "📘 Facebook Friends", "instagram": "📸 Instagram Followers", "both": "⚡ Facebook + Instagram"}.get(plat, plat.capitalize())
+
+    text = (
+        "👥 <b>Select Recipient Target Count</b>\n\n"
+        f"📱 <b>Platform:</b> {plat_name}\n"
+        "🛡️ <b>Safe Session Cap:</b> <code>35 friends (prevents Facebook blocks)</code>\n\n"
+        "How many friends would you like to message in this session?"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "🔟 10 Friends", "callback_data": "cmsg_wiz:count:10"},
+                {"text": "🔢 25 Friends", "callback_data": "cmsg_wiz:count:25"}
+            ],
+            [
+                {"text": "🎯 35 Friends (Safe Max)", "callback_data": "cmsg_wiz:count:35"},
+                {"text": "🚀 ALL Friends (Max 35/batch)", "callback_data": "cmsg_wiz:count:all"}
+            ],
+            [
+                {"text": "✏️ Enter Custom Count", "callback_data": "cmsg_wiz:count:custom"}
+            ],
+            [
+                {"text": "🔙 Back", "callback_data": "cmsg_wiz:back_to_plat"}
+            ]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_custom_message_confirmation(chat_id: str, info: dict, message_id: int = None) -> dict:
+    """Step 4: Confirmation before dispatching messages."""
+    msg = info.get("message_text", "")
+    if len(msg) > 120:
+        msg = msg[:117] + "..."
+    plat = info.get("platform", "facebook")
+    plat_name = {"facebook": "📘 Facebook Friends (Personal Messenger)", "instagram": "📸 Instagram DMs", "both": "⚡ Facebook + Instagram"}.get(plat, plat.capitalize())
+    target_count = info.get("target_count", 30)
+
+    text = (
+        "📋 <b>Confirm Personal Message Outreach</b>\n\n"
+        f"📝 <b>Message Content:</b>\n<i>\"{msg}\"</i>\n\n"
+        f"📱 <b>Destination:</b> {plat_name}\n"
+        f"👥 <b>Recipients:</b> <code>{target_count} friends</code>\n"
+        f"⏱️ <b>Anti-Spam Pacing:</b> <code>8–14s delay + 30s pause every 10 msgs</code>\n"
+        f"🛡️ <b>Action Block Shield:</b> <code>Active (Instant alert on restriction)</code>\n\n"
+        "🚀 <i>Ready to initiate delivery to personal message inboxes?</i>"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🚀 Confirm & Send Messages Now", "callback_data": "cmsg_wiz:start"}],
+            [{"text": "✏️ Change Count", "callback_data": "cmsg_wiz:back_to_count"}],
+            [{"text": "❌ Cancel", "callback_data": "root:main"}]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_post_share_wizard_source_choice(chat_id: str, camp_id: str = "", message_id: int = None) -> dict:
+    """Step 1: Choose between Auto-Post (published campaign) or Manual Link Share."""
+    text = (
+        "🚀 <b>Post Sharing Wizard — Step 1 of 4: Select Share Mode</b>\n\n"
+        "How would you like to share your content?\n\n"
+        "• <b>🤖 Auto-Post:</b> Use the selected published post from your gallery.\n"
+        "• <b>🔗 Manual Link:</b> Paste any custom Instagram, Facebook, or web link."
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🤖 Auto-Post (Use This Post)", "callback_data": f"pshr_wiz:mode:auto:{camp_id}"}],
+            [{"text": "🔗 Manual Link (Paste URL)", "callback_data": f"pshr_wiz:mode:manual:{camp_id}"}],
+            [{"text": "🔙 Back to Gallery", "callback_data": "post_page:0"}]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_post_share_wizard_manual_prompt(chat_id: str, camp_id: str = "", message_id: int = None) -> dict:
+    """Prompts the user to enter/paste a manual link."""
+    text = (
+        "🔗 <b>Post Sharing Wizard — Manual Link Entry</b>\n\n"
+        "Please paste or send the post link below:\n\n"
+        "<i>(Supports Instagram post/reel URLs, Facebook post URLs, YouTube links, or any website link)</i>\n\n"
+        "👇 <i>Type or paste your link in the chat now:</i>"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🔙 Back to Gallery", "callback_data": "post_page:0"}]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_post_share_wizard_platform_choice(chat_id: str, info: dict, message_id: int = None) -> dict:
+    """Step 2: Explicitly select target social media platform (NO auto-detection bypass)."""
+    mode = info.get("mode", "auto")
+    post_url = info.get("post_url") or ""
+    camp_id = info.get("campaign_id") or ""
+    p_name = info.get("product_name") or "Published Campaign"
+
+    target_disp = f"<code>{post_url}</code>" if post_url else f"<code>{camp_id[:8]}...</code> ({p_name})"
+
+    text = (
+        "📱 <b>Post Sharing Wizard — Step 2 of 4: Select Platform</b>\n\n"
+        f"🏷️ <b>Share Source:</b> {'🔗 Manual Link' if mode == 'manual' else '🤖 Auto-Post'}\n"
+        f"📎 <b>Target:</b> {target_disp}\n\n"
+        "Which social media platform would you like to share this post to?"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "📸 Instagram Direct", "callback_data": "pshr_wiz:plat:instagram"},
+                {"text": "📘 Facebook Friends", "callback_data": "pshr_wiz:plat:facebook"}
+            ],
+            [
+                {"text": "⚡ Both (Instagram + Facebook)", "callback_data": "pshr_wiz:plat:both"}
+            ],
+            [
+                {"text": "▶️ YouTube Community / Video", "callback_data": "pshr_wiz:plat:youtube"}
+            ],
+            [
+                {"text": "❌ Cancel", "callback_data": "root:main"}
+            ]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_post_share_wizard_count_choice(chat_id: str, info: dict, message_id: int = None) -> dict:
+    """Step 3: Select recipient count for sharing."""
+    plat = info.get("platform", "both")
+    plat_name = {"instagram": "📸 Instagram Direct", "facebook": "📘 Facebook Friends", "both": "⚡ Instagram + Facebook"}.get(plat, plat.capitalize())
+
+    text = (
+        "🎯 <b>Post Sharing Wizard — Step 3 of 4: Select Recipient Count</b>\n\n"
+        f"📱 <b>Target Platform:</b> {plat_name}\n\n"
+        "How many friends/followers would you like to share this post with?"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "🎯 10 Recipients", "callback_data": "pshr_wiz:count:10"},
+                {"text": "🎯 25 Recipients", "callback_data": "pshr_wiz:count:25"}
+            ],
+            [
+                {"text": "🎯 50 Recipients", "callback_data": "pshr_wiz:count:50"},
+                {"text": "🚀 ALL Friends / Followers", "callback_data": "pshr_wiz:count:all"}
+            ],
+            [
+                {"text": "✏️ Enter Custom Count", "callback_data": "pshr_wiz:count:custom"}
+            ],
+            [
+                {"text": "🔙 Back", "callback_data": "pshr_wiz:back_to_plat"}
+            ]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
+
+
+def send_post_share_wizard_confirmation(chat_id: str, info: dict, message_id: int = None) -> dict:
+    """Step 4: Final Confirmation and Launch Initiation."""
+    mode = info.get("mode", "auto")
+    post_url = info.get("post_url") or ""
+    camp_id = info.get("campaign_id") or ""
+    p_name = info.get("product_name") or "Published Post"
+    plat = info.get("platform", "both")
+    plat_name = {"instagram": "📸 Instagram Direct", "facebook": "📘 Facebook Friends", "both": "⚡ Instagram + Facebook"}.get(plat, plat.capitalize())
+    share_all = info.get("share_all", False)
+    target_count = info.get("target_count", 25)
+    count_disp = "ALL Available Friends/Followers" if share_all else f"{target_count} Recipients"
+
+    target_disp = f"<code>{post_url}</code>" if post_url else f"<code>{camp_id[:8]}...</code> ({p_name})"
+
+    text = (
+        "📋 <b>Post Sharing Wizard — Final Confirmation</b>\n\n"
+        f"🏷️ <b>Share Mode:</b> {'🔗 Manual Link Share' if mode == 'manual' else '🤖 Auto-Post'}\n"
+        f"📎 <b>Target Content:</b> {target_disp}\n"
+        f"📱 <b>Destination Platform:</b> {plat_name}\n"
+        f"👥 <b>Target Recipients:</b> <code>{count_disp}</code>\n"
+        "⏱️ <b>Safety Delay:</b> <code>6–8s human randomized pacing</code>\n\n"
+        "🚀 <i>Ready to initiate safe post sharing to your recipients?</i>"
+    )
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🚀 Start Sharing Now", "callback_data": "pshr_wiz:start"}],
+            [{"text": "✏️ Change Count", "callback_data": "pshr_wiz:back_to_count"}],
+            [{"text": "❌ Cancel", "callback_data": "root:main"}]
+        ]
+    }
+    if message_id:
+        res = edit_message_text(chat_id, message_id, text, keyboard=keyboard)
+        if res.get("ok"):
+            return {"status": "success", "response": res}
+    return send_text_message(chat_id, text, reply_markup=keyboard)
 
 
 def send_instagram_unfollow_menu(chat_id: str, message_id: int = None) -> dict:

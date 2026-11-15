@@ -127,7 +127,12 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
 
     # Construct prompt divided into Task 1 and Task 2 given all at once
     product_name = (custom_product or {}).get("name", "Loan Solutions")
-    loan_solutions_file = str(BASE_DIR / "Loan Solutions.png")
+    product_logo_file = (custom_product or {}).get("logo_path")
+    if not product_logo_file or not os.path.exists(str(product_logo_file)):
+        if "everything" in product_name.lower() or "rental" in product_name.lower():
+            product_logo_file = str(BASE_DIR / "EveryThingRental.png")
+        else:
+            product_logo_file = str(BASE_DIR / "Loan Solutions.png")
 
     prompt_text = (
         f"--- TASK 1: CLEAN VISUAL ARTWORK (IMAGE GENERATION) ---\n"
@@ -167,9 +172,9 @@ def run_chatgpt_human_image_and_telegram(custom_product=None):
     human_sleep(0.5, 1.0)
 
     # ── Step 4B: Attach reference image to ChatGPT composer safely AFTER prompt is verified in place ──
-    if os.path.exists(loan_solutions_file):
-        print(f"📎 Attaching reference image to ChatGPT composer: {os.path.basename(loan_solutions_file)}...", flush=True)
-        upload_image_to_chatgpt(driver, loan_solutions_file)
+    if product_logo_file and os.path.exists(product_logo_file):
+        print(f"📎 Attaching reference image to ChatGPT composer: {os.path.basename(product_logo_file)}...", flush=True)
+        upload_image_to_chatgpt(driver, product_logo_file)
         human_sleep(1.0, 1.8)
 
     # ── Step 4C: Wait for Send button to become ready and click Send ──

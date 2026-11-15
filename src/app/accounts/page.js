@@ -8,6 +8,7 @@ const ALL_AUTOMATION_PLATFORMS = [
   { id: "instagram", name: "Instagram", icon: "📸", category: "Social" },
   { id: "linkedin", name: "LinkedIn", icon: "💼", category: "Social" },
   { id: "whatsapp", name: "WhatsApp", icon: "💬", category: "Social" },
+  { id: "youtube", name: "YouTube", icon: "▶️", category: "Social" },
   { id: "gemini", name: "Gemini", icon: "♊", category: "AI LLM" },
   { id: "chatgpt", name: "ChatGPT", icon: "🟢", category: "AI LLM" },
   { id: "claude", name: "Claude", icon: "🟣", category: "AI LLM" },

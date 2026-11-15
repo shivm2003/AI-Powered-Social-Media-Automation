@@ -30,6 +30,122 @@ from config import PLATFORM_URLS
 
 logger = logging.getLogger("automation.social.instagram_follow")
 
+# ── Safety Thresholds for Account Protection ──
+MAX_FOLLOWS_PER_SESSION = 35  # Strict cap to prevent account bans
+MICRO_COOLDOWN_EVERY = 10     # Cooldown interval (every 10 follows)
+MICRO_COOLDOWN_SECONDS_MIN = 45
+MICRO_COOLDOWN_SECONDS_MAX = 90
+BASE_SAFETY_DELAY_MIN = 8.0
+BASE_SAFETY_DELAY_MAX = 14.0
+
+ACTION_BLOCK_SIGNATURES = [
+    "try again later",
+    "action blocked",
+    "we restrict certain activity",
+    "we limit how often",
+    "limit how often you can do certain things",
+    "temporarily blocked",
+    "you can't use this feature right now",
+    "help us confirm it's you",
+    "help us confirm you own this account",
+    "unusual activity",
+    "challenge_required",
+    "feedback_required",
+    "your account has been temporarily locked",
+]
+
+
+def detect_instagram_action_block(driver) -> tuple[bool, str, str]:
+    """
+    Checks for Instagram action block modals, rate-limit dialogs, and verification challenges.
+    Returns:
+        (is_blocked: bool, block_reason: str, dialog_text: str)
+    """
+    if not driver:
+        return False, "", ""
+    try:
+        from selenium.webdriver.common.by import By
+        # Look for dialog modals or alerts
+        dialogs = driver.find_elements(By.XPATH, "//div[@role='dialog'] | //div[@role='alertdialog'] | //div[contains(@class, 'x1n2onr6')]//div[contains(@role, 'dialog')]")
+        for dlg in dialogs:
+            try:
+                if not dlg.is_displayed():
+                    continue
+                d_text = (dlg.text or dlg.get_attribute("innerText") or "").strip()
+                d_lower = d_text.lower()
+                for sig in ACTION_BLOCK_SIGNATURES:
+                    if sig in d_lower:
+                        return True, sig, d_text
+            except Exception:
+                continue
+
+        # Also inspect page-level warning banners / alerts
+        banners = driver.find_elements(By.XPATH, "//div[@role='alert'] | //span[contains(text(), 'Try Again Later')] | //span[contains(text(), 'Action Blocked')]")
+        for b in banners:
+            try:
+                if not b.is_displayed():
+                    continue
+                b_text = (b.text or b.get_attribute("innerText") or "").strip()
+                b_lower = b_text.lower()
+                for sig in ACTION_BLOCK_SIGNATURES:
+                    if sig in b_lower:
+                        return True, sig, b_text
+            except Exception:
+                continue
+    except Exception as e_chk:
+        logger.debug(f"Action block detection check: {e_chk}")
+
+    return False, "", ""
+
+
+def capture_and_forward_alert(driver, alert_type: str, alert_text: str, chat_id: str = None) -> str:
+    """
+    Captures a screenshot of an Instagram alert/modal and optionally sends it directly to the Telegram bot.
+    Returns the screenshot file path.
+    """
+    screenshot_path = ""
+    try:
+        ss_dir = BASE_DIR / "data" / "media" / "instagram_captures"
+        ss_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = int(time.time())
+        ss_file = ss_dir / f"ig_alert_{timestamp}.png"
+        driver.save_screenshot(str(ss_file))
+        screenshot_path = str(ss_file)
+        logger.warning(f"🚨 Captured Instagram alert screenshot: {screenshot_path}")
+
+        # Send to Telegram bot if credentials available
+        if chat_id or os.environ.get("TELEGRAM_CHAT_ID"):
+            try:
+                from telegram.bot import get_telegram_credentials, make_telegram_request
+                bot_token, default_chat = get_telegram_credentials()
+                target_chat = chat_id or default_chat
+                if bot_token and target_chat:
+                    caption_msg = (
+                        f"🚨 <b>INSTAGRAM SAFETY ALERT DETECTED!</b>\n\n"
+                        f"⚠️ <b>Alert Type:</b> <code>{alert_type}</code>\n"
+                        f"📝 <b>Alert Text:</b>\n<i>\"{alert_text[:300]}\"</i>\n\n"
+                        f"🛑 <b>Action Taken:</b> Follow automation stopped immediately to protect account."
+                    )
+                    with open(screenshot_path, "rb") as sf:
+                        make_telegram_request(
+                            bot_token,
+                            "sendPhoto",
+                            data={
+                                "chat_id": target_chat,
+                                "caption": caption_msg,
+                                "parse_mode": "HTML"
+                            },
+                            files={"photo": (os.path.basename(screenshot_path), sf.read(), "image/png")}
+                        )
+                    logger.info(f"Forwarded alert screenshot to Telegram chat {target_chat}")
+            except Exception as e_tg:
+                logger.error(f"Failed to forward alert screenshot to Telegram: {e_tg}")
+
+    except Exception as e_ss:
+        logger.error(f"Error capturing alert screenshot: {e_ss}")
+
+    return screenshot_path
+
 
 SYSTEM_PATHS = {
     "explore", "reels", "direct", "stories", "accounts", "login", "about", "legal",
@@ -623,6 +739,22 @@ def process_instagram_user_target(
 
                 if clicked:
                     time.sleep(1.3)
+
+                    # ── Check for Action Block or Rate-Limit Modal ──
+                    is_blocked, blk_reason, blk_text = detect_instagram_action_block(driver)
+                    if is_blocked:
+                        logger.error(f"🛑 Instagram action block detected when following @{clean_user}: {blk_reason}")
+                        ss_alert = capture_and_forward_alert(driver, alert_type=f"Action Block ({blk_reason})", alert_text=blk_text)
+                        return {
+                            "status": "rate_limited",
+                            "username": clean_user,
+                            "url": profile_url,
+                            "message": f"Action blocked by Instagram: {blk_text[:150]}",
+                            "error": blk_reason,
+                            "alert_screenshot": ss_alert,
+                            "new_state": "blocked"
+                        }
+
                     # Verify updated button state
                     new_button_state = "followed"
                     for b in driver.find_elements(By.XPATH, "//header//button | //main//button | //button"):
@@ -1316,6 +1448,24 @@ def _follow_instagram_random_explore(
     return sent_count, skipped_count
 
 
+def _generate_location_feeds(loc_name: str, clean_tag: str) -> list:
+    """Generate a diverse pool of Instagram feed URLs for a given location."""
+    encoded = urllib.parse.quote(loc_name.lower())
+    feeds = [
+        ("Keyword Search Feed", f"https://www.instagram.com/explore/search/keyword/?q={encoded}"),
+        ("Location Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_tag}/"),
+        ("City Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_tag}city/"),
+        ("Life Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_tag}life/"),
+        ("Diaries Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_tag}diaries/"),
+        ("Gram Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_tag}gram/"),
+        ("Food Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_tag}food/"),
+        ("Vibes Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_tag}vibes/"),
+        ("People Search Feed", f"https://www.instagram.com/explore/search/keyword/?q={encoded}+people"),
+        ("Local Search Feed", f"https://www.instagram.com/explore/search/keyword/?q={encoded}+local"),
+    ]
+    return feeds
+
+
 def _follow_instagram_by_location(
     driver,
     location: str,
@@ -1327,14 +1477,21 @@ def _follow_instagram_by_location(
     skip_if_verified: bool = True
 ) -> tuple[int, int]:
     """
-    Discovers and follows real residents in a specific target location (e.g. Lucknow).
-    Zero Queuing Architecture:
-    1. Loads Instagram keyword search feed and location hashtags.
-    2. Opens post lightbox modal and inspects geotagged creators.
-    3. Skips verified creators/celebrities.
-    4. Follows accounts directly and immediately on the spot inside the post modal.
-    5. Zero profile page loads, zero queuing/buffering, avoiding bot detection.
-    6. Streams real-time telemetry to Telegram and respects human safety pauses.
+    Two-Stage Location Follow Architecture:
+    ── STAGE 1: Location Feed Scan ──
+    1. Loads 10+ Instagram keyword search feeds and location hashtags (expanded pool).
+    2. Multi-scrolls each feed page to accumulate more thumbnails before opening lightbox.
+    3. Opens post lightbox modal and inspects geotagged creators.
+    4. Follows non-verified accounts directly (6-8s delay per follow).
+    5. Harvests verified accounts into a list for Stage 2 (instead of just skipping them).
+    6. Detects stale/duplicate posts (12 consecutive) and breaks to next feed.
+
+    ── STAGE 2: Follow Followers of Verified Accounts ──
+    7. Iterates through harvested verified accounts from Stage 1.
+    8. Opens each verified account's followers modal via follow_target_account_followers().
+    9. Follows their followers until target is met or followers are exhausted.
+    10. Moves to the next verified account if current one's followers run out.
+    11. Repeats until target_count is fully achieved.
     """
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
@@ -1355,16 +1512,19 @@ def _follow_instagram_by_location(
     sent_count = 0
     skipped_count = 0
     processed_users = set()
+    verified_harvest = []  # Stage 2: Collect verified accounts for follower mining
 
     if not driver:
         driver = browser.get_driver("instagram")
 
     clean_loc_tag = re.sub(r'[^a-zA-Z0-9]', '', loc_name).lower()
-    target_feeds = [
-        ("Keyword Search Feed", f"https://www.instagram.com/explore/search/keyword/?q={urllib.parse.quote(loc_name.lower())}"),
-        ("Location Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_loc_tag}/"),
-        ("City Hashtag Feed", f"https://www.instagram.com/explore/tags/{clean_loc_tag}city/"),
-    ]
+    target_feeds = _generate_location_feeds(loc_name, clean_loc_tag)
+
+    # ══════════════════════════════════════════════════════════════════
+    # ── STAGE 1: Location Feed Scan — Follow Non-Verified Directly ──
+    # ══════════════════════════════════════════════════════════════════
+    logs.append(f"📸 Stage 1: Scanning {len(target_feeds)} location feeds for '{loc_name}'...")
+    logger.info(f"Stage 1: {len(target_feeds)} feeds to scan for '{loc_name}'")
 
     for source_label, feed_url in target_feeds:
         if sent_count >= target_count:
@@ -1394,20 +1554,31 @@ def _follow_instagram_by_location(
                 except Exception:
                     pass
 
+            # ── Multi-scroll pagination: scroll up to 5 times to accumulate thumbnails ──
             thumbnails = driver.find_elements(By.XPATH, "//a[contains(@href, '/p/') or contains(@href, '/reel/')]")
-            if len(thumbnails) < 15:
-                # Scroll down to load more posts
+            for _scroll_i in range(5):
+                prev_count = len(thumbnails)
                 try:
                     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    time.sleep(1.8)
+                    time.sleep(random.uniform(1.8, 2.5))
                     thumbnails = driver.find_elements(By.XPATH, "//a[contains(@href, '/p/') or contains(@href, '/reel/')]")
+                    if len(thumbnails) == prev_count:
+                        break  # No new content loaded, stop scrolling
                 except Exception:
-                    pass
+                    break
 
             logger.info(f"{source_label} loaded {len(thumbnails)} post thumbnails for '{loc_name}'")
 
             if not thumbnails:
                 continue
+
+            # Scroll back to top before opening lightbox
+            try:
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(0.8)
+                thumbnails = driver.find_elements(By.XPATH, "//a[contains(@href, '/p/') or contains(@href, '/reel/')]")
+            except Exception:
+                pass
 
             # Open first post lightbox modal
             try:
@@ -1417,9 +1588,11 @@ def _follow_instagram_by_location(
                 logger.warning(f"Could not open first thumbnail on {source_label}: {e_th}")
                 continue
 
-            # Scan posts inside modal and follow immediately on the spot (NO QUEUE)
+            # ── Scan posts inside modal with stale detection ──
             scan_cycles = 0
             max_scan = max(30, (target_count - sent_count) * 8)
+            consecutive_stale = 0
+            MAX_STALE = 12  # Break after 12 consecutive stale/duplicate posts
 
             while scan_cycles < max_scan and sent_count < target_count:
                 if stop_event and stop_event.is_set():
@@ -1447,8 +1620,13 @@ def _follow_instagram_by_location(
                 except Exception:
                     pass
 
-                # If author already processed or invalid, cycle to next post immediately
+                # If author already processed or invalid, increment stale counter
                 if not author_name or author_name.lower() in processed_users:
+                    consecutive_stale += 1
+                    if consecutive_stale >= MAX_STALE:
+                        logs.append(f"⚠️ {MAX_STALE} consecutive stale posts on {source_label}. Moving to next feed source...")
+                        logger.info(f"Stale detection triggered on {source_label} after {MAX_STALE} consecutive duplicates.")
+                        break
                     try:
                         driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ARROW_RIGHT)
                         time.sleep(random.uniform(0.6, 1.0))
@@ -1456,9 +1634,11 @@ def _follow_instagram_by_location(
                         pass
                     continue
 
+                # Fresh post found — reset stale counter
+                consecutive_stale = 0
                 processed_users.add(author_name.lower())
 
-                # Verified badge check in modal header (skip creators who never follow back)
+                # Verified badge check in modal header
                 is_ver = False
                 ver_reason = ""
                 if skip_if_verified:
@@ -1471,13 +1651,16 @@ def _follow_instagram_by_location(
 
                 if is_ver:
                     skipped_count += 1
-                    logger.info(f"🛡️ Skipped verified creator: @{author_name} ({ver_reason} - will not follow back)")
-                    logs.append(f"🛡️ Skipped verified creator: '@{author_name}' (Verified badge)")
+                    # ── Harvest verified account for Stage 2 instead of just skipping ──
+                    if author_name.lower() not in [v.lower() for v in verified_harvest]:
+                        verified_harvest.append(author_name)
+                        logger.info(f"🏷️ Harvested verified account @{author_name} for Stage 2 follower mining ({ver_reason})")
+                        logs.append(f"🏷️ Harvested verified @{author_name} for follower mining ({len(verified_harvest)} collected)")
                     if on_progress:
                         try:
                             on_progress(sent_count, target_count, {
                                 "user": author_name,
-                                "activity": f"🛡️ Skipped verified creator '@{author_name}'",
+                                "activity": f"🏷️ Harvested verified @{author_name} for follower mining",
                                 "skipped_verified": True
                             })
                         except Exception:
@@ -1527,6 +1710,29 @@ def _follow_instagram_by_location(
                         except Exception:
                             pass
 
+                    # ── Immediate Check for Rate-Limit / Action Block Dialog ──
+                    if clicked:
+                        time.sleep(1.0)
+                        is_blocked, blk_reason, blk_text = detect_instagram_action_block(driver)
+                        if is_blocked:
+                            alert_msg = f"🛑 INSTAGRAM ACTION BLOCKED: {blk_reason}! Text: {blk_text[:120]}"
+                            logs.append(alert_msg)
+                            logger.error(alert_msg)
+                            ss_path = capture_and_forward_alert(driver, alert_type=f"Action Block ({blk_reason})", alert_text=blk_text)
+                            if on_progress:
+                                try:
+                                    on_progress(sent_count, target_count, {
+                                        "platform": "instagram",
+                                        "status": "rate_limited",
+                                        "error": blk_reason,
+                                        "alert_text": blk_text,
+                                        "screenshot": ss_path,
+                                        "activity": f"🛑 Instagram limit reached! Stopping to protect account..."
+                                    })
+                                except Exception:
+                                    pass
+                            break  # Terminate location follow loop immediately to protect account!
+
                 # Move to next post via Arrow Right
                 try:
                     time.sleep(random.uniform(0.5, 0.9))
@@ -1556,10 +1762,26 @@ def _follow_instagram_by_location(
                         except Exception:
                             pass
 
-                    # 2-minute safety break after every 250 follows
-                    if sent_count > 0 and sent_count % 250 == 0 and sent_count < target_count:
-                        cooldown_secs = 120
-                        cooldown_msg = f"⏸️ Reached {sent_count} Instagram follows milestone. Taking a 2-minute safety break..."
+                    # Check hard session safety cap (35 follows max)
+                    if sent_count >= MAX_FOLLOWS_PER_SESSION:
+                        cap_msg = f"🛡️ Reached maximum safe session cap of {MAX_FOLLOWS_PER_SESSION} follows. Stopping to prevent account blocking."
+                        logs.append(cap_msg)
+                        logger.info(cap_msg)
+                        if on_progress:
+                            try:
+                                on_progress(sent_count, target_count, {
+                                    "platform": "instagram",
+                                    "status": "session_cap_reached",
+                                    "activity": cap_msg
+                                })
+                            except Exception:
+                                pass
+                        break
+
+                    # Progressive Cooldown: Pause every 10 follows (MICRO_COOLDOWN_EVERY) for 45-90 seconds
+                    if sent_count > 0 and sent_count % MICRO_COOLDOWN_EVERY == 0 and sent_count < target_count:
+                        cooldown_secs = int(random.uniform(MICRO_COOLDOWN_SECONDS_MIN, MICRO_COOLDOWN_SECONDS_MAX))
+                        cooldown_msg = f"⏸️ Reached {sent_count} follows milestone. Taking a {cooldown_secs}s safety break to safeguard account..."
                         logs.append(cooldown_msg)
                         logger.info(cooldown_msg)
                         if on_progress:
@@ -1569,8 +1791,8 @@ def _follow_instagram_by_location(
                                     "user": author_name,
                                     "cooldown": True,
                                     "cooldown_seconds": cooldown_secs,
-                                    "message": f"Paused for 2-min safety cooldown ({sent_count}/{target_count})",
-                                    "activity": f"☕ 2-minute safety cooldown active ({sent_count}/{target_count})"
+                                    "message": f"Paused for {cooldown_secs}s safety cooldown ({sent_count}/{target_count})",
+                                    "activity": f"☕ {cooldown_secs}s safety cooldown active ({sent_count}/{target_count})"
                                 })
                             except Exception:
                                 pass
@@ -1578,9 +1800,9 @@ def _follow_instagram_by_location(
                             if stop_event and stop_event.is_set():
                                 break
                             time.sleep(1.0)
-                        logs.append(f"▶️ 2-minute safety cooldown completed. Resuming follows ({sent_count}/{target_count})...")
+                        logs.append(f"▶️ Safety cooldown completed. Resuming follows ({sent_count}/{target_count})...")
 
-                    pause = random.uniform(max(10.0, safety_delay * 0.8), max(16.0, safety_delay * 1.2))
+                    pause = random.uniform(BASE_SAFETY_DELAY_MIN, BASE_SAFETY_DELAY_MAX)
                     logger.info(f"Human safety pause: {pause:.1f}s before next follow ({sent_count}/{target_count})...")
                     if on_progress:
                         try:
@@ -1593,6 +1815,89 @@ def _follow_instagram_by_location(
                 else:
                     skipped_count += 1
                     time.sleep(random.uniform(0.5, 0.8))
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ── STAGE 2: Follow Followers of Harvested Verified Accounts ─────────
+    # ══════════════════════════════════════════════════════════════════════════
+    if sent_count < target_count and verified_harvest:
+        remaining_needed = target_count - sent_count
+        stage2_msg = (
+            f"🎯 Stage 2: Location feeds produced {sent_count}/{target_count} follows. "
+            f"Now mining followers of {len(verified_harvest)} verified accounts from {loc_name} "
+            f"(need {remaining_needed} more)..."
+        )
+        logs.append(stage2_msg)
+        logger.info(stage2_msg)
+        if on_progress:
+            try:
+                on_progress(sent_count, target_count, {"activity": stage2_msg})
+            except Exception:
+                pass
+
+        for v_account in verified_harvest:
+            if sent_count >= target_count:
+                break
+            if stop_event and stop_event.is_set():
+                logs.append("🛑 Instagram location follow stopped by user.")
+                break
+
+            remaining = target_count - sent_count
+            mine_msg = f"👥 Mining followers of verified @{v_account} (need {remaining} more, {sent_count}/{target_count})..."
+            logs.append(mine_msg)
+            logger.info(mine_msg)
+            if on_progress:
+                try:
+                    on_progress(sent_count, target_count, {
+                        "activity": f"👥 Following followers of @{v_account} ({sent_count}/{target_count})...",
+                        "target_account": v_account,
+                        "mode": "location_stage2"
+                    })
+                except Exception:
+                    pass
+
+            try:
+                result = follow_target_account_followers(
+                    target_username=v_account,
+                    target_count=remaining,
+                    safety_delay=safety_delay,
+                    on_progress=on_progress,
+                    stop_event=stop_event,
+                    skip_if_verified=True,
+                    skip_if_channel=True
+                )
+
+                extra_sent = result.get("sent", 0)
+                extra_skipped = result.get("skipped", 0)
+                sent_count += extra_sent
+                skipped_count += extra_skipped
+
+                if extra_sent == 0:
+                    skip_msg = f"⏭️ No followable accounts in @{v_account}'s followers (private/empty). Moving to next..."
+                    logs.append(skip_msg)
+                    logger.info(skip_msg)
+                else:
+                    success_msg = f"✅ Followed {extra_sent} from @{v_account}'s followers (Total: {sent_count}/{target_count})"
+                    logs.append(success_msg)
+                    logger.info(success_msg)
+
+            except Exception as e_stage2:
+                logger.warning(f"Stage 2 error for @{v_account}: {e_stage2}")
+                logs.append(f"⚠️ Could not mine @{v_account}'s followers: {e_stage2}")
+                continue
+
+    elif sent_count < target_count and not verified_harvest:
+        shortfall_msg = (
+            f"⚠️ Location feeds exhausted with {sent_count}/{target_count} follows. "
+            f"No verified accounts were found during scan to mine followers from."
+        )
+        logs.append(shortfall_msg)
+        logger.info(shortfall_msg)
+
+    # Final summary
+    if sent_count >= target_count:
+        logs.append(f"🎉 Location follow campaign complete! {sent_count}/{target_count} accounts followed from '{loc_name}'.")
+    else:
+        logs.append(f"📊 Location follow finished: {sent_count}/{target_count} followed from '{loc_name}' ({len(verified_harvest)} verified accounts mined).")
 
     return sent_count, skipped_count
 
@@ -2095,6 +2400,28 @@ def follow_target_account_followers(
                     except Exception:
                         driver.execute_script("arguments[0].click();", btn)
 
+                    # ── Check for Action Block or Rate-Limit Modal ──
+                    time.sleep(1.0)
+                    is_blocked, blk_reason, blk_text = detect_instagram_action_block(driver)
+                    if is_blocked:
+                        alert_msg = f"🛑 INSTAGRAM ACTION BLOCKED during followers crawl: {blk_reason}! Text: {blk_text[:120]}"
+                        logs.append(alert_msg)
+                        logger.error(alert_msg)
+                        ss_path = capture_and_forward_alert(driver, alert_type=f"Action Block ({blk_reason})", alert_text=blk_text)
+                        if on_progress:
+                            try:
+                                on_progress(sent_count, target_count, {
+                                    "platform": "instagram",
+                                    "status": "rate_limited",
+                                    "error": blk_reason,
+                                    "alert_text": blk_text,
+                                    "screenshot": ss_path,
+                                    "activity": "🛑 Instagram limit reached! Stopping to protect account..."
+                                })
+                            except Exception:
+                                pass
+                        break  # Immediately stop follow loop to protect user account
+
                     driver.execute_script("arguments[0].setAttribute('data-bot-sent', 'true');", btn)
                     sent_count += 1
                     consecutive_empty_reloads = 0
@@ -2113,11 +2440,18 @@ def follow_target_account_followers(
                         except Exception as e_p:
                             logger.debug(f"Progress error: {e_p}")
 
-                    # Micro-Batch Resting Cooldown (Safeguard for up to 1000 Follows)
+                    # Hard session safety cap
+                    if sent_count >= MAX_FOLLOWS_PER_SESSION:
+                        cap_msg = f"🛡️ Reached maximum safe session cap of {MAX_FOLLOWS_PER_SESSION} follows. Stopping to prevent account blocking."
+                        logs.append(cap_msg)
+                        logger.info(cap_msg)
+                        break
+
+                    # Micro-Batch Resting Cooldown (Safeguard every 10 follows)
                     batch_follow_count += 1
-                    if batch_follow_count >= 30 and sent_count < target_count:
-                        cooldown_seconds = int(random.uniform(180, 240))  # 3-4 minutes cooldown
-                        logger.info(f"Micro-batch of 30 follows reached ({sent_count}/{target_count}). Entering rest cooldown of {cooldown_seconds}s to safeguard account...")
+                    if batch_follow_count >= MICRO_COOLDOWN_EVERY and sent_count < target_count:
+                        cooldown_seconds = int(random.uniform(MICRO_COOLDOWN_SECONDS_MIN, MICRO_COOLDOWN_SECONDS_MAX))
+                        logger.info(f"Micro-batch of {MICRO_COOLDOWN_EVERY} follows reached ({sent_count}/{target_count}). Entering rest cooldown of {cooldown_seconds}s to safeguard account...")
                         if on_progress:
                             try:
                                 on_progress(sent_count, target_count, {
@@ -2127,7 +2461,7 @@ def follow_target_account_followers(
                                     "target": target_count,
                                     "status": "resting",
                                     "cooldown": cooldown_seconds,
-                                    "message": f"⏳ Resting cooldown: pausing {cooldown_seconds//60} mins to protect account from Instagram rate-limits..."
+                                    "message": f"⏳ Resting cooldown: pausing {cooldown_seconds}s to protect account from Instagram rate-limits..."
                                 })
                             except Exception:
                                 pass
@@ -2140,8 +2474,8 @@ def follow_target_account_followers(
                         if stop_event and stop_event.is_set():
                             break
 
-                    # Human safety delay between follows
-                    pause = random.uniform(max(10.0, safety_delay * 0.8), max(15.0, safety_delay * 1.3))
+                    # Human safety delay between follows (8-14s pacing)
+                    pause = random.uniform(BASE_SAFETY_DELAY_MIN, BASE_SAFETY_DELAY_MAX)
                     logger.info(f"Human delay: {pause:.1f}s before next follow...")
                     time.sleep(pause)
 

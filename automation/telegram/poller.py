@@ -11,6 +11,8 @@ import sys
 import time
 import json
 import uuid
+import re
+import hashlib
 import logging
 from pathlib import Path
 
@@ -63,6 +65,16 @@ try:
         send_task_completed_notification,
         send_posted_content_gallery,
         send_post_shares_overall_stats_menu,
+        send_post_share_wizard_source_choice,
+        send_post_share_wizard_manual_prompt,
+        send_post_share_wizard_platform_choice,
+        send_post_share_wizard_count_choice,
+        send_post_share_wizard_confirmation,
+        send_custom_message_source_menu,
+        send_custom_message_text_prompt,
+        send_custom_message_platform_menu,
+        send_custom_message_count_menu,
+        send_custom_message_confirmation,
     )
 except (ImportError, ModuleNotFoundError):
     from telegram.bot import (
@@ -100,6 +112,16 @@ except (ImportError, ModuleNotFoundError):
         send_task_completed_notification,
         send_posted_content_gallery,
         send_post_shares_overall_stats_menu,
+        send_post_share_wizard_source_choice,
+        send_post_share_wizard_manual_prompt,
+        send_post_share_wizard_platform_choice,
+        send_post_share_wizard_count_choice,
+        send_post_share_wizard_confirmation,
+        send_custom_message_source_menu,
+        send_custom_message_text_prompt,
+        send_custom_message_platform_menu,
+        send_custom_message_count_menu,
+        send_custom_message_confirmation,
     )
 from social.facebook import is_facebook_login_needed, submit_facebook_login, post_to_facebook
 from social.instagram import post_to_instagram
@@ -119,9 +141,12 @@ logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
 
 # In-memory session state per chat_id
 chat_sessions = {}
+# In-memory store for manual post share links (keyed by short hash)
+MANUAL_SHARE_LINKS = {}
 
 
 LOAN_SOLUTIONS_PATH = str(BASE_DIR / "Loan Solutions.png")
+EVERYTHING_RENTAL_PATH = str(BASE_DIR / "EveryThingRental.png")
 
 
 def get_all_products() -> list:
@@ -149,6 +174,14 @@ def get_all_products() -> list:
                     if not p_logo or not os.path.exists(str(p_logo)):
                         if os.path.exists(LOAN_SOLUTIONS_PATH):
                             p_logo = LOAN_SOLUTIONS_PATH
+                elif "everything" in p_name.lower() or "rental" in p_name.lower():
+                    if not p_logo or not os.path.exists(str(p_logo)):
+                        if os.path.exists(EVERYTHING_RENTAL_PATH):
+                            p_logo = EVERYTHING_RENTAL_PATH
+                if p_logo and str(p_logo).startswith("/uploads/"):
+                    pub_file = str(BASE_DIR / "public" / str(p_logo).lstrip("/"))
+                    if os.path.exists(pub_file):
+                        p_logo = pub_file
                 products.append({
                     "id": str(r[0]),
                     "name": p_name,
@@ -178,6 +211,14 @@ def get_all_products() -> list:
                         if not p_logo or not os.path.exists(str(p_logo)):
                             if os.path.exists(LOAN_SOLUTIONS_PATH):
                                 p_logo = LOAN_SOLUTIONS_PATH
+                    elif "everything" in p_name.lower() or "rental" in p_name.lower():
+                        if not p_logo or not os.path.exists(str(p_logo)):
+                            if os.path.exists(EVERYTHING_RENTAL_PATH):
+                                p_logo = EVERYTHING_RENTAL_PATH
+                    if p_logo and str(p_logo).startswith("/uploads/"):
+                        pub_file = str(BASE_DIR / "public" / str(p_logo).lstrip("/"))
+                        if os.path.exists(pub_file):
+                            p_logo = pub_file
                     products.append({
                         "id": str(r[0]),
                         "name": p_name,
@@ -190,6 +231,39 @@ def get_all_products() -> list:
             logger.debug(f"SQLite products lookup note: {e}")
 
     return products
+
+
+def update_everything_rental_logo_db(logo_path: str):
+    """Updates logo_path for EveryThingRental in PostgreSQL and SQLite."""
+    try:
+        import psycopg2
+        pg_user = os.environ.get("DB_USER", "postgres")
+        pg_pass = os.environ.get("DB_PASSWORD", "Shivam@123")
+        pg_host = os.environ.get("DB_HOST", "localhost")
+        pg_port = int(os.environ.get("DB_PORT", "5432"))
+        pg_db = os.environ.get("DB_NAME", "Social_Media")
+        conn = psycopg2.connect(dbname=pg_db, user=pg_user, password=pg_pass, host=pg_host, port=pg_port)
+        cur = conn.cursor()
+        cur.execute("UPDATE products SET logo_path = %s, updated_at = NOW() WHERE name ILIKE %s", (logo_path, "%everything%"))
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info(f"Updated PostgreSQL logo_path for EveryThingRental to: {logo_path}")
+    except Exception as e:
+        logger.debug(f"PG logo update note: {e}")
+
+    db_path = BASE_DIR / "data" / "database.sqlite"
+    if db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute("UPDATE products SET logo_path = ? WHERE name LIKE '%everything%' OR name LIKE '%EveryThing%'", (logo_path,))
+            conn.commit()
+            conn.close()
+            logger.info(f"Updated SQLite logo_path for EveryThingRental to: {logo_path}")
+        except Exception as e:
+            logger.debug(f"SQLite logo update note: {e}")
 
 
 def update_loan_solution_logo_db(logo_path: str):
@@ -919,6 +993,18 @@ def launch_ig_follow_users_task(chat_id: str, usernames: list, message_id: int =
                 results.append(res)
                 st = res.get("status")
 
+                if st == "rate_limited":
+                    icon = "🛑"
+                    logger.error(f"Rate limit detected on @{u}! Halting user follow task immediately.")
+                    send_text_message(
+                        chat_id,
+                        f"🛑 <b>Instagram Rate Limit / Action Block Detected!</b>\n\n"
+                        f"⚠️ <b>Account:</b> @{u}\n"
+                        f"📝 <b>Details:</b> <i>\"{res.get('message', '')}\"</i>\n\n"
+                        f"🔒 System automatically stopped follows to safeguard your Instagram account."
+                    )
+                    break
+
                 if st == "success":
                     sent_count += 1
                     icon = "✅"
@@ -1222,7 +1308,8 @@ def launch_ig_target_followers_task(chat_id: str, target_username: str, target_c
 
 def launch_post_share_task(
     chat_id: str,
-    campaign_id: str,
+    campaign_id: str = None,
+    post_url: str = None,
     platform: str = "both",
     share_all: bool = True,
     target_count: int = 100,
@@ -1231,14 +1318,21 @@ def launch_post_share_task(
     """
     Launches asynchronous post sharing to friends across Instagram and Facebook
     with human-like safety pacing, interactive telemetry, and instant cancellation.
+    Supports both database campaigns and direct manual post URLs.
     """
     import threading
     import uuid
     from db_campaigns import get_campaign_from_db
     from social.post_sharer import share_post_to_all_platforms, share_instagram_post_to_friends, share_facebook_post_to_friends
 
-    camp = get_campaign_from_db(campaign_id) if campaign_id else {}
-    p_name = camp.get("product_name") or "Marketing Post"
+    # Detect if campaign_id is actually a URL
+    if campaign_id and (campaign_id.startswith("http://") or campaign_id.startswith("https://")):
+        post_url = post_url or campaign_id
+        campaign_id = "manual_post_link"
+
+    is_manual = bool(post_url)
+    camp = get_campaign_from_db(campaign_id) if (campaign_id and not is_manual) else {}
+    p_name = camp.get("product_name") or ("Manual Link Share" if is_manual else "Marketing Post")
 
     job_id = str(uuid.uuid4())[:8]
     stop_flag = BASE_DIR / "data" / f"stop_shr_{job_id}.flag"
@@ -1251,9 +1345,15 @@ def launch_post_share_task(
         "both": "⚡ Instagram + Facebook"
     }.get(platform.lower(), platform.upper())
 
+    target_header = (
+        f"🔗 <b>Manual Post Link:</b> <code>{post_url}</code>\n"
+        if is_manual else
+        f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code> ({p_name})\n"
+    )
+
     init_text = (
         f"🚀 <b>Post Sharing to Friends Initiated!</b>\n\n"
-        f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code> ({p_name})\n"
+        f"{target_header}"
         f"📱 <b>Target Platforms:</b> {plat_label}\n"
         f"🎯 <b>Mode:</b> {mode_label}\n"
         f"🆔 <b>Job ID:</b> <code>{job_id}</code>\n"
@@ -1288,9 +1388,14 @@ def launch_post_share_task(
                     stop_event.set()
                 friend_name = details.get("friend") or "friend"
                 plat = (details.get("platform") or platform).capitalize()
+                update_header = (
+                    f"🔗 <b>Post:</b> <code>{post_url}</code>\n"
+                    if is_manual else
+                    f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code>\n"
+                )
                 update_text = (
                     f"📤 <b>Sharing Post to Friends in Progress...</b>\n\n"
-                    f"🏷️ <b>Campaign:</b> <code>{campaign_id}</code>\n"
+                    f"{update_header}"
                     f"📱 <b>Platform:</b> {plat}\n"
                     f"👥 <b>Progress:</b> <code>{sent_cnt}</code> / <code>{total_cnt}</code> friends\n"
                     f"👤 <b>Last Selected:</b> <i>{friend_name}</i>\n"
@@ -1304,6 +1409,7 @@ def launch_post_share_task(
 
             if platform.lower() == "instagram":
                 res = share_instagram_post_to_friends(
+                    post_url=post_url,
                     campaign_id=campaign_id,
                     share_all=share_all,
                     target_count=target_count,
@@ -1312,6 +1418,7 @@ def launch_post_share_task(
                 )
             elif platform.lower() == "facebook":
                 res = share_facebook_post_to_friends(
+                    post_url=post_url,
                     campaign_id=campaign_id,
                     share_all=share_all,
                     target_count=target_count,
@@ -1321,6 +1428,7 @@ def launch_post_share_task(
             else:
                 res = share_post_to_all_platforms(
                     campaign_id=campaign_id,
+                    post_url=post_url,
                     share_all=share_all,
                     target_count=target_count,
                     on_progress=_progress_cb,
@@ -1403,6 +1511,222 @@ def launch_post_share_task(
     orchestrator.submit_task(task_obj)
 
 
+def launch_custom_message_task(
+    chat_id: str,
+    message_text: str = None,
+    reel_url: str = None,
+    platform: str = "facebook",
+    target_count: int = 30,
+    message_id: int = None
+):
+    """
+    Launches asynchronous personal messaging & reel outreach to friends
+    across Facebook Messenger (and/or Instagram DMs) with safety caps,
+    action block detection, and live Telegram telemetry.
+    """
+    import threading
+    import uuid
+    from social.facebook_messenger import send_facebook_friends_outreach
+    from social.post_sharer import share_instagram_post_to_friends
+
+    safe_target = min(target_count, 35)
+    plat_label = {
+        "facebook": "📘 Facebook Messenger",
+        "instagram": "📸 Instagram Direct",
+        "both": "⚡ Facebook + Instagram"
+    }.get(platform, platform.capitalize())
+
+    msg_preview = (message_text or reel_url or "Custom Message")[:80]
+
+    init_text = (
+        f"🚀 <b>Personal Message Outreach Initiated!</b>\n\n"
+        f"📱 <b>Target Platform:</b> {plat_label}\n"
+        f"📝 <b>Content Preview:</b> <i>\"{msg_preview}\"</i>\n"
+        f"👥 <b>Target Recipients:</b> <code>{safe_target} friends (Safe Session Cap)</code>\n"
+        f"⏱️ <b>Pacing Delay:</b> <code>8.0s - 14.0s randomized</code>\n"
+        f"🛡️ <b>Block Shield:</b> <code>Active (Instant alert on restriction)</code>\n\n"
+        f"⏳ <i>Connecting to browser and initiating delivery...</i>"
+    )
+    if message_id:
+        try:
+            edit_message_text(chat_id, message_id, init_text)
+            sent_msg_id = message_id
+        except Exception:
+            res_init = send_text_message(chat_id, init_text)
+            sent_msg_id = res_init.get("message_id") if res_init.get("ok") else None
+    else:
+        res_init = send_text_message(chat_id, init_text)
+        sent_msg_id = res_init.get("message_id") if res_init.get("ok") else None
+
+    def _exec_cmsg():
+        fb_sent = 0
+        ig_sent = 0
+        all_recipients = []
+        last_screenshot = None
+
+        def _on_cmsg_progress(cur, tot, extra=None):
+            act = extra.get("activity", "Messaging friends...") if extra else "Messaging friends..."
+            prog_text = (
+                f"⚡ <b>Personal Messaging in Progress...</b>\n\n"
+                f"📱 <b>Platform:</b> {plat_label}\n"
+                f"👥 <b>Progress:</b> <code>{cur}/{tot} friends messaged</code>\n"
+                f"📌 <b>Current Action:</b> <i>{act}</i>\n"
+                f"⏱️ <i>Human-like pacing active to keep your account 100% safe.</i>"
+            )
+            if sent_msg_id:
+                try:
+                    edit_message_text(chat_id, sent_msg_id, prog_text)
+                except Exception:
+                    pass
+
+        try:
+            if platform in ["facebook", "both"]:
+                fb_res = send_facebook_friends_outreach(
+                    message_text=message_text,
+                    reel_url=reel_url,
+                    target_count=safe_target,
+                    on_progress=_on_cmsg_progress
+                )
+                if fb_res.get("status") == "rate_limited":
+                    block_msg = fb_res.get("message") or "Facebook action limit encountered."
+                    alert_text = (
+                        f"🚨 <b>Facebook Action Alert Detected!</b>\n\n"
+                        f"⚠️ <i>{block_msg}</i>\n\n"
+                        f"🛑 <b>Safety Action:</b> Stopped messaging immediately to protect your Facebook account.\n"
+                        f"📊 <b>Delivered before limit:</b> <code>{fb_res.get('sent_count', 0)} friends</code>"
+                    )
+                    send_text_message(chat_id, alert_text)
+                    if fb_res.get("screenshot") and os.path.exists(fb_res["screenshot"]):
+                        try:
+                            token, _ = get_telegram_credentials()
+                            with open(fb_res["screenshot"], "rb") as f:
+                                make_telegram_request(token, "sendPhoto", data={"chat_id": chat_id, "caption": "📸 Screenshot Proof of Facebook Alert"}, files={"photo": f})
+                        except Exception:
+                            pass
+                    return
+
+                fb_sent = fb_res.get("sent_count", 0)
+                all_recipients.extend(fb_res.get("recipients", []))
+                last_screenshot = fb_res.get("screenshot")
+
+            if platform in ["instagram", "both"]:
+                if reel_url or (message_text and ("http" in message_text)):
+                    urls = re.findall(r'https?://[^\s]+', message_text or reel_url or "")
+                    if urls:
+                        ig_res = share_instagram_post_to_friends(
+                            post_url=urls[0],
+                            target_count=safe_target,
+                            on_progress=_on_cmsg_progress
+                        )
+                        ig_sent = ig_res.get("shares_sent", 0)
+                        all_recipients.extend(ig_res.get("recipients", []))
+
+            total_sent = fb_sent + ig_sent
+            sample_rec = ", ".join(all_recipients[:6]) if all_recipients else "None"
+            if len(all_recipients) > 6:
+                sample_rec += f"... and {len(all_recipients)-6} more"
+
+            done_text = (
+                f"🎉 <b>Personal Message Outreach Completed!</b>\n\n"
+                f"📱 <b>Target Platform:</b> {plat_label}\n"
+                f"🏆 <b>Total Messages Sent:</b> <code>{total_sent} friends</code>\n"
+                f"   • 📘 Facebook Messenger: <code>{fb_sent} delivered</code>\n"
+                f"   • 📸 Instagram Direct: <code>{ig_sent} delivered</code>\n\n"
+                f"👥 <b>Sample Recipients:</b> <i>{sample_rec}</i>\n\n"
+                f"💾 <i>All shares logged in database. Account safety limits honored.</i>"
+            )
+            done_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "✉️ Send Another Message", "callback_data": "root:custom_msg"}],
+                    [{"text": "📋 Main Menu", "callback_data": "root:main"}]
+                ]
+            }
+            if sent_msg_id:
+                try:
+                    edit_message_text(chat_id, sent_msg_id, done_text, keyboard=done_keyboard)
+                except Exception:
+                    send_text_message(chat_id, done_text, reply_markup=done_keyboard)
+            else:
+                send_text_message(chat_id, done_text, reply_markup=done_keyboard)
+
+            if last_screenshot and os.path.exists(last_screenshot):
+                try:
+                    token, _ = get_telegram_credentials()
+                    with open(last_screenshot, "rb") as f:
+                        make_telegram_request(token, "sendPhoto", data={"chat_id": chat_id, "caption": "📸 Facebook Delivery Proof"}, files={"photo": f})
+                except Exception:
+                    pass
+
+        except Exception as e_c:
+            logger.error(f"Error executing custom message task: {e_c}", exc_info=True)
+            send_text_message(chat_id, f"⚠️ Personal message outreach notice: {e_c}")
+
+    task_obj = AutomationTask(
+        name=f"Custom Message ({plat_label})",
+        task_type="custom_message",
+        platform=platform,
+        account_id="manvxi_ai",
+        tg_chat_id=chat_id,
+        tg_message_id=sent_msg_id,
+        run_fn=lambda t: _exec_cmsg()
+    )
+    orchestrator.submit_task(task_obj)
+
+
+def send_manual_post_share_prompt(chat_id: str, post_url: str, is_ig: bool = False, is_fb: bool = False, message_id: int = None):
+    """Presents user with interactive options to share a manually pasted post link."""
+    link_key = hashlib.md5(post_url.encode("utf-8")).hexdigest()[:8]
+    MANUAL_SHARE_LINKS[link_key] = post_url
+
+    detected_plat = "📸 Instagram Post / Reel" if is_ig else "📘 Facebook Post" if is_fb else "🌐 Social Media Post"
+
+    msg_text = (
+        f"🔗 <b>Manual Post Share Detected!</b>\n\n"
+        f"📱 <b>Detected Type:</b> {detected_plat}\n"
+        f"📎 <b>Link:</b> <code>{post_url}</code>\n\n"
+        f"How would you like to share this post to your friends/followers?"
+    )
+
+    keyboard_rows = []
+    if is_ig:
+        keyboard_rows.append([
+            {"text": "🚀 Share to ALL IG Followers", "callback_data": f"post_shr_man:ig:all:{link_key}"},
+            {"text": "🎯 Share to 25 Followers", "callback_data": f"post_shr_man:ig:25:{link_key}"}
+        ])
+        keyboard_rows.append([
+            {"text": "⚡ Share to Both (IG + FB)", "callback_data": f"post_shr_man:both:all:{link_key}"}
+        ])
+    elif is_fb:
+        keyboard_rows.append([
+            {"text": "🚀 Share to ALL FB Friends", "callback_data": f"post_shr_man:fb:all:{link_key}"},
+            {"text": "🎯 Share to 25 Friends", "callback_data": f"post_shr_man:fb:25:{link_key}"}
+        ])
+        keyboard_rows.append([
+            {"text": "⚡ Share to Both (IG + FB)", "callback_data": f"post_shr_man:both:all:{link_key}"}
+        ])
+    else:
+        keyboard_rows.append([
+            {"text": "📸 Share to IG Followers", "callback_data": f"post_shr_man:ig:all:{link_key}"},
+            {"text": "📘 Share to FB Friends", "callback_data": f"post_shr_man:fb:all:{link_key}"}
+        ])
+        keyboard_rows.append([
+            {"text": "⚡ Share to Both (ALL)", "callback_data": f"post_shr_man:both:all:{link_key}"}
+        ])
+
+    keyboard_rows.append([
+        {"text": "❌ Cancel", "callback_data": "menu_root"}
+    ])
+
+    keyboard = {"inline_keyboard": keyboard_rows}
+    if message_id:
+        try:
+            edit_message_text(chat_id, message_id, msg_text, keyboard=keyboard)
+            return
+        except Exception:
+            pass
+    send_text_message(chat_id, msg_text, reply_markup=keyboard)
+
+
 def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms: list, message_id: int = None):
     """
     Publishes post to multiple social platforms (Facebook, Instagram, LinkedIn, WhatsApp)
@@ -1455,7 +1779,8 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
                     "facebook": "📘 Facebook",
                     "instagram": "📸 Instagram",
                     "linkedin": "💼 LinkedIn",
-                    "whatsapp": "💬 WhatsApp"
+                    "whatsapp": "💬 WhatsApp",
+                    "youtube": "▶️ YouTube",
                 }.get(plat_clean, plat_clean.capitalize())
 
                 send_text_message(
@@ -1547,6 +1872,26 @@ def launch_multi_platform_publication(chat_id: str, campaign_id: str, platforms:
                         else:
                             failed_platforms.append(f"WhatsApp ({res.get('message', 'error')})")
                             send_text_message(chat_id, f"⚠️ WhatsApp notice: {res.get('message')}")
+
+                    elif plat_clean == "youtube":
+                        from social.youtube import post_to_youtube
+                        res = post_to_youtube(media_path=media_path, caption=caption)
+                        if res.get("status") == "success":
+                            yt_verified = res.get("verified", False)
+                            yt_url = res.get("video_url") or res.get("url") or "https://studio.youtube.com"
+                            successful_platforms.append({
+                                "platform": "youtube",
+                                "name": "YouTube",
+                                "verified": yt_verified,
+                                "url": yt_url
+                            })
+                            succ_txt = "✅ <b>YouTube:</b> Successfully published & verified! ✅"
+                            if yt_url and yt_url != "https://studio.youtube.com":
+                                succ_txt += f"\n🔗 <b>Watch Link:</b> {yt_url}"
+                            send_text_message(chat_id, succ_txt)
+                        else:
+                            failed_platforms.append(f"YouTube ({res.get('message', 'error')})")
+                            send_text_message(chat_id, f"⚠️ YouTube notice: {res.get('message')}")
 
                 except Exception as e_p:
                     logger.error(f"Error publishing to {plat_clean}: {e_p}")
@@ -1713,11 +2058,11 @@ def handle_callback_query(callback: dict):
     # 3. User clicked [✨ Select All]
     elif callback_data.startswith("plat_select_all:"):
         campaign_id = callback_data.split(":", 1)[1] if ":" in callback_data else ""
-        all_plats = ["facebook", "instagram", "linkedin", "whatsapp"]
+        all_plats = ["facebook", "instagram", "linkedin", "whatsapp", "youtube"]
         chat_sessions.setdefault(chat_id, {})["selected_platforms"] = all_plats
         chat_sessions[chat_id]["campaign_id"] = campaign_id
         if callback_id:
-            answer_callback_query(callback_id, text="Selected all 4 platforms! ✅")
+            answer_callback_query(callback_id, text="Selected all 5 platforms! ✅")
         if message_id and chat_id:
             try:
                 edit_message_reply_markup(
@@ -1971,9 +2316,9 @@ def handle_callback_query(callback: dict):
                 f"🎨 <b>Format:</b> {format_title}\n"
                 f"🤖 <b>AI Engine:</b> {provider_title}\n\n"
                 f"⚡ <i>Step 1: Launching Chrome with profile <code>{acc_pdir}</code> & remote debugging...</i>\n"
-                f"⚡ <i>Step 2: AI generating policy-compliant 3-clip video script & Indian voiceover...</i>\n"
-                f"⚡ <i>Step 3: Rendering 3 sequential 8s clips & compiling master 24s video reel...</i>\n"
-                f"⏳ <b>Please wait at least 5 minutes (~5 to 6 minutes).</b> High-definition video generation (minimum 5 minutes per clip wait time), neural voiceover synthesis, and clip compilation take extra time to process!"
+                f"⚡ <i>Step 2: Activating Gemini 'Video' skill & uploading face reference photo...</i>\n"
+                f"⚡ <i>Step 3: Generating 10s high-definition video with Indian voiceover & branding...</i>\n"
+                f"⏳ <b>Please wait (~1 to 3 minutes).</b> Video skill generation, neural voiceover, and preview compilation are in progress!"
             )
         else:
             status_text = (
@@ -2108,6 +2453,12 @@ def handle_callback_query(callback: dict):
         if callback_id:
             answer_callback_query(callback_id)
         send_chrome_account_selection_menu(chat_id, content_type="image", llm_provider="chatgpt", product_id="default", message_id=message_id)
+
+    # 13b. Root Choice 2: Custom Message & Outreach Flow
+    elif callback_data == "root:custom_msg":
+        if callback_id:
+            answer_callback_query(callback_id)
+        send_custom_message_source_menu(chat_id, message_id=message_id)
 
     # 14. Root Choice 2: Growth & Outreach Flow -> Step 1: Select Platform
     elif callback_data == "root:outreach":
@@ -2544,6 +2895,223 @@ def handle_callback_query(callback: dict):
                 message_id=message_id
             )
 
+    # 33. Manual Post Share Link Callback
+    elif callback_data.startswith("post_shr_man:"):
+        parts = callback_data.split(":")
+        plat = parts[1] if len(parts) > 1 else "both"
+        mode_val = parts[2] if len(parts) > 2 else "all"
+        link_key = parts[3] if len(parts) > 3 else ""
+        post_url = MANUAL_SHARE_LINKS.get(link_key)
+
+        if not post_url:
+            if callback_id:
+                answer_callback_query(callback_id, text="⚠️ Post link expired or not found. Please paste the link again.")
+            return
+
+        share_all = (mode_val == "all")
+        target_count = 25 if mode_val == "25" else 100
+        plat_map = {"ig": "instagram", "fb": "facebook", "both": "both"}
+        eff_plat = plat_map.get(plat, "both")
+
+        if callback_id:
+            answer_callback_query(callback_id, text=f"🚀 Starting post share for {eff_plat.upper()}...")
+
+        launch_post_share_task(
+            chat_id=chat_id,
+            campaign_id="manual_link",
+            post_url=post_url,
+            platform=eff_plat,
+            share_all=share_all,
+            target_count=target_count,
+            message_id=message_id
+        )
+
+    # 34. Post Share Interactive Wizard Callbacks
+    elif callback_data.startswith("pshr_wiz:"):
+        parts = callback_data.split(":")
+        action_type = parts[1] if len(parts) > 1 else ""
+
+        session = chat_sessions.setdefault(chat_id, {})
+        wiz = session.setdefault("post_share_wiz", {})
+
+        if action_type == "src_choice":
+            camp_id = parts[2] if len(parts) > 2 else ""
+            wiz["campaign_id"] = camp_id
+            wiz["mode"] = "auto"
+            from db_campaigns import get_campaign_from_db
+            c_info = get_campaign_from_db(camp_id) or {}
+            wiz["product_name"] = c_info.get("product_name") or "Published Campaign"
+            if callback_id:
+                answer_callback_query(callback_id)
+            send_post_share_wizard_source_choice(chat_id, camp_id, message_id=message_id)
+
+        elif action_type == "manual_input":
+            camp_id = parts[2] if len(parts) > 2 else ""
+            wiz["mode"] = "manual"
+            wiz["campaign_id"] = camp_id or "manual_link"
+            session["action"] = "AWAITING_SHARE_LINK"
+            if callback_id:
+                answer_callback_query(callback_id, text="🔗 Please paste your post link below:")
+            send_post_share_wizard_manual_prompt(chat_id, camp_id, message_id=message_id)
+
+        elif action_type == "mode":
+            sub_mode = parts[2] if len(parts) > 2 else "auto"
+            camp_id = parts[3] if len(parts) > 3 else ""
+            wiz["mode"] = sub_mode
+            wiz["campaign_id"] = camp_id or wiz.get("campaign_id") or ""
+
+            if sub_mode == "manual":
+                session["action"] = "AWAITING_SHARE_LINK"
+                if callback_id:
+                    answer_callback_query(callback_id, text="🔗 Please paste your post link:")
+                send_post_share_wizard_manual_prompt(chat_id, camp_id, message_id=message_id)
+            else:
+                from db_campaigns import get_campaign_from_db
+                c_info = get_campaign_from_db(camp_id) or {}
+                wiz["product_name"] = c_info.get("product_name") or "Published Campaign"
+                if callback_id:
+                    answer_callback_query(callback_id)
+                send_post_share_wizard_platform_choice(chat_id, wiz, message_id=message_id)
+
+        elif action_type == "plat":
+            chosen_plat = parts[2] if len(parts) > 2 else "both"
+            wiz["platform"] = chosen_plat
+            if callback_id:
+                answer_callback_query(callback_id, text=f"Selected {chosen_plat.capitalize()} ✅")
+            send_post_share_wizard_count_choice(chat_id, wiz, message_id=message_id)
+
+        elif action_type == "count":
+            c_val = parts[2] if len(parts) > 2 else "25"
+            if c_val == "custom":
+                session["action"] = "AWAITING_SHARE_COUNT"
+                if callback_id:
+                    answer_callback_query(callback_id, text="🔢 Enter custom recipient count:")
+                send_text_message(chat_id, "🔢 <b>Custom Recipient Count:</b>\n\nPlease type the exact number of friends/followers to share with (e.g. <code>15</code>, <code>30</code>, <code>75</code>):")
+            elif c_val == "all":
+                wiz["share_all"] = True
+                wiz["target_count"] = 100
+                if callback_id:
+                    answer_callback_query(callback_id, text="Selected ALL Friends/Followers 🚀")
+                send_post_share_wizard_confirmation(chat_id, wiz, message_id=message_id)
+            else:
+                try:
+                    wiz["target_count"] = int(c_val)
+                except ValueError:
+                    wiz["target_count"] = 25
+                wiz["share_all"] = False
+                if callback_id:
+                    answer_callback_query(callback_id, text=f"Target: {wiz['target_count']} recipients 🎯")
+                send_post_share_wizard_confirmation(chat_id, wiz, message_id=message_id)
+
+        elif action_type == "back_to_plat":
+            if callback_id:
+                answer_callback_query(callback_id)
+            send_post_share_wizard_platform_choice(chat_id, wiz, message_id=message_id)
+
+        elif action_type == "back_to_count":
+            if callback_id:
+                answer_callback_query(callback_id)
+            send_post_share_wizard_count_choice(chat_id, wiz, message_id=message_id)
+
+        elif action_type == "start":
+            if callback_id:
+                answer_callback_query(callback_id, text="🚀 Starting Post Sharing Task...")
+            camp_id = wiz.get("campaign_id") or "manual_link"
+            post_url = wiz.get("post_url")
+            platform = wiz.get("platform", "both")
+            share_all = wiz.get("share_all", False)
+            target_count = wiz.get("target_count", 25)
+
+            session.pop("post_share_wiz", None)
+            session.pop("action", None)
+
+            launch_post_share_task(
+                chat_id=chat_id,
+                campaign_id=camp_id,
+                post_url=post_url,
+                platform=platform,
+                share_all=share_all,
+                target_count=target_count,
+                message_id=message_id
+            )
+
+    # 35. Custom Message & Outreach Wizard Callbacks
+    elif callback_data.startswith("cmsg_wiz:"):
+        parts = callback_data.split(":")
+        sub = parts[1] if len(parts) > 1 else ""
+        session = chat_sessions.setdefault(chat_id, {})
+        wiz = session.setdefault("custom_msg_wiz", {})
+
+        if sub == "mode":
+            mode_type = parts[2] if len(parts) > 2 else "custom"
+            if mode_type == "gallery":
+                if callback_id:
+                    answer_callback_query(callback_id, text="🖼️ Opening Posted Content Gallery...")
+                send_posted_content_gallery(chat_id, page_index=0, message_id=message_id)
+            else:
+                session["action"] = "AWAITING_CUSTOM_MSG_TEXT"
+                if callback_id:
+                    answer_callback_query(callback_id, text="✍️ Type your message or Reel link:")
+                send_custom_message_text_prompt(chat_id, message_id=message_id)
+
+        elif sub == "plat":
+            plat = parts[2] if len(parts) > 2 else "facebook"
+            wiz["platform"] = plat
+            if callback_id:
+                answer_callback_query(callback_id, text=f"Selected {plat.capitalize()} ✅")
+            send_custom_message_count_menu(chat_id, wiz, message_id=message_id)
+
+        elif sub == "count":
+            c_val = parts[2] if len(parts) > 2 else "35"
+            if c_val == "custom":
+                session["action"] = "AWAITING_CUSTOM_MSG_COUNT"
+                if callback_id:
+                    answer_callback_query(callback_id, text="🔢 Enter recipient count:")
+                send_text_message(chat_id, "🔢 <b>Enter Custom Recipient Count:</b>\n\nPlease reply with the number of friends you want to message (1 to 35):")
+            elif c_val == "all":
+                wiz["target_count"] = 35
+                if callback_id:
+                    answer_callback_query(callback_id, text="Selected ALL Friends (Safe cap: 35) 🚀")
+                send_custom_message_confirmation(chat_id, wiz, message_id=message_id)
+            else:
+                try:
+                    wiz["target_count"] = min(int(c_val), 35)
+                except ValueError:
+                    wiz["target_count"] = 25
+                if callback_id:
+                    answer_callback_query(callback_id, text=f"Target: {wiz['target_count']} friends 🎯")
+                send_custom_message_confirmation(chat_id, wiz, message_id=message_id)
+
+        elif sub == "back_to_plat":
+            if callback_id:
+                answer_callback_query(callback_id)
+            send_custom_message_platform_menu(chat_id, wiz, message_id=message_id)
+
+        elif sub == "back_to_count":
+            if callback_id:
+                answer_callback_query(callback_id)
+            send_custom_message_count_menu(chat_id, wiz, message_id=message_id)
+
+        elif sub == "start":
+            if callback_id:
+                answer_callback_query(callback_id, text="🚀 Initiating Personal Messaging...")
+            msg_text = wiz.get("message_text")
+            reel_url = wiz.get("reel_url")
+            platform = wiz.get("platform", "facebook")
+            target_count = wiz.get("target_count", 30)
+
+            session.pop("custom_msg_wiz", None)
+            session.pop("action", None)
+
+            launch_custom_message_task(
+                chat_id=chat_id,
+                message_text=msg_text,
+                reel_url=reel_url,
+                platform=platform,
+                target_count=target_count,
+                message_id=message_id
+            )
+
 
 def handle_text_message(message: dict):
     """Processes user text messages in Telegram (such as passwords, start commands, or revision feedback)."""
@@ -2553,6 +3121,81 @@ def handle_text_message(message: dict):
 
     logger.info(f"Received text message: '{text}' from chat {chat_id}")
 
+    session = chat_sessions.setdefault(chat_id, {})
+    curr_action = session.get("action")
+
+    # ── Wizard Step: User typing custom message text or reel link ──
+    if curr_action == "AWAITING_CUSTOM_MSG_TEXT":
+        session.pop("action", None)
+        cmsg_wiz = session.setdefault("custom_msg_wiz", {})
+        cmsg_wiz["message_text"] = text
+        url_match = re.search(r'https?://[^\s]+', text)
+        if url_match:
+            cmsg_wiz["reel_url"] = url_match.group(0).rstrip('.,;!?')
+        send_custom_message_platform_menu(chat_id, cmsg_wiz, message_id=None)
+        return
+
+    # ── Wizard Step: User typing custom recipient count for custom message ──
+    if curr_action == "AWAITING_CUSTOM_MSG_COUNT":
+        session.pop("action", None)
+        num_match = re.search(r'\d+', text)
+        cmsg_wiz = session.setdefault("custom_msg_wiz", {})
+        if num_match:
+            cnt = int(num_match.group(0))
+            cmsg_wiz["target_count"] = min(max(cnt, 1), 35)
+        else:
+            cmsg_wiz["target_count"] = 25
+        send_custom_message_confirmation(chat_id, cmsg_wiz, message_id=None)
+        return
+
+    # ── Wizard Step: User pasting manual post share link ──
+    if curr_action == "AWAITING_SHARE_LINK":
+        url_match = re.search(r'https?://[^\s]+', text)
+        found_url = url_match.group(0).rstrip('.,;!?') if url_match else (text if text.startswith("http") else None)
+        if found_url:
+            wiz = session.setdefault("post_share_wiz", {})
+            wiz["post_url"] = found_url
+            wiz["mode"] = "manual"
+            session.pop("action", None)
+            # Explicit user choice without auto-detection bypass
+            send_post_share_wizard_platform_choice(chat_id, wiz, message_id=None)
+            return
+        else:
+            send_text_message(
+                chat_id,
+                "⚠️ <b>Invalid Link:</b> Please paste a valid web URL starting with <code>http://</code> or <code>https://</code>:"
+            )
+            return
+
+    # ── Wizard Step: User typing custom recipient count ──
+    if curr_action == "AWAITING_SHARE_COUNT":
+        num_match = re.search(r'\d+', text)
+        if num_match:
+            cnt = int(num_match.group(0))
+            if cnt > 0:
+                wiz = session.setdefault("post_share_wiz", {})
+                wiz["target_count"] = cnt
+                wiz["share_all"] = False
+                session.pop("action", None)
+                send_post_share_wizard_confirmation(chat_id, wiz, message_id=None)
+                return
+        send_text_message(
+            chat_id,
+            "⚠️ <b>Invalid Count:</b> Please enter a valid positive number (e.g. <code>15</code>, <code>30</code>, <code>50</code>):"
+        )
+        return
+
+    # ── Check for Manual Post Share Link (Instagram / Facebook / Direct URL) ──
+    url_match = re.search(r'https?://[^\s]+', text)
+    if url_match:
+        found_url = url_match.group(0).rstrip('.,;!?')
+        wiz = session.setdefault("post_share_wiz", {})
+        wiz["post_url"] = found_url
+        wiz["mode"] = "manual"
+        # Strict user rule: NO domain auto-detection! Always ask user to select the platform!
+        send_post_share_wizard_platform_choice(chat_id, wiz, message_id=None)
+        return
+
     clean_text = text.lower().strip()
     if clean_text in ["/queue", "queue", "/tasks", "tasks", "/status", "status", "/activity", "activity"]:
         send_queue_dashboard(chat_id)
@@ -2560,6 +3203,10 @@ def handle_text_message(message: dict):
 
     if clean_text in ["/posts", "posts", "/myposts", "myposts", "/gallery", "gallery", "/posted"]:
         send_posted_content_gallery(chat_id, page_index=0)
+        return
+
+    if clean_text in ["/message", "message", "/custommsg", "custommsg", "/cmsg", "cmsg", "/sendmessage", "/outreach"]:
+        send_custom_message_source_menu(chat_id)
         return
 
     if clean_text in ["/sharestats", "sharestats", "/poststats"]:
@@ -2614,7 +3261,7 @@ def handle_text_message(message: dict):
         send_chrome_account_selection_menu(chat_id)
         return
 
-    # Direct 24s Video Command: /video [prompt], "generate video", "create video", etc.
+    # Direct 10s Video Command: /video [prompt], "generate video", "create video", etc.
     is_video_cmd = (
         clean_text.startswith("/video") or
         clean_text.startswith("video:") or
@@ -2624,6 +3271,7 @@ def handle_text_message(message: dict):
         "make video" in clean_text or
         "make a video" in clean_text or
         "video generation" in clean_text or
+        "10s video" in clean_text or
         "24s video" in clean_text or
         "generate 24s" in clean_text
     )
@@ -2640,34 +3288,33 @@ def handle_text_message(message: dict):
 
         send_text_message(
             chat_id,
-            f"🎬 <b>Generating 24-Second Gemini AI Video (Home Loan & LAP Strategic Focus)...</b>\n\n"
+            f"🎬 <b>Generating 10-Second Gemini AI Video (Video Skill + Custom Faces)...</b>\n\n"
             f"📝 <b>Prompt:</b> <i>\"{prompt_val}\"</i>\n\n"
             "⚙️ <b>Pipeline Stages:</b>\n"
-            "• Clip 1 (0-8s): 🏠 Home Loan - Dream of 'Apna Ghar' for Middle-Class Families\n"
-            "• Clip 2 (8-16s): 🏢 Loan Against Property (LAP) - High Capital for Business Growth\n"
-            "• Clip 3 (16-24s): 💼 Complete Solutions (Home, LAP, Personal & Business Loans) & Apply Online\n"
-            "• Sequential Stitching to 24s Reel (9:16) with Indian Voiceover & Branding\n\n"
-            "⏳ <b>Please wait at least 5 minutes (~5 to 6 minutes)!</b> High-definition AI video rendering (minimum 5 minutes per clip wait time), neural voiceover synthesis, and clip compilation take extra time. Complete preview with approval buttons will arrive here."
+            "• Activating Gemini 'Video' skill via '+' tools menu\n"
+            "• Uploading face reference photo for authentic personalized video\n"
+            "• Generating 10s cinematic video (vertical 9:16) with Indian voiceover & branding\n"
+            "• Downloading generated video and dispatching preview for approval\n\n"
+            "⏳ <b>Please wait (~1 to 3 minutes)!</b> Complete video preview with interactive approval buttons will arrive here."
         )
         import threading
-        def _run_24s_cmd():
+        def _run_10s_cmd():
             try:
                 from media.gemini_video_engine import gemini_video_engine
-                gemini_video_engine.run_full_24s_pipeline(
+                gemini_video_engine.run_10s_video_pipeline(
                     prompt=prompt_val,
                     product_name="Loan Solutions",
                     product_category="Finance",
                     platforms=["facebook", "instagram"],
                     send_to_telegram=True,
-                    send_individual_clips=True,
                     logo_path=LOAN_SOLUTIONS_PATH if os.path.exists(LOAN_SOLUTIONS_PATH) else None,
                     chat_id=chat_id
                 )
             except Exception as e_v:
-                logger.error(f"Error generating 24s video from command: {e_v}")
+                logger.error(f"Error generating 10s video from command: {e_v}")
                 send_text_message(chat_id, f"⚠️ Video generation notice: {e_v}")
 
-        threading.Thread(target=_run_24s_cmd, daemon=True).start()
+        threading.Thread(target=_run_10s_cmd, daemon=True).start()
         return
 
     # Direct Follow Stats Commands: /followstats, /stats, /leads
@@ -2677,7 +3324,6 @@ def handle_text_message(message: dict):
         return
 
     # Direct Follow Commands: /follow @user, follow @user, /user @user, /profile @user
-    import re
     is_follow_cmd = any(clean_text.startswith(p) for p in [
         "/follow", "follow @", "follow ",
         "/user ", "user ", "/profile ", "profile "

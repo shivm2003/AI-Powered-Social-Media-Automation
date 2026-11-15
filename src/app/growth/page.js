@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import FacebookAcceptDeck from "@/components/growth/FacebookAcceptDeck";
 import InstagramUnfollowDeck from "@/components/growth/InstagramUnfollowDeck";
 import FriendsGroupDeck from "@/components/growth/FriendsGroupDeck";
+import ManualPostShareDeck from "@/components/growth/ManualPostShareDeck";
 
 const PRESET_LOCATIONS = [
   "Lucknow",
@@ -250,6 +251,17 @@ export default function GrowthPage() {
           </span>
         </button>
         <button
+          id="btn-tab-share-link"
+          onClick={() => setActiveTab("share_link")}
+          className={`btn ${activeTab === "share_link" ? "btn-primary" : "btn-secondary"}`}
+          style={{ padding: "0.6rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}
+        >
+          <span>🔗 Share Post Link</span>
+          <span style={{ background: "rgba(236, 72, 153, 0.25)", color: "#ec4899", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 700 }}>
+            Manual URL
+          </span>
+        </button>
+        <button
           id="btn-tab-launcher"
           onClick={() => setActiveTab("launcher")}
           className={`btn ${activeTab === "launcher" ? "btn-primary" : "btn-secondary"}`}
@@ -277,6 +289,10 @@ export default function GrowthPage() {
 
       {activeTab === "groups" && (
         <FriendsGroupDeck />
+      )}
+
+      {activeTab === "share_link" && (
+        <ManualPostShareDeck />
       )}
 
       {activeTab === "launcher" ? (
@@ -500,7 +516,7 @@ export default function GrowthPage() {
               >
                 <span style={{ fontSize: "1.5rem" }}>🌟</span>
                 <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                  <strong style={{ color: "#38bdf8" }}>Algorithmic Suggestions Feed:</strong> The bot will harvest friend requests directly from Facebook's <b>People You May Know</b> (<code>/friends/suggestions</code>) and Instagram's <b>Suggested for You</b> (<code>/explore/people/</code>). No city filter needed.
+                  <strong style={{ color: "#38bdf8" }}>Algorithmic Suggestions Feed:</strong> The bot will harvest friend requests directly from Facebook&apos;s <b>People You May Know</b> (<code>/friends/suggestions</code>) and Instagram&apos;s <b>Suggested for You</b> (<code>/explore/people/</code>). No city filter needed.
                 </div>
               </div>
             ) : (

@@ -7,6 +7,8 @@ from .facebook import post_to_facebook
 from .instagram import post_to_instagram
 from .linkedin import post_to_linkedin
 from .whatsapp import post_to_whatsapp
+from .youtube import post_to_youtube
+from .facebook_messenger import send_facebook_friends_outreach
 from .caption_helper import ensure_apply_now_at_start, LOAN_SOLUTIONS_APPLY_URL
 
 logger = logging.getLogger("automation.social")
@@ -16,6 +18,7 @@ POSTERS = {
     "instagram": post_to_instagram,
     "linkedin": post_to_linkedin,
     "whatsapp": post_to_whatsapp,
+    "youtube": post_to_youtube,
 }
 
 

@@ -447,6 +447,48 @@ def handle_command(command: dict):
                 "stopped": stopped
             })
 
+        elif action in ["share_post", "share_manual_post_link"]:
+            from social.post_sharer import (
+                share_instagram_post_to_friends,
+                share_facebook_post_to_friends,
+                share_post_to_all_platforms
+            )
+            post_url = command.get("post_url") or command.get("url") or command.get("link")
+            campaign_id = command.get("campaign_id") or "manual_post_share"
+            platform = str(command.get("platform", "both")).lower()
+            share_all = bool(command.get("share_all", True))
+            target_count = int(command.get("target_count", 50))
+            safety_delay = int(command.get("safety_delay", 8))
+
+            logger.info(f"Executing manual post share for {platform} | URL: {post_url} | Share All: {share_all} | Target: {target_count}...")
+
+            if platform == "instagram":
+                res = share_instagram_post_to_friends(
+                    post_url=post_url,
+                    campaign_id=campaign_id,
+                    share_all=share_all,
+                    target_count=target_count,
+                    safety_delay=safety_delay,
+                )
+            elif platform == "facebook":
+                res = share_facebook_post_to_friends(
+                    post_url=post_url,
+                    campaign_id=campaign_id,
+                    share_all=share_all,
+                    target_count=target_count,
+                    safety_delay=safety_delay,
+                )
+            else:
+                res = share_post_to_all_platforms(
+                    campaign_id=campaign_id,
+                    post_url=post_url,
+                    platforms=["instagram", "facebook"],
+                    share_all=share_all,
+                    target_count=target_count,
+                    safety_delay=safety_delay,
+                )
+            send_response(res)
+
         else:
             send_response({
                 "status": "error",

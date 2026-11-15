@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PRODUCT_CATEGORIES, TONES, CAMPAIGN_OBJECTIVES } from "@/lib/constants";
 
 export default function ProductsPage() {
@@ -9,12 +9,15 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef(null);
 
   const emptyProduct = {
     name: "",
     description: "",
     category: "other",
     website_url: "",
+    logo_path: "",
     target_audience: "",
     key_benefits: [],
     brand_colors: { primary: "#7C5CFC", secondary: "#3DD6D0", accent: "#FFB347" },
@@ -41,6 +44,33 @@ export default function ProductsPage() {
       console.error("Failed to fetch products:", error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleLogoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (data.success && data.fileUrl) {
+        setForm((prev) => ({ ...prev, logo_path: data.fileUrl }));
+      } else {
+        alert(data.error || "Failed to upload logo image");
+      }
+    } catch (err) {
+      console.error("Logo upload error:", err);
+      alert("Error uploading logo image");
+    } finally {
+      setUploadingLogo(false);
+      if (e.target) e.target.value = "";
     }
   }
 
@@ -89,6 +119,7 @@ export default function ProductsPage() {
       description: product.description || "",
       category: product.category || "other",
       website_url: product.website_url || "",
+      logo_path: product.logo_path || "",
       target_audience: product.target_audience || "",
       key_benefits: product.key_benefits || [],
       brand_colors: product.brand_colors || { primary: "#7C5CFC", secondary: "#3DD6D0", accent: "#FFB347" },
@@ -187,6 +218,99 @@ export default function ProductsPage() {
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Brand Logo Upload & Preview */}
+              <div
+                className="form-group"
+                style={{
+                  padding: "var(--space-3) var(--space-4)",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px dashed var(--border)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
+                  <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>
+                    🖼️ Brand Logo Image
+                  </label>
+                  {form.logo_path && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: "0.75rem", padding: "2px 8px", color: "var(--text-danger)" }}
+                      onClick={() => setForm({ ...form, logo_path: "" })}
+                    >
+                      ✕ Remove Logo
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+                  {/* Logo Preview Square */}
+                  <div
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border)",
+                      background: "#ffffff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                      flexShrink: 0,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                    }}
+                  >
+                    {form.logo_path ? (
+                      <img
+                        src={
+                          form.logo_path.startsWith("/") || form.logo_path.startsWith("http")
+                            ? form.logo_path
+                            : `/uploads/${form.logo_path.split(/[/\\]/).pop()}`
+                        }
+                        alt="Logo Preview"
+                        style={{ width: "100%", height: "100%", objectFit: "contain", padding: "3px" }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: "1.6rem", color: "var(--text-muted)" }}>🏢</span>
+                    )}
+                  </div>
+
+                  {/* Upload Trigger & URL input */}
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                        ref={logoInputRef}
+                        style={{ display: "none" }}
+                        onChange={handleLogoUpload}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: "0.45rem 1rem", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={uploadingLogo}
+                      >
+                        <span>{uploadingLogo ? "⏳ Uploading..." : "📁 Upload Logo File"}</span>
+                      </button>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                        PNG, JPG, WebP or SVG (auto-linked to product)
+                      </span>
+                    </div>
+
+                    <input
+                      className="form-input"
+                      style={{ fontSize: "0.78rem", padding: "0.35rem 0.65rem", fontFamily: "monospace" }}
+                      value={form.logo_path || ""}
+                      onChange={(e) => setForm({ ...form, logo_path: e.target.value })}
+                      placeholder="Or enter logo path (e.g. /uploads/EveryThingRental.png)"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -388,9 +512,13 @@ export default function ProductsPage() {
                 </div>
                 {product.logo_path && (
                   <img
-                    src={product.logo_path}
+                    src={
+                      product.logo_path.startsWith("/") || product.logo_path.startsWith("http")
+                        ? product.logo_path
+                        : `/uploads/${product.logo_path.split(/[/\\]/).pop()}`
+                    }
                     alt={product.name}
-                    style={{ width: 40, height: 40, borderRadius: "var(--radius-sm)", objectFit: "cover" }}
+                    style={{ width: 44, height: 44, borderRadius: "var(--radius-sm)", objectFit: "contain", background: "#ffffff", padding: "3px" }}
                   />
                 )}
               </div>
