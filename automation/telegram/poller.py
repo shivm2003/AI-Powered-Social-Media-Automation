@@ -1622,19 +1622,29 @@ def launch_custom_message_task(
                         all_recipients.extend(ig_res.get("recipients", []))
 
             total_sent = fb_sent + ig_sent
-            sample_rec = ", ".join(all_recipients[:6]) if all_recipients else "None"
-            if len(all_recipients) > 6:
-                sample_rec += f"... and {len(all_recipients)-6} more"
+            sample_rec = ", ".join(all_recipients[:8]) if all_recipients else "None"
+            if len(all_recipients) > 8:
+                sample_rec += f"... and {len(all_recipients)-8} more"
 
-            done_text = (
-                f"🎉 <b>Personal Message Outreach Completed!</b>\n\n"
-                f"📱 <b>Target Platform:</b> {plat_label}\n"
-                f"🏆 <b>Total Messages Sent:</b> <code>{total_sent} friends</code>\n"
-                f"   • 📘 Facebook Messenger: <code>{fb_sent} delivered</code>\n"
-                f"   • 📸 Instagram Direct: <code>{ig_sent} delivered</code>\n\n"
-                f"👥 <b>Sample Recipients:</b> <i>{sample_rec}</i>\n\n"
-                f"💾 <i>All shares logged in database. Account safety limits honored.</i>"
-            )
+            if total_sent > 0:
+                done_text = (
+                    f"🎉 <b>Personal Message Outreach Completed!</b>\n\n"
+                    f"📱 <b>Target Platform:</b> {plat_label}\n"
+                    f"🏆 <b>Total Messages Sent:</b> <code>{total_sent} distinct friends</code>\n"
+                    f"   • 📘 Facebook Messenger: <code>{fb_sent} delivered</code>\n"
+                    f"   • 📸 Instagram Direct: <code>{ig_sent} delivered</code>\n\n"
+                    f"👥 <b>Delivered To:</b> <i>{sample_rec}</i>\n\n"
+                    f"💾 <i>All shares logged in database. Account safety limits honored.</i>"
+                )
+            else:
+                err_detail = (fb_res.get("message") if platform in ["facebook", "both"] else "") or "No new distinct friends available to message."
+                done_text = (
+                    f"⚠️ <b>Personal Message Outreach Notice</b>\n\n"
+                    f"📱 <b>Target Platform:</b> {plat_label}\n"
+                    f"ℹ️ <b>Delivered:</b> <code>0 friends</code>\n\n"
+                    f"📝 <b>Status Note:</b> <i>{err_detail}</i>\n\n"
+                    f"💡 <i>Check your account connection or try again with a different target count.</i>"
+                )
             done_keyboard = {
                 "inline_keyboard": [
                     [{"text": "✉️ Send Another Message", "callback_data": "root:custom_msg"}],
