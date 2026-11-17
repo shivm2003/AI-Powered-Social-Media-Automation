@@ -1299,8 +1299,9 @@ def send_custom_message_count_menu(chat_id: str, info: dict, message_id: int = N
     text = (
         "👥 <b>Select Recipient Target Count</b>\n\n"
         f"📱 <b>Platform:</b> {plat_name}\n"
-        "🛡️ <b>Safe Session Cap:</b> <code>35 friends (prevents Facebook blocks)</code>\n\n"
-        "How many friends would you like to message in this session?"
+        "🛡️ <b>Adaptive Pacing:</b> <code>8-14s human delays + periodic cooldowns</code>\n\n"
+        "How many friends would you like to message in this session?\n"
+        "<i>💡 You can select any preset or tap 'Enter Custom Count' to specify any number (e.g. 50, 75, 100, 200).</i>"
     )
     keyboard = {
         "inline_keyboard": [
@@ -1309,10 +1310,11 @@ def send_custom_message_count_menu(chat_id: str, info: dict, message_id: int = N
                 {"text": "🔢 25 Friends", "callback_data": "cmsg_wiz:count:25"}
             ],
             [
-                {"text": "🎯 35 Friends (Safe Max)", "callback_data": "cmsg_wiz:count:35"},
-                {"text": "🚀 ALL Friends (Max 35/batch)", "callback_data": "cmsg_wiz:count:all"}
+                {"text": "🎯 50 Friends", "callback_data": "cmsg_wiz:count:50"},
+                {"text": "💯 100 Friends", "callback_data": "cmsg_wiz:count:100"}
             ],
             [
+                {"text": "🚀 ALL Friends (250 Friends)", "callback_data": "cmsg_wiz:count:all"},
                 {"text": "✏️ Enter Custom Count", "callback_data": "cmsg_wiz:count:custom"}
             ],
             [

@@ -33,11 +33,13 @@ from db_campaigns import record_post_share
 
 logger = logging.getLogger("automation.social.facebook_messenger")
 
-MAX_SAFE_FB_MESSAGES_PER_SESSION = 35
+DEFAULT_SAFE_FB_MESSAGES_PER_SESSION = 50
 BASE_SAFETY_DELAY_MIN = 8.0
 BASE_SAFETY_DELAY_MAX = 14.0
 MICRO_COOLDOWN_EVERY = 10
 MICRO_COOLDOWN_SECONDS = 30
+BATCH_COOLDOWN_EVERY = 25
+BATCH_COOLDOWN_SECONDS = 60
 
 
 def detect_facebook_action_block(driver) -> dict:
@@ -101,7 +103,7 @@ def send_facebook_reels_or_post_to_friends(
     logs = []
     sent_recipients = []
     screenshot_path = None
-    effective_target = min(target_count, MAX_SAFE_FB_MESSAGES_PER_SESSION) if not share_all else MAX_SAFE_FB_MESSAGES_PER_SESSION
+    effective_target = target_count if not share_all else 9999
 
     target_url = post_url or "https://www.facebook.com/me"
     logs.append(f"📘 Opening Facebook: {target_url} (Target: {effective_target} friends)")
@@ -379,7 +381,7 @@ def send_facebook_direct_text_messages(
     logs = []
     sent_recipients = []
     screenshot_path = None
-    effective_target = min(target_count, MAX_SAFE_FB_MESSAGES_PER_SESSION)
+    effective_target = max(int(target_count), 1)
 
     logs.append(f"📘 Starting Facebook distinct friends outreach (Target: {effective_target} friends)")
     logger.info(f"Starting 1-on-1 Facebook Messenger outreach | Target: {effective_target} friends")
@@ -411,13 +413,22 @@ def send_facebook_direct_text_messages(
                     self_id = match.group(1)
 
             # ── Step 1: Dynamically scroll friends directory to load a large friend pool ──
-            # For 10 friends, scroll ~4-5 times; for 25-35 friends, scroll ~10-12 times.
-            num_scrolls = max(5, int(effective_target * 0.5) + 3)
-            logs.append(f"🔍 Loading friends list (Scrolling {num_scrolls} times for deep candidate pool)...")
+            # Target at least 1.5x candidates so we have buffer for friends without message button
+            needed_pool = int(effective_target * 1.5) + 10
+            max_scrolls = min(max(8, int(effective_target * 0.7) + 5), 120)
+            logs.append(f"🔍 Loading friends list (Dynamic scrolling up to {max_scrolls} times for ~{needed_pool} candidates)...")
             
-            for s in range(num_scrolls):
-                driver.execute_script("window.scrollBy(0, 1200);")
-                time.sleep(1.2)
+            for s in range(max_scrolls):
+                driver.execute_script("window.scrollBy(0, 1500);")
+                time.sleep(1.0)
+                # Periodically check if we have enough friend link candidates loaded in DOM
+                if s > 0 and s % 4 == 0:
+                    loaded_count = driver.execute_script("""
+                        var links = document.querySelectorAll('a[href*="/profile.php?id="], a[href*="facebook.com/"]');
+                        return links.length;
+                    """) or 0
+                    if loaded_count >= needed_pool * 2:
+                        break
 
             time.sleep(1.5)
 
@@ -451,9 +462,9 @@ def send_facebook_direct_text_messages(
                 var isProfile = false;
                 if (href.includes('/profile.php?id=')) {
                     isProfile = true;
-                } else if (href.includes('facebook.com/') && !href.includes('/friends') && !href.includes('/stories') && !href.includes('/groups') && !href.includes('/hashtag')) {
+                } else if (href.includes('facebook.com/') && !href.includes('/friends') && !href.includes('/stories') && !href.includes('/groups') && !href.includes('/hashtag') && !href.includes('/messages/')) {
                     var path = href.split('facebook.com/')[1].split('/')[0].split('?')[0];
-                    if (path && path.length > 1 && !excludedWords.includes(path.toLowerCase())) {
+                    if (path && path.length > 1 && !excludedWords.includes(path.toLowerCase()) && path !== 'me') {
                         isProfile = true;
                     }
                 }
@@ -665,8 +676,11 @@ def send_facebook_direct_text_messages(
                             "screenshot": blk_now.get("screenshot")
                         }
 
-                    # Micro-cooldown pause every 10 messages
-                    if count % MICRO_COOLDOWN_EVERY == 0 and count < effective_target:
+                    # Micro-cooldown pause every 10 messages, and batch breather every 25 messages
+                    if count % BATCH_COOLDOWN_EVERY == 0 and count < effective_target:
+                        logs.append(f"🛡️ Safety breather for {BATCH_COOLDOWN_SECONDS}s after {count} messages to protect account from velocity limits...")
+                        time.sleep(BATCH_COOLDOWN_SECONDS)
+                    elif count % MICRO_COOLDOWN_EVERY == 0 and count < effective_target:
                         logs.append(f"☕ Safety pause for {MICRO_COOLDOWN_SECONDS}s to keep Facebook account safe...")
                         time.sleep(MICRO_COOLDOWN_SECONDS)
                     else:

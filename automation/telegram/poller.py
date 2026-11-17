@@ -1529,7 +1529,7 @@ def launch_custom_message_task(
     from social.facebook_messenger import send_facebook_friends_outreach
     from social.post_sharer import share_instagram_post_to_friends
 
-    safe_target = min(target_count, 35)
+    safe_target = max(int(target_count), 1)
     plat_label = {
         "facebook": "📘 Facebook Messenger",
         "instagram": "📸 Instagram Direct",
@@ -1542,8 +1542,8 @@ def launch_custom_message_task(
         f"🚀 <b>Personal Message Outreach Initiated!</b>\n\n"
         f"📱 <b>Target Platform:</b> {plat_label}\n"
         f"📝 <b>Content Preview:</b> <i>\"{msg_preview}\"</i>\n"
-        f"👥 <b>Target Recipients:</b> <code>{safe_target} friends (Safe Session Cap)</code>\n"
-        f"⏱️ <b>Pacing Delay:</b> <code>8.0s - 14.0s randomized</code>\n"
+        f"👥 <b>Target Recipients:</b> <code>{safe_target} distinct friends</code>\n"
+        f"⏱️ <b>Pacing Delay:</b> <code>8.0s - 14.0s randomized + periodic pauses</code>\n"
         f"🛡️ <b>Block Shield:</b> <code>Active (Instant alert on restriction)</code>\n\n"
         f"⏳ <i>Connecting to browser and initiating delivery...</i>"
     )
@@ -3072,22 +3072,27 @@ def handle_callback_query(callback: dict):
             send_custom_message_count_menu(chat_id, wiz, message_id=message_id)
 
         elif sub == "count":
-            c_val = parts[2] if len(parts) > 2 else "35"
+            c_val = parts[2] if len(parts) > 2 else "50"
             if c_val == "custom":
                 session["action"] = "AWAITING_CUSTOM_MSG_COUNT"
                 if callback_id:
                     answer_callback_query(callback_id, text="🔢 Enter recipient count:")
-                send_text_message(chat_id, "🔢 <b>Enter Custom Recipient Count:</b>\n\nPlease reply with the number of friends you want to message (1 to 35):")
+                send_text_message(
+                    chat_id,
+                    "🔢 <b>Enter Custom Recipient Count:</b>\n\n"
+                    "Please reply with the number of friends you want to message (e.g. <code>50</code>, <code>75</code>, <code>100</code>, <code>200</code>):\n\n"
+                    "<i>💡 The bot supports any count and will automatically pace delivery with human delays and periodic cooldowns to keep your account safe.</i>"
+                )
             elif c_val == "all":
-                wiz["target_count"] = 35
+                wiz["target_count"] = 250
                 if callback_id:
-                    answer_callback_query(callback_id, text="Selected ALL Friends (Safe cap: 35) 🚀")
+                    answer_callback_query(callback_id, text="Selected ALL Friends (250 friends) 🚀")
                 send_custom_message_confirmation(chat_id, wiz, message_id=message_id)
             else:
                 try:
-                    wiz["target_count"] = min(int(c_val), 35)
+                    wiz["target_count"] = max(int(c_val), 1)
                 except ValueError:
-                    wiz["target_count"] = 25
+                    wiz["target_count"] = 50
                 if callback_id:
                     answer_callback_query(callback_id, text=f"Target: {wiz['target_count']} friends 🎯")
                 send_custom_message_confirmation(chat_id, wiz, message_id=message_id)
@@ -3152,9 +3157,9 @@ def handle_text_message(message: dict):
         cmsg_wiz = session.setdefault("custom_msg_wiz", {})
         if num_match:
             cnt = int(num_match.group(0))
-            cmsg_wiz["target_count"] = min(max(cnt, 1), 35)
+            cmsg_wiz["target_count"] = max(cnt, 1)
         else:
-            cmsg_wiz["target_count"] = 25
+            cmsg_wiz["target_count"] = 50
         send_custom_message_confirmation(chat_id, cmsg_wiz, message_id=None)
         return
 
